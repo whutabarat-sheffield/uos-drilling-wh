@@ -4,10 +4,19 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 # from https://justinnhli.com/posts/2020/05/sharing-git-repositories-between-pip-and-setuppy.html
+
+# uncomment if on Airbus network
+# DEPENDENCIES = {
+#     'transformers': 'https://github.airbus.corp/Airbus/transformers.git',
+#     'tsfm-public': 'https://github.airbus.corp/Airbus/tsfm.git',
+#     'accelerate': 'https://github.airbus.corp/Airbus/accelerate.git',
+# }
+
+# uncomment if on public internet
 DEPENDENCIES = {
-    'transformers': 'https://github.airbus.corp/Airbus/transformers.git',
-    'tsfm-public': 'https://github.airbus.corp/Airbus/tsfm.git',
-    'accelerate': 'https://github.airbus.corp/Airbus/accelerate.git',
+    'transformers': 'https://github.com/whutabarat-sheffield/transformers-wh.git',
+    'tsfm-public': 'https://github.com/ibm-granite/granite-tsfm.git',
+    'accelerate': 'https://github.com/huggingface/accelerate.git',
 }
 
 def get_dependency(package, location):
@@ -51,7 +60,7 @@ setuptools.setup(
         'numpy',
         'pandas',
         'matplotlib',
-        'pytorch-cuda',
+        # 'pytorch-cuda',
         'tensorboardX',
         'ipykernel',
         'jupyter',
