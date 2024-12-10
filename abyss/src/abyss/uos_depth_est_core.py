@@ -1,8 +1,12 @@
-from typing import Tuple
+
 import numpy as np
 import pandas as pd
 import sysconfig
+import json
+
+from typing import Tuple
 from pathlib import Path
+from functools import reduce
 
 from abyss.dataparser import loadSetitecXls
 from abyss.inference import DepthInference
@@ -439,6 +443,42 @@ def depth_est_ml(file):
 
     """
     l_result = kp_recognition_ml(file)
+    return l_result
+
+def depth_est_ml_mqtt(msg, conf=None):
+    """
+    Estimate the depth using machine learning.
+
+    Args:
+        msg (str): The MQTT message containing the data.
+        conf (dict): The configuration dictionary. TBC.
+
+    Returns:
+        list: The estimated depth values.
+
+    """
+    if conf is None:
+        position_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position','Value')
+        torque_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque','Value')
+        torque_empty_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty','Value')
+    else:
+        position_keys = conf['position_keys']
+        torque_keys = conf['torque_keys']
+        torque_empty_keys = conf['torque_empty_keys']
+
+    d = json.loads(msg)
+
+    # https://stackoverflow.com/questions/34209587/python-access-hierarchical-dict-element-from-list-of-keys
+    position = reduce(dict.get, position_keys, msg)
+    torque = reduce(dict.get, torque_keys, msg)
+    torque_empty = reduce(dict.get, torque_empty_keys, msg)
+    df = pd.DataFrame({'Position': position, 'Torque': torque, 'Torque_Empty': torque_empty})
+    df['Torque_Total'] = df['Torque'] + df['Torque_Empty']
+    df['Position'] = -df['Position']
+
+    di = DepthInference() # Load the depth inference model
+    l_result = di.infer_common(df)
+    
     return l_result
 
 
