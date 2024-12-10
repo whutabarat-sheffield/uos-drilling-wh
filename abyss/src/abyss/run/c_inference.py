@@ -1,10 +1,12 @@
-from dataparser import loadSetitecXls
 import numpy as np
 import pandas as pd
-from utils.pipelines.inference_pipeline import *
-from utils.pipelines.training_data_formater import *
-from utils.functions.load_model import load_model
 from pprint import pprint
+
+from abyss.dataparser import loadSetitecXls
+from abyss.utils.pipelines.inference_pipeline import *
+from abyss.utils.pipelines.training_data_formater import *
+from abyss.utils.functions.load_model import load_model
+
 
 """
 This py is for inference
@@ -76,10 +78,12 @@ class DepthInference:
 
 
 if __name__ == "__main__":
-
+    import os
     '''read data to pandas data frame'''
-    raw_data_path = '../../test_data/MQTT_Curve_Info_20240304_14H27.json'
-    ref_data_path = '../../test_data/ref_15T.csv'
+    raw_data_path = '../test_data/MQTT_Curve_Info_20240304_14H27.json'
+    ref_data_path = '../test_data/ref_15T.csv'
+    # pprint(os.getcwd())
+    # pprint(os.listdir('../'))
 
     # df = pd.read_csv(
     #     raw_data_path,
@@ -104,5 +108,5 @@ if __name__ == "__main__":
     print(f'HAMBURG EXAMPLE .json split function: {result1}, depth: {result1[1]-result1[0]}')
     #E00401006B6B2977_113-V3-022_ST_2193_63
     print((result, result1))
-    result2 = d_est.infer_xls('../../test_data/E00401006B6B2977_113-V3-022_ST_2193_63.xls', hole_id = 'test', local = 0, PREDRILLED = 1)
+    result2 = d_est.infer_xls('../test_data/E00401006B6B2977_113-V3-022_ST_2193_63.xls', hole_id = 'test', local = 0, PREDRILLED = 1)
     print(f'MDB EXAMPLE .xls: {result2}, depth: {result2[1]-result2[0]}')
