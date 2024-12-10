@@ -39,6 +39,7 @@ class DepthInference:
         # hole_depth = depth_estimation_pipeline(model, data, start_xpos=enter_pos[hole_id])
         exit_depth = exit_estimation_pipeline(model, data)
         return enter_pos[hole_id], exit_depth
+   
     
     def infer_json(self, json_path, hole_id = 'test', local = 0, PREDRILLED = 1):
         self.raw_data_path = raw_data_path
