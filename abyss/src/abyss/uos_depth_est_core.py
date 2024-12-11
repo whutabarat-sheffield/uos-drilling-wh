@@ -458,23 +458,44 @@ def depth_est_ml_mqtt(msg, conf=None):
 
     """
     if conf is None:
+        hole_id_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber','Value')
         position_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position','Value')
         torque_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque','Value')
         torque_empty_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty','Value')
+        step_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb','Value')
+        local_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.ToolAge','Value')
+        predrilled_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.Predrilled','Value')
     else:
+        hole_id_keys = conf['hole_id']
         position_keys = conf['position_keys']
         torque_keys = conf['torque_keys']
         torque_empty_keys = conf['torque_empty_keys']
+        step_keys = conf['step_keys']
+        local_keys = conf['local_keys']
+        predrilled_keys = conf['predrilled_keys']
 
     d = json.loads(msg)
 
     # https://stackoverflow.com/questions/34209587/python-access-hierarchical-dict-element-from-list-of-keys
-    position = reduce(dict.get, position_keys, msg)
-    torque = reduce(dict.get, torque_keys, msg)
-    torque_empty = reduce(dict.get, torque_empty_keys, msg)
-    df = pd.DataFrame({'Position': position, 'Torque': torque, 'Torque_Empty': torque_empty})
-    df['Torque_Total'] = df['Torque'] + df['Torque_Empty']
-    df['Position'] = -df['Position']
+    position = reduce(dict.get, position_keys, d)
+    torque = reduce(dict.get, torque_keys, d)
+    torque_empty = reduce(dict.get, torque_empty_keys, d)
+    step = reduce(dict.get, step_keys, d)
+    hole_id = reduce(dict.get, hole_id_keys, d)
+    local = 0 #reduce(dict.get, local_keys, d)
+    predrilled = 1 #reduce(dict.get, predrilled_keys, d)
+    # df = pd.DataFrame({'Position': position, 'Torque': torque, 'Torque_Empty': torque_empty})
+    df = pd.DataFrame({'Position (mm)': position, 
+                       'I Torque (A)': torque, 
+                       'I Torque Empty (A)': torque_empty, 
+                       'Step (nb)': step})
+    #Expected columns: 'i_torque', 'HOLE_ID', 'step', 'xpos', 'local', 'PREDRILLED'
+    # df['i_torque'] = df['I Torque (A)'] + df['I Torque Empty (A)']
+    df = df.astype({'Step (nb)': 'int32'})
+    df['Position (mm)'] = -df['Position (mm)']
+    df['HOLE_ID'] = str(hole_id)
+    df['local'] = local
+    df['PREDRILLED'] = predrilled
 
     di = DepthInference() # Load the depth inference model
     l_result = di.infer_common(df)
