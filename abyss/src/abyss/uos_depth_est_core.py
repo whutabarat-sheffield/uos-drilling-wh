@@ -445,16 +445,22 @@ def depth_est_ml(file):
     l_result = kp_recognition_ml(file)
     return l_result
 
-def depth_est_ml_mqtt(msg, conf=None):
+def convert_mqtt_to_df(msg, conf=None):
     """
-    Estimate the depth using machine learning.
+    Convert a MQTT message to a Pandas DataFrame.
 
-    Args:
-        msg (str): The MQTT message containing the data.
-        conf (dict): The configuration dictionary. TBC.
+    Parameters:
+    msg (str): The MQTT message containing the data.
+    conf (dict): The configuration dictionary containing the key paths to the required data.
 
     Returns:
-        list: The estimated depth values.
+    DataFrame: The converted DataFrame with the required columns.
+
+    Notes:
+    - The configuration dictionary should contain the following keys: 'hole_id', 'position_keys', 'torque_keys', 'torque_empty_keys', 'step_keys', 'local_keys', 'predrilled_keys'.
+    - The function uses the `reduce` function to access the hierarchical dictionary elements from the list of keys.
+    - The function converts the DataFrame columns to the required types using the `astype` method.
+    - The function returns the converted DataFrame with the required columns.
 
     """
     if conf is None:
@@ -496,6 +502,22 @@ def depth_est_ml_mqtt(msg, conf=None):
     df['HOLE_ID'] = str(hole_id)
     df['local'] = local
     df['PREDRILLED'] = predrilled
+    # df = df.convert_dtypes()
+    return df
+
+def depth_est_ml_mqtt(msg, conf=None):
+    """
+    Estimate the depth using machine learning.
+
+    Args:
+        msg (str): The MQTT message containing the data.
+        conf (dict, optional): The configuration dictionary. Defaults to None.
+
+    Returns:
+        list: The estimated depth values.
+
+    """
+    df = convert_mqtt_to_df(msg, conf)
 
     di = DepthInference() # Load the depth inference model
     l_result = di.infer_common(df)
