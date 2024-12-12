@@ -96,7 +96,8 @@ class DepthInference:
 
         return self.infer_common(df, hole_id, local, PREDRILLED)
 
-    def infer_common(self, data, hole_id='test', local=0, PREDRILLED=1):
+    # def infer_common(self, data, hole_id='test', local=0, PREDRILLED=1):
+    def infer_common(self, data):
         """
         Common method for performing depth inference.
 
@@ -110,6 +111,9 @@ class DepthInference:
             tuple: A tuple containing the enter position and exit depth.
         """
         self._df = data
+        hole_id = data['HOLE_ID'][0]
+        local = data['local'][0]
+        PREDRILLED = data['PREDRILLED'][0]
         data, enter_pos = inference_data_pipeline(df_for_inference=self._df, ref_data_path=self.ref_data_path)
         model = load_model(idx_cv=4)
         exit_depth = exit_estimation_pipeline(model, data)
