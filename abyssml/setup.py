@@ -63,6 +63,7 @@ setuptools.setup(
         'matplotlib',
         'pytorch-cuda',
         'tensorboardX',
+        'paho-mqtt',
         get_dependency('transformers', location='install'),
         get_dependency('tsfm-public', location='install'),
         get_dependency('accelerate', location='install'),
