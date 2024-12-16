@@ -1,16 +1,23 @@
 # Use an official Python 3 image as the base image
-FROM python:3.9-slim
+FROM python:3.10-slim
+
+# Install system dependencies for git and build tools
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the application code to the container
-COPY . .
+# Clone the GitHub repository
+# Replace GITHUB_REPOSITORY_URL with the actual HTTPS clone URL of your repository
+# ARG https://github.com/whutabarat-sheffield/uos-drilling-wh.git
+RUN git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
 
-CMD cd /abyss
-
-# Install Python dependencies
-RUN pip install  --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org pip setuptools
+# Change current directory to the abyss directory and install
+RUN cd abyss && \
+    pip install --no-cache-dir .
 
 # Specify the default command to run the application
-#CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
+CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
