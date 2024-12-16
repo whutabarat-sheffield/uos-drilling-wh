@@ -13,11 +13,15 @@ WORKDIR /app
 # Clone the GitHub repository
 # Replace GITHUB_REPOSITORY_URL with the actual HTTPS clone URL of your repository
 # ARG https://github.com/whutabarat-sheffield/uos-drilling-wh.git
-RUN git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
+# RUN git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
+
+# Copy the entire project directory into the container
+COPY . .
 
 # Change current directory to the abyss directory and install
 RUN cd abyss && \
-    pip install --no-cache-dir .
+    pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu118/ .
 
 # Specify the default command to run the application
 CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
+
