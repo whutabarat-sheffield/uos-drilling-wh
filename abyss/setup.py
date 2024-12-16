@@ -16,18 +16,18 @@ with open("README.md", "r", encoding="utf-8") as fh:
 # }
 
 # uncomment if on public internet
+DEPENDENCIES = {
+    'transformers': 'https://github.com/whutabarat-sheffield/transformers-wh.git',
+    'tsfm-public': 'https://github.com/ibm-granite/granite-tsfm.git',
+    'accelerate': 'https://github.com/huggingface/accelerate.git',
+}
 
+# These are local tarballs of the dependencies
 LOCAL_DEPENDENCIES = {
     # 'transformers': 'transformers-4.48.0.dev0.tar.gz', # gives wrong result
     'transformers': 'transformers-4.41.0.dev0.tar.gz',
     'tsfm-public': 'tsfm_public-0.2.17.tar.gz',
     'accelerate': 'accelerate-1.2.1.tar.gz',
-}
-
-DEPENDENCIES = {
-    'transformers': 'https://github.com/whutabarat-sheffield/transformers-wh.git',
-    'tsfm-public': 'https://github.com/ibm-granite/granite-tsfm.git',
-    'accelerate': 'https://github.com/huggingface/accelerate.git',
 }
 
 def get_dependency(package, location):
@@ -40,7 +40,6 @@ def get_dependency(package, location):
         return f'{package} @ file:///{local_dep}'
     else:
         raise ValueError(f'Unknown location: {location}')
-
 
 
 setuptools.setup(
@@ -70,10 +69,8 @@ setuptools.setup(
         'h5py',
         'nptdms',
         'scaleogram',
-        # 'nvidia_cuda_runtime_cu11',
-        # 'pytorch-cuda==11.8',
         # 'torch@https://download.pytorch.org/whl/cu118/torch-2.3.1%2Bcu118-cp310-cp310-win_amd64.whl',
-        'torch==2.3.1+cu118',
+        'torch==2.3.1+cu118', # This ensures that the CUDA 11.8 version of torch is installed
         'torchvision',
         'torchaudio',
         'numpy',
@@ -82,8 +79,8 @@ setuptools.setup(
         'tensorboardX',
         'ipykernel',
         'jupyter',
-        'paho-mqtt',
-        'pyyaml',
+        'paho-mqtt', # MQTT client
+        'pyyaml', # YAML parser
         get_dependency('transformers', location='local'),
         get_dependency('tsfm-public', location='local'),
         get_dependency('accelerate', location='local'),
