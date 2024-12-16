@@ -1,0 +1,119 @@
+{
+  "MessageId": "c8502215-0a05-407c-86ab-fbc5e03ac27b",
+  "MessageType": "ua-data",
+  "PublisherId": "ILLL502033771",
+  "Messages": {
+    "DataSetWriterId": 1,
+    "SequenceNumber": 1161,
+    "Timestamp": "2024-12-13T13:38:32Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.CreationTime": {
+        "Value": "2024-12-11T09:24:49Z",
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.SerialNumber": {
+        "Value": 23120040,
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.InternalRecipeType": {
+        "Value": "Standard",
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.InternalRecipeId": {
+        "Value": 0,
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.InternalRecipeVersion": {
+        "Value": 12,
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty": {
+        "Value": [
+          5.225,
+          3.076
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty": {
+        "Value": [
+          0.293,
+          0.188
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StopCode": {
+        "Value": [
+          64,
+          8192
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.OverallResultValues.CycleTime": {
+        "Value": 7.51,
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.ResultId": {
+        "Value": 2409,
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.ResultEvaluation": {
+        "Value": true,
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultMetaData.Distance": {
+        "Value": 10.023,
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber": {
+        "Value": [
+          1,
+          2
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M1MaxAmperage": {
+        "Value": [
+          0,
+          17.041
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M2MaxAmperage": {
+        "Value": [
+          0.059,
+          0.539
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M1Distance": {
+        "Value": [
+          0,
+          0
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M2Distance": {
+        "Value": [
+          4.028,
+          5.984
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.GapMax": {
+        "Value": [
+          0,
+          0
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.E0025C6395081C56_A4HL-LG_ST_13_16.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Duration": {
+        "Value": [
+          1.62,
+          4.69
+        ],
+        "SourceTimestamp": "2024-12-11T08:24:49Z"
+      }
+    }
+  }
+}
