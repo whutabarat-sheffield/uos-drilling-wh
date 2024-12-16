@@ -15,12 +15,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 #     'accelerate': 'https://github.airbus.corp/Airbus/accelerate.git',
 # }
 
-# uncomment if on public internet
-DEPENDENCIES = {
-    'transformers': 'https://github.com/whutabarat-sheffield/transformers-wh.git',
-    'tsfm-public': 'https://github.com/ibm-granite/granite-tsfm.git',
-    'accelerate': 'https://github.com/huggingface/accelerate.git',
-}
+# # uncomment if on public internet
+# DEPENDENCIES = {
+#     'transformers': 'https://github.com/whutabarat-sheffield/transformers-wh.git',
+#     'tsfm-public': 'https://github.com/ibm-granite/granite-tsfm.git',
+#     'accelerate': 'https://github.com/huggingface/accelerate.git',
+# }
 
 # These are local tarballs of the dependencies
 LOCAL_DEPENDENCIES = {
