@@ -5,3 +5,28 @@ torque_empty: = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=O
 step: ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb','Value')
 local: ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.ToolAge','Value')
 predrilled:  
+
+OPCPUBSUB/toolboxid/toolid/ResultManagement
+Traces: OPCPUBSUB/toolboxid/toolid/ResultManagement/Trace
+
+
+# mqtt_config.yaml
+mqtt:
+  broker:
+    host: "localhost"
+    port: 1883
+    username: ""  # Optional
+    password: ""  # Optional
+
+  publisher:
+    topic: "OPCPUBSUB/toolboxid/toolid/ResultManagement"
+    client_id: "setitec_publisher"
+    qos: 1
+    retain: false
+
+  listener:
+    topics:
+      - "home/sensors/#"
+      - "home/controls/#"
+    client_id: "python_listener"
+    qos: 1
