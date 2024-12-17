@@ -1,16 +1,8 @@
-hole_id: ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber','Value')
-position: ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position','Value')
-torque: ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque','Value')
-torque_empty: = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty','Value')
-step: ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb','Value')
-local: ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.ToolAge','Value')
-predrilled:  
-
-OPCPUBSUB/toolboxid/toolid/ResultManagement
-Traces: OPCPUBSUB/toolboxid/toolid/ResultManagement/Trace
-
-
 # mqtt_config.yaml
+
+# Results: OPCPUBSUB/toolboxid/toolid/ResultManagement
+# Traces: OPCPUBSUB/toolboxid/toolid/ResultManagement/Trace
+
 mqtt:
   broker:
     host: "localhost"
@@ -18,15 +10,24 @@ mqtt:
     username: ""  # Optional
     password: ""  # Optional
 
+  data_ids:
+    machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'
+    position: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepTraceContent[0].Values'
+    thrust: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityThrustTrace.StepTraceContent[0].Values'
+    torque: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityTorqueTrace.StepTraceContent[0].Values'
+    step: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.StepNumberTrace.StepTraceContent[0].Values'
+    torque_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty'
+    thrust_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty'
+    step_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber'
+
   publisher:
-    topic: "OPCPUBSUB/toolboxid/toolid/ResultManagement"
+    topics:
+      - "OPCPUBSUB/toolboxid/toolid/ResultManagement"
+      - "OPCPUBSUB/toolboxid/toolid/ResultManagement/Traces"
     client_id: "setitec_publisher"
-    qos: 1
-    retain: false
 
   listener:
     topics:
-      - "home/sensors/#"
-      - "home/controls/#"
+      - "OPCPUBSUB/toolboxid/toolid/ResultManagement"
+      - "OPCPUBSUB/toolboxid/toolid/ResultManagement/Traces"
     client_id: "python_listener"
-    qos: 1
