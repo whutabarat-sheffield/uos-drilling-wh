@@ -6,8 +6,25 @@ CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+# from https://justinnhli.com/posts/2020/05/sharing-git-repositories-between-pip-and-setuppy.html
+
+# uncomment if on Airbus network
+# DEPENDENCIES = {
+#     'transformers': 'https://github.airbus.corp/Airbus/transformers.git',
+#     'tsfm-public': 'https://github.airbus.corp/Airbus/tsfm.git',
+#     'accelerate': 'https://github.airbus.corp/Airbus/accelerate.git',
+# }
+
+# # uncomment if on public internet
+# DEPENDENCIES = {
+#     'transformers': 'https://github.com/whutabarat-sheffield/transformers-wh.git',
+#     'tsfm-public': 'https://github.com/ibm-granite/granite-tsfm.git',
+#     'accelerate': 'https://github.com/huggingface/accelerate.git',
+# }
+
 # These are local tarballs of the dependencies
 LOCAL_DEPENDENCIES = {
+    # 'transformers': 'transformers-4.48.0.dev0.tar.gz', # gives wrong result
     'transformers': 'transformers-4.41.0.dev0.tar.gz',
     'tsfm-public': 'tsfm_public-0.2.17.tar.gz',
     'accelerate': 'accelerate-1.2.1.tar.gz',
@@ -75,3 +92,58 @@ setuptools.setup(
     },
     include_package_data=True,
 )
+
+# setuptools.setup(
+#     name="abyss",
+#     version="2.0.0",
+#     author="David Miller",
+#     author_email="d.b.miller@sheffield.ac.uk",
+#     description="Electric drill data processing",
+#     long_description=long_description,
+#     long_description_content_type="text/markdown",
+#     url="https://github.airbus.corp/Airbus/uos-drilling",
+#     project_urls={
+#         "Bug Tracker": "https://github.airbus.corp/Airbus/uos-drilling/issues",
+#     },
+#     classifiers=[
+#         "Programming Language :: Python :: 3",
+#         "Operating System :: OS Independent",
+#     ],
+#     package_dir={"": "src"},
+#     packages=setuptools.find_packages(where="src"),
+#     python_requires=">=3.9",
+#     install_requires=[
+#         'numpy',
+#         'pandas',
+#         'matplotlib',
+#         'openpyxl',
+#         'h5py',
+#         'nptdms',
+#         'scaleogram',
+#         'torch',
+#         'torchvision',
+#         'torchaudio',
+#         'numpy',
+#         'pandas',
+#         'matplotlib',
+#         # 'pytorch-cuda',
+#         'tensorboardX',
+#         'ipykernel',
+#         'jupyter',
+#         'paho-mqtt'
+#         get_dependency('transformers', location='git'),
+#         get_dependency('tsfm-public', location='git'),
+#         get_dependency('accelerate', location='git'),
+#     ],
+#     dependency_links=[
+#         get_dependency('transformers', location='link'),
+#         get_dependency('tsfm-public', location='link'),
+#         get_dependency('accelerate', location='link'),
+#     ],
+#     entry_points={
+#         'console_scripts': [
+#             'depth-est = abyss:run.uos_depth_estimation',
+#         ],
+#     },
+#     include_package_data=True,
+# )

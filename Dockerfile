@@ -24,4 +24,3 @@ RUN cd abyss && \
 
 # Specify the default command to run the application
 CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
-
