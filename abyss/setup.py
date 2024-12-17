@@ -70,7 +70,8 @@ setuptools.setup(
         'nptdms',
         'scaleogram',
         # 'torch@https://download.pytorch.org/whl/cu118/torch-2.3.1%2Bcu118-cp310-cp310-win_amd64.whl',
-        'torch==2.3.1+cu118', # This ensures that the CUDA 11.8 version of torch is installed
+        # 'torch==2.3.1+cu118', # This ensures that the CUDA 11.8 version of torch is installed
+        'torch==2.3.1',
         'torchvision',
         'torchaudio',
         'numpy',
@@ -87,7 +88,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'depth-est = abyss:run.uos_depth_estimation_listen-continuous',
+            'depth-est = abyss:run.uos_depth_estimation_listen',
         ],
     },
     include_package_data=True,
