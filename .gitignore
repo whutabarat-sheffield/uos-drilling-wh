@@ -601,3 +601,7 @@ scripts/windo/**/*.pdf
 .idea/.name
 .vscode/settings.json
 >>>>>>> d6e5253 (Initial commit)
+
+
+## Unignore requirements.txt
+!requirements.txt

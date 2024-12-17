@@ -1,0 +1,25 @@
+# Core Scientific and Data Processing Libraries
+numpy
+pandas
+matplotlib
+openpyxl
+h5py
+nptdms
+scaleogram
+
+# Deep Learning Libraries
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+torchaudio
+
+# Visualization and Logging
+tensorboardX
+
+# Jupyter and Kernel Support
+ipykernel
+jupyter
+
+# Communication and Configuration
+paho-mqtt
+pyyaml
