@@ -87,7 +87,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'depth-est = abyss:run.uos_depth_estimation',
+            'depth-est = abyss:run.uos_depth_estimation_listen-continuous',
         ],
     },
     include_package_data=True,

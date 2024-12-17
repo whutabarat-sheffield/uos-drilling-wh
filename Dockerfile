@@ -23,4 +23,4 @@ RUN cd abyss && \
     pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu118/ .
 
 # Specify the default command to run the application
-CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
+CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
