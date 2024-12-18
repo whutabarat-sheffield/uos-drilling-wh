@@ -50,7 +50,7 @@ RUN cd abyss && \
 EXPOSE 1883
 
 # Switch to the non-privileged user to run the application.
-USER appuser
+# USER appuser
 
 # Specify the default command to run the application
 CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]

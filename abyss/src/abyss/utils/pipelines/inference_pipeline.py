@@ -54,7 +54,7 @@ def depth_estimation_pipeline(model, dataset_for_evl, start_xpos, threshold=-1):
                 input_df.iloc[:, 0:17].values,
                 dtype=torch.float32).unsqueeze(0)
             out = model(input_data)
-            original_data = input_data.squeeze(0).cpu().detach().numpy()
+            original_data = input_data.squeeze(0).cpu().detach().numpy() # TODO: check if this can be accelerated
             heatmap_data = out['prediction_outputs'].squeeze(0).cpu().detach().numpy()
             heatmap_data[heatmap_data < threshold] = 0
             heatmap_all = heatmap_data

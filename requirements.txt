@@ -9,7 +9,7 @@ scaleogram
 
 # Deep Learning Libraries
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch
+torch==2.3.1+cpu
 torchvision
 torchaudio
 
