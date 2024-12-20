@@ -2,8 +2,6 @@ import paho.mqtt.client as mqtt
 import time
 import json
 import argparse
-# import sysconfig
-# from pathlib import Path
 import os
 import yaml
 import random
@@ -28,47 +26,25 @@ args = parser.parse_args()
 # config = yaml.safe_load(open("mqtt_conf.yaml"))
 config = yaml.safe_load(open(args.conf))
 
+# Sample data folders
+DATA_FOLDERS = ['data0', 'data1']
+
 TOPIC_RESULT = config['mqtt']['publisher']['topics']['result']
 TOPIC_TRACE = config['mqtt']['publisher']['topics']['trace']
-SOURCE_TIMESTAMP =  "2024-12-11T08:24:49Z"
 
 TOOLBOXIDS = ['ILLL502033771', 'ILLL502033772', 'ILLL502033773', 'ILLL502033774', 'ILLL502033775']
 TOOLIDS = ['setitec001', 'setitec002', 'setitec003', 'setitec004', 'setitec005']
 
-client = mqtt.Client()
-client.connect(config['mqtt']['broker']['host'], 
-               config['mqtt']['broker']['port'])
-
-# # print(os.getcwd())
-# with open (f'{os.getcwd()}\\data\\Result.json') as f:
-#     d_result = f.read()
-# with open (f'{os.getcwd()}\\data\\Trace.json') as f:
-#     d_trace = f.read()
-
-# # We use this to randomise the order of publishing
-# list_to_publish = [(TOPIC_RESULT, d_result), 
-#                    (TOPIC_TRACE, d_trace)]
 
 def publish(topic, payload, timestamp0, timestamp1) -> None:
     payload.replace(timestamp0, timestamp1)
     d = json.loads(payload)
-    # print(payload)
-    # print(d['Messages'])
-    # client.publish("test/topic", json.dumps(payload))
     client.publish(topic, json.dumps(d))
     t = time.localtime()
     current_time = time.strftime("%H:%M:%S", t)
     print(f"[{current_time}]: Publish data on {topic} '{timestamp1}'")
 
-# while True:
-#     source_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
-#     random.shuffle(list_to_publish)
-#     for item in list_to_publish:
-#         publish(item[0], item[1], source_timestamp)
-#         time.sleep(random.randint(1, 3))
 
-# Sample data folders
-DATA_FOLDERS = ['data0', 'data1']
 
 def find_in_dict(data: dict, target_key: str) -> list:
     """
@@ -87,6 +63,12 @@ def find_in_dict(data: dict, target_key: str) -> list:
     _search(data)
     return results
 
+# Create client
+client = mqtt.Client()
+client.connect(config['mqtt']['broker']['host'], 
+               config['mqtt']['broker']['port'])
+
+# Publish data continuously
 while True:
     # Select a random data folder to publish and read the data
     random.shuffle(DATA_FOLDERS)
@@ -99,8 +81,8 @@ while True:
         d_trace = f.read()
         source_timestamps = find_in_dict(dict(json.loads(d_result)), 'SourceTimestamp')
         assert len(set(source_timestamps)) == 1
-        
-    # assert len(set(source_timestamps)) == 1
+
+    # Update the source timestamp        
     original_source_timestamp = source_timestamps[0]
     new_source_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
     
@@ -109,13 +91,15 @@ while True:
     random.shuffle(TOOLBOXIDS)
     random.shuffle(TOOLIDS)
     
+    # Prepare the topics
     topic_result = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['result']}"
     topic_trace = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['trace']}"
 
-    # Publish the data
+    # Shuffle the data order
     list_to_publish = [(topic_result, d_result), (topic_trace, d_trace)]
     random.shuffle(list_to_publish)
 
+    # Publish the data
     for item in list_to_publish:
         publish(item[0], item[1], original_source_timestamp, new_source_timestamp)
         time.sleep(random.randint(1, 3))
