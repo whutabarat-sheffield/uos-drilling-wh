@@ -5,10 +5,21 @@
 
 mqtt:
   broker:
+    # host: ""OPCPUBSUB"
     host: "localhost"
     port: 1883
     username: ""  # Optional
     password: ""  # Optional
+
+  listener:
+    root: "OPCPUBSUB"
+    # toolboxid: "ILLL502033771"
+    toolboxid: "+"
+    # toolid: "setitectest"
+    toolid: "+"
+    result: "ResultManagement"
+    trace: "ResultManagement/Trace"
+    client_id: "python_listener"
 
   data_ids:
     machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'
@@ -20,14 +31,10 @@ mqtt:
     thrust_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty'
     step_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber'
 
+# This is for testing purposes
   publisher:
     topics:
-      - "OPCPUBSUB/toolboxid/toolid/ResultManagement"
-      - "OPCPUBSUB/toolboxid/toolid/ResultManagement/Traces"
+      result: "OPCPUBSUB/ILLL502033771/setitectest/ResultManagement"
+      trace: "OPCPUBSUB/ILLL502033771/setitectest/ResultManagement/Traces"
     client_id: "setitec_publisher"
 
-  listener:
-    topics:
-      - "OPCPUBSUB/toolboxid/toolid/ResultManagement"
-      - "OPCPUBSUB/toolboxid/toolid/ResultManagement/Traces"
-    client_id: "python_listener"
