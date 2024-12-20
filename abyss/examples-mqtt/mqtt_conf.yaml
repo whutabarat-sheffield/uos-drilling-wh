@@ -19,7 +19,7 @@ mqtt:
     toolid: "+"
     result: "ResultManagement"
     trace: "ResultManagement/Trace"
-    client_id: "python_listener"
+    # client_id: "python_listener"
 
   data_ids:
     machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'

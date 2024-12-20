@@ -37,7 +37,7 @@ TOOLIDS = ['setitec001', 'setitec002', 'setitec003', 'setitec004', 'setitec005']
 
 
 def publish(topic, payload, timestamp0, timestamp1) -> None:
-    payload.replace(timestamp0, timestamp1)
+    payload = payload.replace(timestamp0, timestamp1)
     d = json.loads(payload)
     client.publish(topic, json.dumps(d))
     t = time.localtime()
