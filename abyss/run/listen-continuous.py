@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 import paho.mqtt.client as mqtt
 import yaml
 import json
@@ -19,6 +20,8 @@ from abyss.uos_depth_est_core import (
     convert_mqtt_to_df,
     depth_est_ml_mqtt,
 )
+
+from join_separate_mqtt import convert_mqtt_to_df
 
 def setup_logging(level):
     """
@@ -295,9 +298,29 @@ class DrillingDataAnalyser:
             logging.info("Tool ID: %s", tool_id)
             logging.info("Timestamp: %s", datetime.fromtimestamp(result_msg.timestamp))
             logging.info("Time difference: %.3f seconds", abs(result_msg.timestamp - trace_msg.timestamp))
+
+            # Here we can add our specific processing logic for the matched messages
+            # Example: depth_est_ml_mqtt(result_msg.data, trace_msg.data)
+
+
+            pd = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config['mqtt']['data_ids'])
+
+            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                fn = f"{result_msg.timestamp}.txt"
+                with open(fn, 'w') as file:
+                    file.write(f"Toolbox ID: {toolbox_id}\n")
+                    file.write(f"Tool ID: {tool_id}\n")
+                    file.write(f"Timestamp: {datetime.fromtimestamp(result_msg.timestamp)}\n\n")
+                    file.write(f"RESULT:\n\n")
+                    file.write(str(result_msg.data))
+                    file.write(f"\n\nTRACE:\n\n")
+                    file.write(str(trace_msg.data))
+                logging.info(f"Stored matched data into {fn}")
+                pd.to_csv(f"{result_msg.timestamp}.csv", index=False)
+            
             
         except Exception as e:
-            logging.error("Error in process_matching_messages: %s", str(e))
+            logging.critical("Error in process_matching_messages: %s", str(e))
 
     def run(self):
         """Main method to set up MQTT clients and start listening"""
@@ -357,7 +380,7 @@ def main():
         analyzer = DrillingDataAnalyser(config_path=args.config)
         analyzer.run()
     except FileNotFoundError:
-        logging.critical("Configuration file '%s' not found.", args.config)
+        logging.critical("Configuration file '%s' not found.", args.config, os.getcwd())
         sys.exit(1)
     except yaml.YAMLError as e:
         logging.critical("Invalid YAML configuration in '%s': %s", args.config, str(e))
