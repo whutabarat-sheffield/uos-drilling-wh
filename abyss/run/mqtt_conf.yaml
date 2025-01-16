@@ -66,6 +66,10 @@ mqtt:
    thrust_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty'
    step_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber'
 
+estimation:
+  keypoints: 'ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints'
+  depth_estimation: 'ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation'
+
  # Test Publisher Configuration
  # -------------------------
  # Settings for test message publishing (development/testing only)
