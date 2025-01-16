@@ -122,6 +122,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
     if result_df is not None and trace_df is not None:
         try:
             combined_df = pd.merge(result_df, trace_df, on='Step (nb)', how='outer')
+            logging.debug(str(combined_df.dtypes))
             return combined_df
         except Exception as e:
             logging.critical("Error merging RESULT and TRACE DataFrames: %s", str(e))

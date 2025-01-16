@@ -19,6 +19,7 @@ from abyss.uos_depth_est_core import (
     depth_est_ml,
     convert_mqtt_to_df,
     depth_est_ml_mqtt,
+    DepthInference
 )
 
 from join_separate_mqtt import convert_mqtt_to_df
@@ -93,6 +94,9 @@ class DrillingDataAnalyser:
         
         # Cleanup interval (10 times the time window)
         self.cleanup_interval = 10 * self.time_window
+
+        # Load the depth inference model
+        self.depth_inference = DepthInference() 
 
         logging.debug("DrillingDataAnalyser initialized")
 
@@ -303,9 +307,9 @@ class DrillingDataAnalyser:
             # Example: depth_est_ml_mqtt(result_msg.data, trace_msg.data)
 
 
-            pd = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config['mqtt']['data_ids'])
-
-            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config['mqtt']['data_ids'])
+            print(f"debug level: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
+            if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
                 fn = f"{result_msg.timestamp}.txt"
                 with open(fn, 'w') as file:
                     file.write(f"Toolbox ID: {toolbox_id}\n")
@@ -316,11 +320,24 @@ class DrillingDataAnalyser:
                     file.write(f"\n\nTRACE:\n\n")
                     file.write(str(trace_msg.data))
                 logging.info(f"Stored matched data into {fn}")
-                pd.to_csv(f"{result_msg.timestamp}.csv", index=False)
-            
+                csvfn = f"{result_msg.timestamp}.csv"
+                df.to_csv(csvfn, index=False)
+                logging.info(f"Stored matched dataframe into {csvfn}")
             
         except Exception as e:
             logging.critical("Error in process_matching_messages: %s", str(e))
+
+        try:
+            # Perform keypoint identification
+            l_result = self.depth_inference.infer_common(df)
+            depth_estimation = l_result[1]-l_result[0]
+            logging.info(f"Keypoints, depth estimation: {l_result, depth_estimation}")
+            # Publish the results somewhere
+        except Exception as e:
+            logging.error("Error in depth estimation: %s", str(e))
+            
+            
+
 
     def run(self):
         """Main method to set up MQTT clients and start listening"""

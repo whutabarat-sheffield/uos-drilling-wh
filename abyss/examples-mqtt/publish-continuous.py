@@ -26,12 +26,14 @@ args = parser.parse_args()
 # config = yaml.safe_load(open("mqtt_conf.yaml"))
 config = yaml.safe_load(open(args.conf))
 
-# Sample data folders
+# Sample data folders, these are the new datasets
 DATA_FOLDERS = ['data0', 'data1']
 
+# MQTT topics for publishing
 TOPIC_RESULT = config['mqtt']['publisher']['topics']['result']
 TOPIC_TRACE = config['mqtt']['publisher']['topics']['trace']
 
+# Made up toolboxids and toolids for simulating multiple tools
 TOOLBOXIDS = ['ILLL502033771', 'ILLL502033772', 'ILLL502033773', 'ILLL502033774', 'ILLL502033775']
 TOOLIDS = ['setitec001', 'setitec002', 'setitec003', 'setitec004', 'setitec005']
 
