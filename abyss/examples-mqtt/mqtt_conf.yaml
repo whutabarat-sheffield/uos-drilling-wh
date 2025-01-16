@@ -6,7 +6,8 @@
 mqtt:
   broker:
     # host: ""OPCPUBSUB"
-    host: "localhost"
+    # host: "localhost"
+    host: host.docker.internal
     port: 1883
     username: ""  # Optional
     password: ""  # Optional
