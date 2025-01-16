@@ -6,20 +6,24 @@ openpyxl
 h5py
 nptdms
 scaleogram
+scikit-learn
 
 # Deep Learning Libraries
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.3.1+cpu
+torch==2.3.1+cpu # >2.3.1 does not work
 torchvision
 torchaudio
+tokenizers
 
 # Visualization and Logging
 tensorboardX
+tqdm
 
 # Jupyter and Kernel Support
 ipykernel
 jupyter
+jupyterlab
 
 # Communication and Configuration
-paho-mqtt
+paho-mqtt<2.0.0
 pyyaml
