@@ -1,3 +1,5 @@
+import logging
+import sys
 import paho.mqtt.client as mqtt
 import yaml
 import json
@@ -17,6 +19,19 @@ from abyss.uos_depth_est_core import (
     convert_mqtt_to_df,
     depth_est_ml_mqtt,
 )
+
+def setup_logging(level):
+    """
+    Configure logging with the specified level.
+    
+    Args:
+        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    """
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
 
 def find_in_dict(data: dict, target_key: str) -> list:
     """
@@ -56,6 +71,7 @@ class DrillingDataAnalyser:
         # Load configuration
         with open(config_path, 'r') as file:
             self.config = yaml.safe_load(file)
+            logging.info(f"Loaded configuration from {config_path}")
         
         # MQTT connection parameters
         self.broker = self.config['mqtt']['broker']
@@ -75,6 +91,8 @@ class DrillingDataAnalyser:
         # Cleanup interval (10 times the time window)
         self.cleanup_interval = 10 * self.time_window
 
+        logging.debug("DrillingDataAnalyser initialized")
+
     def create_mqtt_client(self, client_id):
         """Create MQTT client with basic configuration"""
         client = mqtt.Client(client_id, callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
@@ -84,6 +102,7 @@ class DrillingDataAnalyser:
                 self.broker['username'], 
                 self.broker['password']
             )
+            logging.debug(f"Configured MQTT client with username authentication")
         
         return client
 
@@ -91,20 +110,20 @@ class DrillingDataAnalyser:
         """Create an MQTT client for listening to Result data"""
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
-                print("Result Listener Connected with result code " + str(rc))
+                logging.info("Result Listener Connected with result code %s", rc)
                 topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
                 client.subscribe(topic)
                 self.topics.append(topic)
-                print(f"Subscribed to {topic}")
+                logging.info(f"Subscribed to {topic}")
             else:
-                print(f"Failed to connect with result code {rc}")
+                logging.error(f"Failed to connect with result code {rc}")
 
         def on_message(client, userdata, msg):
             try:
                 data = json.loads(msg.payload)
-                print(f"\nResult Message on {msg.topic}:")
+                logging.debug("Result Message on %s", msg.topic)
                 st = find_in_dict(data, 'SourceTimestamp')
-                print(f"Source Timestamp: {st[0]}")
+                logging.debug("Source Timestamp: %s", st[0])
                 dt = datetime.strptime(st[0], "%Y-%m-%dT%H:%M:%SZ")
                 unix_timestamp = dt.timestamp()
                 
@@ -114,13 +133,13 @@ class DrillingDataAnalyser:
                     source=msg.topic
                 )
                 self.add_message(tsdata)
-                print(f"Unix Timestamp: {unix_timestamp}")
-                print(f"ToolboxId: {msg.topic.split('/')[1]}")
-                print(f"ToolId: {msg.topic.split('/')[2]}")
+                logging.debug("Unix Timestamp: %s", unix_timestamp)
+                logging.debug("ToolboxId: %s", msg.topic.split('/')[1])
+                logging.debug("ToolId: %s", msg.topic.split('/')[2])
             except json.JSONDecodeError:
-                print(f"Error decoding JSON from {msg.topic}")
+                logging.error(f"Error decoding JSON from {msg.topic}")
             except Exception as e:
-                print(f"Error processing message: {str(e)}")
+                logging.error(f"Error processing message: {str(e)}")
 
         client = mqtt.Client("result_listener")
         client.on_connect = on_connect
@@ -131,20 +150,20 @@ class DrillingDataAnalyser:
         """Create an MQTT client for listening to Trace data"""
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
-                print("Trace Listener Connected with result code " + str(rc))
+                logging.info("Trace Listener Connected with result code %s", rc)
                 topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
                 client.subscribe(topic)
                 self.topics.append(topic)
-                print(f"Subscribed to {topic}")
+                logging.info(f"Subscribed to {topic}")
             else:
-                print(f"Failed to connect with result code {rc}")
+                logging.error(f"Failed to connect with result code {rc}")
 
         def on_message(client, userdata, msg):
             try:
                 data = json.loads(msg.payload)
-                print(f"\nTrace Message on {msg.topic}:")
+                logging.debug("Trace Message on %s", msg.topic)
                 st = find_in_dict(data, 'SourceTimestamp')
-                print(f"Source Timestamp: {st[0]}")
+                logging.debug("Source Timestamp: %s", st[0])
                 dt = datetime.strptime(st[0], "%Y-%m-%dT%H:%M:%SZ")
                 unix_timestamp = dt.timestamp()
                 
@@ -154,13 +173,13 @@ class DrillingDataAnalyser:
                     source=msg.topic
                 )
                 self.add_message(tsdata)
-                print(f"Unix Timestamp: {unix_timestamp}")
-                print(f"ToolboxId: {msg.topic.split('/')[1]}")
-                print(f"ToolId: {msg.topic.split('/')[2]}")
+                logging.debug("Unix Timestamp: %s", unix_timestamp)
+                logging.debug("ToolboxId: %s", msg.topic.split('/')[1])
+                logging.debug("ToolId: %s", msg.topic.split('/')[2])
             except json.JSONDecodeError:
-                print(f"Error decoding JSON from {msg.topic}")
+                logging.error(f"Error decoding JSON from {msg.topic}")
             except Exception as e:
-                print(f"Error processing message: {str(e)}")
+                logging.error(f"Error processing message: {str(e)}")
 
         client = mqtt.Client("trace_listener")
         client.on_connect = on_connect
@@ -170,40 +189,36 @@ class DrillingDataAnalyser:
     def add_message(self, data: TimestampedData):
         """Add a message to the buffer and check for matches"""
         try:
-            # Determine correct buffer based on message type
             matching_topic = None
             if self.config['mqtt']['listener']['trace'] in data.source:
                 matching_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
             else:
                 matching_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
             
-            print(f"\nDEBUG: Adding message to buffer:")
-            print(f"Source: {data.source}")
-            print(f"Matching topic: {matching_topic}")
-            print(f"Buffer size before: {len(self.buffers[matching_topic])}")
+            logging.debug("Adding message to buffer")
+            logging.debug("Source: %s", data.source)
+            logging.debug("Matching topic: %s", matching_topic)
+            logging.debug("Buffer size before: %s", len(self.buffers[matching_topic]))
             
-            # Store message in the correct buffer
             self.buffers[matching_topic].append(data)
             
-            print(f"Buffer size after: {len(self.buffers[matching_topic])}")
-            print(f"All buffers: {[f'{k}: {len(v)}' for k,v in self.buffers.items()]}")
+            logging.debug("Buffer size after: %s", len(self.buffers[matching_topic]))
+            logging.debug("All buffers: %s", {k: len(v) for k,v in self.buffers.items()})
             
-            # Look for matches immediately after adding
             self.find_and_process_matches()
             
-            # Check if it's time to cleanup
             current_time = datetime.now().timestamp()
             if current_time - self.last_cleanup >= self.cleanup_interval:
                 self.cleanup_old_messages()
                 self.last_cleanup = current_time
 
         except Exception as e:
-            print(f"Error in add_message: {str(e)}")
+            logging.error("Error in add_message: %s", str(e))
 
     def find_and_process_matches(self):
         """Find and process messages with matching timestamps and tool IDs"""
         try:
-            print("\nDEBUG: Checking for matches")
+            logging.debug("Checking for matches")
             
             result_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
             trace_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
@@ -211,14 +226,12 @@ class DrillingDataAnalyser:
             result_messages = self.buffers.get(result_topic, [])
             trace_messages = self.buffers.get(trace_topic, [])
             
-            print(f"Result messages: {len(result_messages)}")
-            print(f"Trace messages: {len(trace_messages)}")
+            logging.debug("Result messages: %s", len(result_messages))
+            logging.debug("Trace messages: %s", len(trace_messages))
             
-            # Keep track of messages to remove
             to_remove_result = []
             to_remove_trace = []
             
-            # Find all matches without removing immediately
             for result_msg in result_messages:
                 r_parts = result_msg.source.split('/')
                 r_tool_key = f"{r_parts[1]}/{r_parts[2]}"
@@ -232,28 +245,25 @@ class DrillingDataAnalyser:
                         result_msg not in to_remove_result and 
                         trace_msg not in to_remove_trace):
                         
-                        print(f"\nFound matching pair!")
-                        print(f"Tool: {r_tool_key}")
-                        print(f"Timestamp: {datetime.fromtimestamp(result_msg.timestamp)}")
+                        logging.info("Found matching pair!")
+                        logging.info("Tool: %s", r_tool_key)
+                        logging.info("Timestamp: %s", datetime.fromtimestamp(result_msg.timestamp))
                         
-                        # Process the pair
                         self.process_matching_messages([result_msg, trace_msg])
                         
-                        # Mark for removal
                         to_remove_result.append(result_msg)
                         to_remove_trace.append(trace_msg)
             
-            # Remove processed messages after finding all matches
             self.buffers[result_topic] = [msg for msg in result_messages if msg not in to_remove_result]
             self.buffers[trace_topic] = [msg for msg in trace_messages if msg not in to_remove_trace]
             
         except Exception as e:
-            print(f"Error in find_and_process_matches: {str(e)}")
+            logging.error("Error in find_and_process_matches: %s", str(e))
 
     def cleanup_old_messages(self):
         """Remove messages older than the cleanup interval"""
         try:
-            print("\nDEBUG: Cleaning up old messages")
+            logging.debug("Cleaning up old messages")
             current_time = datetime.now().timestamp()
             removed_count = 0
             
@@ -265,10 +275,10 @@ class DrillingDataAnalyser:
                 ]
                 removed_count += original_length - len(self.buffers[topic])
             
-            print(f"Removed {removed_count} old messages")
+            logging.info("Removed %s old messages", removed_count)
             
         except Exception as e:
-            print(f"Error in cleanup_old_messages: {str(e)}")
+            logging.error("Error in cleanup_old_messages: %s", str(e))
 
     def process_matching_messages(self, matches: List[TimestampedData]):
         """Process messages that have matching timestamps"""
@@ -280,18 +290,14 @@ class DrillingDataAnalyser:
             toolbox_id = parts[1]
             tool_id = parts[2]
             
-            print("\nProcessing matched pair:")
-            print(f"Toolbox ID: {toolbox_id}")
-            print(f"Tool ID: {tool_id}")
-            print(f"Timestamp: {datetime.fromtimestamp(result_msg.timestamp)}")
-            print(f"Time difference: {abs(result_msg.timestamp - trace_msg.timestamp):.3f} seconds")
-            
-            # Here you can process the paired data as needed
-            # result_data = result_msg.data
-            # trace_data = trace_msg.data
+            logging.info("Processing matched pair:")
+            logging.info("Toolbox ID: %s", toolbox_id)
+            logging.info("Tool ID: %s", tool_id)
+            logging.info("Timestamp: %s", datetime.fromtimestamp(result_msg.timestamp))
+            logging.info("Time difference: %.3f seconds", abs(result_msg.timestamp - trace_msg.timestamp))
             
         except Exception as e:
-            print(f"Error in process_matching_messages: {str(e)}")
+            logging.error("Error in process_matching_messages: %s", str(e))
 
     def run(self):
         """Main method to set up MQTT clients and start listening"""
@@ -303,16 +309,14 @@ class DrillingDataAnalyser:
         trace_client.connect(self.config['mqtt']['broker']['host'], 
                            self.config['mqtt']['broker']['port'])
         
-        # Start both loops in non-blocking mode
         result_client.loop_start()
         trace_client.loop_start()
 
         try:
-            # Keep the main thread alive
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\nStopping MQTT clients...")
+            logging.info("Stopping MQTT clients...")
             result_client.loop_stop()
             trace_client.loop_stop()
             result_client.disconnect()
@@ -324,30 +328,42 @@ def main():
     
     Command line arguments:
         --config: Path to YAML configuration file (default: mqtt_conf.yaml)
+        --log-level: Logging level (default: INFO)
     
     Example usage:
         python -m drilling_analyzer
-        python -m drilling_analyzer --config=/path/to/custom_config.yaml
+        python -m drilling_analyzer --config=custom_config.yaml --log-level=DEBUG
     """
     parser = argparse.ArgumentParser(description='MQTT Drilling Data Analyzer')
-    parser.add_argument('--config', 
-                       type=str,
-                       default='mqtt_conf.yaml',
-                       help='Path to YAML configuration file (default: mqtt_conf.yaml)')
+    parser.add_argument(
+        '--config', 
+        type=str,
+        default='mqtt_conf.yaml',
+        help='Path to YAML configuration file (default: mqtt_conf.yaml)'
+    )
+    parser.add_argument(
+        '--log-level',
+        type=str,
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default='INFO',
+        help='Set the logging level (default: INFO)'
+    )
     
     args = parser.parse_args()
+    
+    setup_logging(getattr(logging, args.log_level))
     
     try:
         analyzer = DrillingDataAnalyser(config_path=args.config)
         analyzer.run()
     except FileNotFoundError:
-        print(f"Error: Configuration file '{args.config}' not found.")
+        logging.critical("Configuration file '%s' not found.", args.config)
         sys.exit(1)
     except yaml.YAMLError as e:
-        print(f"Error: Invalid YAML configuration in '{args.config}': {str(e)}")
+        logging.critical("Invalid YAML configuration in '%s': %s", args.config, str(e))
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logging.critical("Error: %s", str(e))
         sys.exit(1)
 
 if __name__ == "__main__":
