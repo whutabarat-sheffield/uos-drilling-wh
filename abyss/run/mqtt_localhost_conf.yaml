@@ -1,0 +1,78 @@
+# MQTT Configuration for Drilling Data Analysis System
+# ================================================
+
+# This configuration file defines the MQTT broker connection settings and topic structures
+# for the drilling data analysis system. The system listens for two types of messages:
+# - Result messages: Contains metadata and results
+# - Trace messages: Contains detailed trace data
+
+# Topic Structure Examples:
+# - Results: OPCPUBSUB/toolboxid/toolid/ResultManagement
+# - Traces: OPCPUBSUB/toolboxid/toolid/ResultManagement/Trace
+
+# Where:
+# - OPCPUBSUB: Root topic prefix
+# - toolboxid: ID of the toolbox (e.g., ILLL502033771)
+# - toolid: ID of the specific tool (e.g., setitectest)
+
+mqtt:
+ # Broker Connection Settings
+ # ------------------------
+ broker:
+   # Host can be one of:
+   # - "localhost" for local development
+   # - "host.docker.internal" for Docker containers to connect to host machine
+   # - Actual hostname or IP for production
+  #  host: host.docker.internal
+   host: "localhost"
+   
+   # Standard MQTT port (default: 1883)
+   # Use 8883 for MQTT over TLS
+   port: 1883
+   
+   # Authentication credentials (if required by broker)
+   username: ""  # Optional: Set username for authenticated connections
+   password: ""  # Optional: Set password for authenticated connections
+
+ # Listener Configuration
+ # --------------------
+ listener:
+   root: "OPCPUBSUB"  # Root topic prefix
+   
+   # Tool identification patterns:
+   # "+" = wildcard to match any single level
+   # Specific ID = listen only to that specific tool
+   toolboxid: "+"  # Use specific ID (e.g., "ILLL502033771") or "+" for all
+   toolid: "+"     # Use specific ID (e.g., "setitectest") or "+" for all
+   
+   # Message type suffixes
+   result: "ResultManagement"        # Suffix for result messages
+   trace: "ResultManagement/Trace"   # Suffix for trace messages
+
+ # Data Field Mappings
+ # -----------------
+ # These paths define where to find specific data fields in the message payload
+ data_ids:
+   # Machine identification
+   machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'
+   
+   # Trace data paths
+   position: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepTraceContent[0].Values'
+   thrust: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityThrustTrace.StepTraceContent[0].Values'
+   torque: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityTorqueTrace.StepTraceContent[0].Values'
+   step: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.StepNumberTrace.StepTraceContent[0].Values'
+   
+   # Empty value references
+   torque_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty'
+   thrust_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty'
+   step_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber'
+
+ # Test Publisher Configuration
+ # -------------------------
+ # Settings for test message publishing (development/testing only)
+ publisher:
+   topics:
+     # Example topics using specific tool IDs
+     result: "OPCPUBSUB/ILLL502033771/setitectest/ResultManagement"
+     trace: "OPCPUBSUB/ILLL502033771/setitectest/ResultManagement/Traces"
+   client_id: "setitec_publisher"  # Unique ID for the test publisher
