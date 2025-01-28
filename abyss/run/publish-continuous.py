@@ -27,7 +27,7 @@ args = parser.parse_args()
 config = yaml.safe_load(open(args.conf))
 
 # Sample data folders
-DATA_FOLDERS = ['data0', 'data1']
+DATA_FOLDERS = ['data0', 'data1', 'data2']
 
 TOPIC_RESULT = config['mqtt']['publisher']['topics']['result']
 TOPIC_TRACE = config['mqtt']['publisher']['topics']['trace']

@@ -12,7 +12,7 @@ import argparse
 
 from dataclasses import dataclass
 from typing import Dict, List, TypeVar, Generic
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 from abyss.uos_depth_est_core import (
@@ -151,6 +151,7 @@ class DrillingDataAnalyser:
         client = mqtt.Client("result_listener")
         client.on_connect = on_connect
         client.on_message = on_message
+        self.result_client = client
         return client
     
     def create_trace_listener(self):
@@ -191,6 +192,8 @@ class DrillingDataAnalyser:
         client = mqtt.Client("trace_listener")
         client.on_connect = on_connect
         client.on_message = on_message
+
+        self.trace_client = client
         return client
 
     def add_message(self, data: TimestampedData):
@@ -327,18 +330,44 @@ class DrillingDataAnalyser:
         except Exception as e:
             logging.critical("Error in process_matching_messages: %s", str(e))
 
-        try:
-            # Perform keypoint identification
-            l_result = self.depth_inference.infer_common(df)
-            depth_estimation = l_result[1]-l_result[0]
-            logging.info(f"Keypoints, depth estimation: {l_result, depth_estimation}")
-            # Publish the results somewhere
-        except Exception as e:
-            logging.error("Error in depth estimation: %s", str(e))
+        # prepare data for publishing
+        # dt = datetime.strptime(result_msg.timestamp, "%Y-%m-%dT%H:%M:%SZ")
+        dt_utc = datetime.fromtimestamp(result_msg.timestamp)
+        dt = datetime.strftime(dt_utc, "%Y-%m-%dT%H:%M:%SZ")
+
+        # OUTPUT: Depth estimation
+        # insufficient steps to estimate keypoints
+        if len(df['Step (nb)'].unique()) < 2:
+            
+            keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
+            keyp_data = dict(Value = 'Not enough steps to estimate keypoints', SourceTimestamp = dt)
+            self.result_client.publish(keyp_topic, json.dumps(keyp_data))
+            dest_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['depth_estimation']}"
+            dest_data = dict(Value = 'Not enough steps to estimate depth', SourceTimestamp = dt)
+            self.result_client.publish(dest_topic, json.dumps(dest_data))
+            logging.error("Not enough steps to estimate depth")
+            return
+
+        # more than one step, perform keypoint identification
+        else:
+            try:
+                # Perform keypoint identification
+                l_result = self.depth_inference.infer_common(df)
+                logging.info(f"Keypoints: {l_result}")
+                # Perform depth estimation
+                depth_estimation = l_result[1]-l_result[0]
+                logging.info(f"Depth estimation: {depth_estimation}")
+                # Publish the results somewhere
+                keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
+                keyp_data = dict(Value = l_result, SourceTimestamp = dt)
+                self.result_client.publish(keyp_topic, json.dumps(keyp_data))
+                dest_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['depth_estimation']}"
+                dest_data = dict(Value = depth_estimation, SourceTimestamp = dt)
+                self.result_client.publish(dest_topic, json.dumps(dest_data))
+            except Exception as e:
+                logging.error("Error in depth estimation: %s", str(e))
             
             
-
-
     def run(self):
         """Main method to set up MQTT clients and start listening"""
         result_client = self.create_result_listener()
@@ -378,7 +407,7 @@ def main():
     parser.add_argument(
         '--config', 
         type=str,
-        default='mqtt_conf.yaml',
+        default='mqtt_docker_conf.yaml',
         help='Path to YAML configuration file (default: mqtt_conf.yaml)'
     )
     parser.add_argument(
