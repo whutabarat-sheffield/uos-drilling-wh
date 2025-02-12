@@ -10,3 +10,6 @@ Change into /abyss
 Type 'pip install .'
 
 Go into test and run it
+
+# Docker installation
+
