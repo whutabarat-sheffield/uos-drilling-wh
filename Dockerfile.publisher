@@ -80,7 +80,7 @@ EXPOSE 1883
 # CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
 # CMD ["python", "listen-continuous.py"]
 # CMD ["python", "publish-continuous.py", ""]
-CMD ["python", "listen-continuous.py"]
+CMD ["python", "mqtt-publisher.py"]
 # CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
 # Run the application.
 # CMD python listen-continuous.py 

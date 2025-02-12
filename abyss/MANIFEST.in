@@ -1,2 +1,2 @@
-recursive-include abyss *
+recursive-include src/abyss/trained_model *
 include README.md

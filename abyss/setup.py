@@ -1,5 +1,6 @@
 import os
 import setuptools
+import glob
 
 CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -32,15 +33,34 @@ LOCAL_DEPENDENCIES = {
 
 def get_dependency(package, location):
     if location == 'git':
-        return f'{package} @ git+{DEPENDENCIES[package]}'
+        return f'{package} @ git+{LOCAL_DEPENDENCIES[package]}'
     elif location == 'link':
-        return f'{DEPENDENCIES[package]}#egg={package}'
+        return f'{LOCAL_DEPENDENCIES[package]}#egg={package}'
     elif location == 'local':
         local_dep = os.path.join(CURRENT_DIR, '..', 'deps', f'{LOCAL_DEPENDENCIES[package]}')
         return f'{package} @ file:///{local_dep}'
     else:
         raise ValueError(f'Unknown location: {location}')
 
+def package_files(directory):
+    paths = []
+    for (path, directories, filenames) in os.walk(directory):
+        for filename in filenames:
+            paths.append(os.path.join('..', path, filename))
+    return paths
+
+extra_files = package_files('src/abyss/trained_model')
+
+data_files = []
+directories = glob.glob('./src/abyss/trained_model')
+for directory in directories:
+    files = glob.glob(directory+'*')
+    # data_files.extend((directory, files))
+    data_files.extend(files)
+
+# print(data_files)
+open('data_files.log', 'w').write(os.getcwd() + '\n' + '\n'.join(data_files))
+open('extra_files.log', 'w').write(os.getcwd() + '\n' + '\n'.join(extra_files))
 
 setuptools.setup(
     name="abyss",
@@ -60,6 +80,8 @@ setuptools.setup(
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
+    include_package_data=True,
+    package_data={'': extra_files},
     python_requires=">=3.9",
     install_requires=[
         # 'distribute',
@@ -92,7 +114,7 @@ setuptools.setup(
             'depth-est = abyss:run.uos_depth_estimation_listen',
         ],
     },
-    include_package_data=True,
+
 )
 
 # setuptools.setup(
