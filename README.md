@@ -25,27 +25,25 @@ git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
 Details on step #2 and #3
 CPU version:
 ```
-#  run the publisher
+#  step #2 build the publisher and listener
+docker build -t publisher -f Dockerfile.local.publisher .
 docker build -t listener.cpu -f Dockerfile.local.cpu .
-# run the listener
+# step #3 run the publisher then listener
+docker run -t publisher
 docker run -t listener.cpu
 ```
 
 GPU version:
 ```
-# run the publisher
+# step #2 build the publisher and listener
+docker build -t publisher -f Dockerfile.local.publisher .
 docker build -t listener.gpu -f Dockerfile.local.gpu .
-# run the listener
+# step #3 run the publisher then listener
+docker run -t publisher
 docker run -t listener.gpu
 ```
 
-For testing in localhost:
-```
-docker build -t publisher -f Dockerfile.local.publisher .
-docker run -t publisher
-```
-
-For testing with a Raspberry Pi (only on simple network):
+For testing with a Raspberry Pi (still flaky and only on simple network):
 ```
 docker build -t publisher -f Dockerfile.rpi.publisher .
 docker run -t publisher
@@ -53,11 +51,16 @@ docker run -t publisher
 
 
 
-Notes:
+Below are Windo's notes on how to manage Docker -- please ignore:
 ```
+# Building
 docker build -t uos-listener-test001 .
+# Debugging
 docker run --rm -it --entrypoint /bin/bash uos-listener-test001
+# Checking site-packages
 cd /usr/local/lib/python3.10/site-packages/abyss
+# Running the publisher
 docker build -f Dockerfile.publisher -t uos-publisher-test001 .
+# Cleaning unused containers
 docker system prune -a 
 ```
