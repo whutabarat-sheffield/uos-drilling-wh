@@ -14,24 +14,28 @@ Go into test and run it
 # Docker installation
 
 1. Clone the entire repository
-2. Build the images
-3. Run the images
+2. Build the Docker images for publisher and listener
+3. Run the Docker images
 
-#1
+Details on step #1
 ```
 git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
 ```
 
-#2
+Details on step #2 and #3
 CPU version:
 ```
+#  run the publisher
 docker build -t listener.cpu -f Dockerfile.local.cpu .
+# run the listener
 docker run -t listener.cpu
 ```
 
 GPU version:
 ```
+# run the publisher
 docker build -t listener.gpu -f Dockerfile.local.gpu .
+# run the listener
 docker run -t listener.gpu
 ```
 
@@ -45,4 +49,15 @@ For testing with a Raspberry Pi (only on simple network):
 ```
 docker build -t publisher -f Dockerfile.rpi.publisher .
 docker run -t publisher
+```
+
+
+
+Notes:
+```
+docker build -t uos-listener-test001 .
+docker run --rm -it --entrypoint /bin/bash uos-listener-test001
+cd /usr/local/lib/python3.10/site-packages/abyss
+docker build -f Dockerfile.publisher -t uos-publisher-test001 .
+docker system prune -a 
 ```
