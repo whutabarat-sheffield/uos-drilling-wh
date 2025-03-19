@@ -18,15 +18,17 @@
 mqtt:
   # Broker Connection Settings
   # ------------------------
+  # These settings define the connection details for the MQTT broker
   broker:
     # Host can be one of:
     # - "localhost" for local development
     # - "host.docker.internal" for Docker containers to connect to host machine
     # - Actual hostname or IP for production
+    # TODO: Update the host based on the actual broker location
     host: host.docker.internal
     
     # Standard MQTT port (default: 1883)
-    # Use 8883 for MQTT over TLS
+    # TODO: Update the port if the broker uses a different port
     port: 1883
     
     # Authentication credentials (if required by broker)
@@ -35,7 +37,13 @@ mqtt:
 
   # Listener Configuration
   # --------------------
+  # These settings define the topic structure to listen for messages
+  # and the data field mappings to extract specific data from the payload
+  # TODO: Update these paths based on the actual data structure
   listener:
+    # Topic Structure
+    # --------------
+    # TODO: Update the root, toolboxid, and toolid based on the actual topic structure
     root: "OPCPUBSUB"  # Root topic prefix
     
     # Tool identification patterns:
@@ -51,6 +59,7 @@ mqtt:
   # Data Field Mappings
   # -----------------
   # These paths define where to find specific data fields in the message payload
+  # TODO: Update these paths based on the actual data structure
   data_ids:
     # Machine identification
     machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'
@@ -68,11 +77,13 @@ mqtt:
 
   # Estimation Configuration
   # ----------------------
+  # These paths define where to publish or store the results of the algorithm
+  # TODO: Update these paths based on the actual data structure
   estimation:
     keypoints: 'ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints'
     depth_estimation: 'ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation'
 
-  # Test Publisher Configuration
+  # Test Publisher Configuration -- For Testing Only
   # -------------------------
   publisher:
     topics:
