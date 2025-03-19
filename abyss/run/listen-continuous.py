@@ -357,7 +357,7 @@ class DrillingDataAnalyser:
                 # Perform depth estimation
                 depth_estimation = l_result[1]-l_result[0]
                 logging.info(f"Depth estimation: {depth_estimation}")
-                # Publish the results somewhere
+                # Publish the results somewhere as in the configuration file
                 keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
                 keyp_data = dict(Value = l_result, SourceTimestamp = dt)
                 self.result_client.publish(keyp_topic, json.dumps(keyp_data))
@@ -407,7 +407,7 @@ def main():
     parser.add_argument(
         '--config', 
         type=str,
-        default='mqtt_docker_conf.yaml',
+        default='mqtt_conf.yaml',
         help='Path to YAML configuration file (default: mqtt_conf.yaml)'
     )
     parser.add_argument(
