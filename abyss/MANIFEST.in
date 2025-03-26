@@ -1,3 +1,2 @@
 recursive-include src/abyss/trained_model *
 include README.md
-include deps/*.tar.gz
