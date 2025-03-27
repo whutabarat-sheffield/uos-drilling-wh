@@ -1,3 +1,43 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
+requires = ["setuptools>=60", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "abyss"
+version = "0.1.0"
+authors = [
+    {name = "Digital Manufacturing Group - University of Sheffield", email = "w.hutabarat@sheffield.ac.uk"},
+]
+description = "Electric drill data processing"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "openpyxl",
+    "torch==2.3.1",
+    "paho-mqtt<2.0.0",
+    "pyyaml",
+]
+
+[project.urls]
+"Homepage" = "https://github.airbus.corp/Airbus/uos-drilling"
+"Bug Tracker" = "https://github.airbus.corp/Airbus/uos-drilling/issues"
+
+[project.scripts]
+depth-est = "abyss.run.listen_continuous:main"
+
+[tool.setuptools]
+include-package-data = true
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["../abyss/trained_model/**/*"]
+

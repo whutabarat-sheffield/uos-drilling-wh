@@ -100,7 +100,7 @@ setuptools.setup(
         # 'tensorboardX',
         # 'ipykernel',
         # 'jupyter',
-        'paho-mqtt', # MQTT client
+        'paho-mqtt<2.0.0', # MQTT client
         'pyyaml', # YAML parser
         # get_dependency('transformers', location='local'),
         # get_dependency('tsfm-public', location='local'),
