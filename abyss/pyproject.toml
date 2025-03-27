@@ -29,7 +29,7 @@ dependencies = [
 "Bug Tracker" = "https://github.airbus.corp/Airbus/uos-drilling/issues"
 
 [project.scripts]
-depth-est = "abyss.run.listen_continuous:main"
+uos_depthest_listener = "abyss.run.listen_continuous:main"
 
 [tool.setuptools]
 include-package-data = true
