@@ -2,12 +2,12 @@ import abyss
 abysspath = abyss.__path__[0]
 
 from transformers import (
-    EarlyStoppingCallback,
-    PatchTSMixerConfig,
+    # EarlyStoppingCallback,
+    # PatchTSMixerConfig,
     PatchTSMixerForPrediction,
-    PatchTSMixerForPretraining,
-    Trainer,
-    TrainingArguments,
+    # PatchTSMixerForPretraining,
+    # Trainer,
+    # TrainingArguments,
 )
 
 def load_model(idx_cv, tool_age_predrilling=True):
