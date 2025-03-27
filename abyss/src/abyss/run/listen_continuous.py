@@ -6,7 +6,7 @@ import argparse
 
 
 from abyss.uos_depth_est import (
-    DrillingDataAnalyser,
+    MQTTDrillingDataAnalyser,
 )
 
 from abyss.uos_depth_est_utils import (
@@ -46,7 +46,7 @@ def main():
     setup_logging(getattr(logging, args.log_level))
     
     try:
-        analyzer = DrillingDataAnalyser(config_path=args.config)
+        analyzer = MQTTDrillingDataAnalyser(config_path=args.config)
         analyzer.run()
     except FileNotFoundError:
         logging.critical("Configuration file '%s' not found in %s", args.config, os.getcwd())
