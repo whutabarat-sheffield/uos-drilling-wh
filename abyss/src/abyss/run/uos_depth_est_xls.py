@@ -52,7 +52,7 @@ def main():
     try:
         analyzer = DepthInference()
         kp = analyzer.infer_xls(args.file_path)
-        print(f"Key points: {kp[0]:.2f} mm, {kp[1]:.2f} mm, depth: {kp[1]-kp[0]:.2f} mm")
+        print(f"Key points [1] {kp[0]:.2f} mm, [2] {kp[1]:.2f} mm, result: {kp[1]-kp[0]:.2f} mm depth")
     except FileNotFoundError:
         logging.critical("Configuration file '%s' not found in %s", args.config, os.getcwd())
         sys.exit(1)
