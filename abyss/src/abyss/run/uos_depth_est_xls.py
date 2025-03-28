@@ -5,7 +5,7 @@ import yaml
 import argparse
 
 
-from abyss.uos_depth_est_core import (
+from abyss.uos_inference import (
     DepthInference
 )
 
@@ -27,9 +27,8 @@ def main():
         python -m uos_depth_est file_path --log-level=DEBUG
     """
     parser = argparse.ArgumentParser(description='XLS Drilling Data Analyzer')
-    parser.add_argument(
-
-        type=str,
+    parser.add_argument("file_path",
+        # type=str,
         # default='mqtt_conf.yaml',
         help='Path to XLS Setitec file (default: none)'
     )
@@ -45,9 +44,15 @@ def main():
     
     setup_logging(getattr(logging, args.log_level))
     
+    ## -----------------------------------------------------------------------------
+    ##
+    ## Run the depth estimator here
+    ##
+    ## -----------------------------------------------------------------------------
     try:
-        analyzer = MQTTDrillingDataAnalyser(config_path=args.config)
-        analyzer.run()
+        analyzer = DepthInference()
+        kp = analyzer.infer_xls(args.file_path)
+        print(f"Key points: {kp[0]:.2f} mm, {kp[1]:.2f} mm, depth: {kp[1]-kp[0]:.2f} mm")
     except FileNotFoundError:
         logging.critical("Configuration file '%s' not found in %s", args.config, os.getcwd())
         sys.exit(1)
