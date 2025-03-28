@@ -37,11 +37,12 @@ class DepthInference:
     """
     def __init__(self, n_model=4, ref_data_path=None):
         try:
-            ref_data_path = abyss.__path__[0] + '/test_data/ref_15T.csv'
+            ref_data_path = abyss.__path__[0] + '/trained_model/reference_data/ref_15T.csv'
         except:
             assert ref_data_path is not None, "Please provide a reference data path."
         self.ref_data_path = ref_data_path
-        self.model = load_model(n_model, ref_data_path)
+        self.model = load_model(n_model)
+        self.idx_cv = n_model
 
 
     def inference(self, raw_data_path, hole_id='test', local=0, PREDRILLED=1):
@@ -68,8 +69,8 @@ class DepthInference:
 
         # prepare data, model, and estimator
         data, enter_pos = inference_data_pipeline(df_for_inference=df, ref_data_path=self.ref_data_path)
-        model = load_model(idx_cv=4)
-        exit_depth = exit_estimation_pipeline(model, data)
+        # model = load_model(idx_cv=4)
+        exit_depth = exit_estimation_pipeline(self.model, data)
         return enter_pos[hole_id], exit_depth
 
     def infer_json(self, json_path, hole_id='test', local=0, PREDRILLED=1):
@@ -115,8 +116,8 @@ class DepthInference:
         local = data['local'][0]
         PREDRILLED = data['PREDRILLED'][0]
         data, enter_pos = inference_data_pipeline(df_for_inference=self._df, ref_data_path=self.ref_data_path)
-        model = load_model(idx_cv=4)
-        exit_depth = exit_estimation_pipeline(model, data)
+        # model = load_model(idx_cv=4)
+        exit_depth = exit_estimation_pipeline(self.model, data)
         return enter_pos[hole_id], exit_depth
 
     def infer_xls(self, xls_path, hole_id='test', local=0, PREDRILLED=1):
@@ -139,7 +140,9 @@ class DepthInference:
         df['local'] = local
         df['PREDRILLED'] = PREDRILLED
 
-        return self.infer_common(df, hole_id, local, PREDRILLED)
+        # return self.infer_common(df, hole_id, local, PREDRILLED)
+        return self.infer_common(df)
+
 
 
 if __name__ == "__main__":
