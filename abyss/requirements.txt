@@ -12,6 +12,6 @@ paho-mqtt<2.0.0
 pyyaml
 
 # Hard dependencies (must use provided packages)
-accelerate==1.2.1
-transformers==4.41.0.dev0
-tsfm_public==0.2.17
+# accelerate @ file://localhost/build/abyss/src/deps/accelerate-1.2.1-py3-none-any.whl
+# transformers @ file://localhost/build/abyss/src/deps/transformers-4.41.0.dev0-py3-none-any.whl
+# tsfm_public @ file://localhost/build/abyss/src/deps/tsfm_public-0.2.17-py3-none-any.whl
