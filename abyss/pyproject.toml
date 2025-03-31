@@ -28,6 +28,7 @@ dependencies = {file = "requirements.txt"}
 uos_depthest_listener = "abyss.run.listen_continuous:main"
 uos_depthest_xls = "abyss.run.uos_depth_est_xls:main"
 uos_depthest_json = "abyss.run.uos_depth_est_json:main"
+uos_publish_json = "abyss.run.uos_publish_json:main"
 
 [tool.setuptools]
 include-package-data = true

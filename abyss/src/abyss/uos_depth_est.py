@@ -212,7 +212,7 @@ class MQTTDrillingDataAnalyser:
     def find_and_process_matches(self):
         """Find and process messages with matching timestamps and tool IDs"""
         try:
-            logging.debug("Checking for matches")
+            logging.info("Checking for matches")
             
             result_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
             trace_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
@@ -220,14 +220,15 @@ class MQTTDrillingDataAnalyser:
             result_messages = self.buffers.get(result_topic, [])
             trace_messages = self.buffers.get(trace_topic, [])
             
-            logging.debug("Result messages: %s", len(result_messages))
-            logging.debug("Trace messages: %s", len(trace_messages))
+            logging.info("Result messages: %s", len(result_messages))
+            logging.info("Trace messages: %s", len(trace_messages))
             
             to_remove_result = []
             to_remove_trace = []
             
             for result_msg in result_messages:
                 r_parts = result_msg.source.split('/')
+                logging.info("r_parts: %s", r_parts)
                 r_tool_key = f"{r_parts[1]}/{r_parts[2]}"
                 
                 for trace_msg in trace_messages:
@@ -294,7 +295,11 @@ class MQTTDrillingDataAnalyser:
             # Example: depth_est_ml_mqtt(result_msg.data, trace_msg.data)
 
 
-            df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config['mqtt']['data_ids'])
+            # df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config['mqtt']['data_ids'])
+            df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config)
+            logging.info("Dataframe:\n%s", df.head())
+            assert df is not None, "Dataframe is None"
+            assert not df.empty, "Dataframe is empty"
             print(f"debug level: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
             if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
                 fn = f"{result_msg.timestamp}.txt"
