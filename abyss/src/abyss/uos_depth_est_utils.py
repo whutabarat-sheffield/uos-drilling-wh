@@ -98,6 +98,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
                 'local': [str(local)],  
                 'PREDRILLED': [1]
             })
+        df['local'] = df['local'].astype('int32')
         logging.info(f"DataFrame: {df}")
         return df
 
@@ -166,7 +167,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         try:
             combined_df = pd.merge(result_df, trace_df, on='Step (nb)', how='outer')
             logging.info(str(combined_df.dtypes))
-            logging.info(f"Combined DataFrame: {combined_df.tail()}")
+            logging.info(f"Combined DataFrame: {combined_df.head()}")
             return combined_df
         except Exception as e:
             logging.critical("Error merging RESULT and TRACE DataFrames: %s", str(e))

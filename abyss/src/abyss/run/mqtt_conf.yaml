@@ -64,12 +64,14 @@ mqtt:
   data_ids:
     # Machine identification
     machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'
+    result_id: 'ResultManagement.Results.0.ResultMetaData.ResultId'
+    trace_result_id: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepResultId'
     
     # Trace data paths
     position: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepTraceContent[0].Values'
-    thrust: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityThrustTrace.StepTraceContent[0].Values'
-    torque: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityTorqueTrace.StepTraceContent[0].Values'
-    step: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.StepNumberTrace.StepTraceContent[0].Values'
+    thrust:   'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityThrustTrace.StepTraceContent[0].Values'
+    torque:   'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityTorqueTrace.StepTraceContent[0].Values'
+    step:     'ResultManagement.Results.0.ResultContent.Trace.StepTraces.StepNumberTrace.StepTraceContent[0].Values'
     
     # Empty value references
     torque_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty'

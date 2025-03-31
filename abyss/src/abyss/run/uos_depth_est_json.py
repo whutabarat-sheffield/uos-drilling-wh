@@ -52,7 +52,7 @@ def main():
         '--log-level',
         type=str,
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='INFO',
+        default='DEBUG',
         help='Set the logging level (default: INFO)'
     )
     
@@ -69,14 +69,18 @@ def main():
         # Load the configuration file
         with open(args.config, 'r') as file:
             conf = yaml.safe_load(file)
+            # logging.debug(f"Configuration: {conf}\n\n")
         # load the data from the MQTT messages
         with open(args.result_msg, 'r') as file:
             result_msg = json.dumps(json.load(file))
-            print(f"Result message: {result_msg}")
+            # logging.debug(f"Result message: {result_msg}\n\n")
         with open(args.trace_msg, 'r') as file:
             trace_msg = json.dumps(json.load(file))
+            # logging.debug(f"Trace message: {trace_msg}\n\n")
         # Convert the MQTT messages to a DataFrame
         df = convert_mqtt_to_df(result_msg=result_msg, trace_msg=trace_msg, conf=conf)
+        assert df is not None, "DataFrame conversion failed."
+        logging.info(f"DataFrame successfully converted:\n {df.tail()}")
         analyzer = DepthInference()
         kp = analyzer.infer_common(df)
         print(f"Key points: {kp[0]:.2f} mm, {kp[1]:.2f} mm, depth: {kp[1]-kp[0]:.2f} mm")
