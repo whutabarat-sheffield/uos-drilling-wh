@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from pprint import pprint
+import logging
 
 import abyss
 from abyss.dataparser import loadSetitecXls
@@ -112,11 +113,14 @@ class DepthInference:
             tuple: A tuple containing the enter position and exit depth.
         """
         self._df = data
+        assert(self._df is not None), "Please provide a data frame for inference."
         hole_id = data['HOLE_ID'][0]
-        local = data['local'][0]
+        local = data['local'][0]  
         PREDRILLED = data['PREDRILLED'][0]
+        logging.info("Starting inference...")
         data, enter_pos = inference_data_pipeline(df_for_inference=self._df, ref_data_path=self.ref_data_path)
         # model = load_model(idx_cv=4)
+        logging.info("Estimating depth...")
         exit_depth = exit_estimation_pipeline(self.model, data)
         return enter_pos[hole_id], exit_depth
 

@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 # import numpy as np
 from abyss.utils.functions.data_labeller import *
 from abyss.utils.functions.data_visualisation import *
@@ -14,11 +15,16 @@ def inference_data_pipeline(df_for_inference, ref_data_path):
     :param Predrilling_flag: whether the hole to be estimated has predrilling hole
     :return: the pandas dataframe that is ready for estimation.
     """
+    logging.info("Starting inference data pipeline...")
+    logging.info("Checking raw data...")
     data = raw_data_checker(df_for_inference)
+    logging.info("Adding entry point...")
     data, enter_pos = add_entry_point(data)
+    logging.info("Organising data...")
     data = data_orgnization(data)
+    logging.info("Calling data scaling function...")
     data = data_scaler(data, ref_data_path=ref_data_path)
-
+    logging.info("Inference pipeline finished!")
     return data, enter_pos
 
 
