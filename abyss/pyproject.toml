@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "abyss"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
     {name = "Digital Manufacturing Group - University of Sheffield", email = "w.hutabarat@sheffield.ac.uk"},
 ]
