@@ -293,15 +293,14 @@ class MQTTDrillingDataAnalyser:
 
             # Here we can add our specific processing logic for the matched messages
             # Example: depth_est_ml_mqtt(result_msg.data, trace_msg.data)
-
-
             # df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config['mqtt']['data_ids'])
             df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config)
             logging.info("Dataframe:\n%s", df.head())
             assert df is not None, "Dataframe is None"
             assert not df.empty, "Dataframe is empty"
-            print(f"debug level: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
-            if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+
+            # logging.info(f"debug level: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
+            if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
                 fn = f"{result_msg.timestamp}.txt"
                 with open(fn, 'w') as file:
                     file.write(f"Toolbox ID: {toolbox_id}\n")
@@ -326,8 +325,8 @@ class MQTTDrillingDataAnalyser:
 
         # OUTPUT: Depth estimation
         # insufficient steps to estimate keypoints
+        # TODO: replace magic numbers with a better system
         if len(df['Step (nb)'].unique()) < 2:
-            
             keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
             keyp_data = dict(Value = 'Not enough steps to estimate keypoints', SourceTimestamp = dt)
             self.result_client.publish(keyp_topic, json.dumps(keyp_data))
@@ -339,23 +338,27 @@ class MQTTDrillingDataAnalyser:
 
         # more than one step, perform keypoint identification
         else:
+            # Placeholders
+            l_result = [0]
+            depth_estimation = 0
             try:
-                # Perform keypoint identification
-                l_result = self.depth_inference.infer_common(df)
-                logging.info(f"Keypoints: {l_result}")
+                # Perform keypoint identification -- this calls the deep learning model
+                l_result = self.depth_inference.infer_common(df)               
                 # Perform depth estimation
                 depth_estimation = l_result[1]-l_result[0]
-                logging.info(f"Depth estimation: {depth_estimation}")
-                # Publish the results somewhere as in the configuration file
-                keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
-                keyp_data = dict(Value = l_result, SourceTimestamp = dt)
-                self.result_client.publish(keyp_topic, json.dumps(keyp_data))
-                dest_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['depth_estimation']}"
-                dest_data = dict(Value = depth_estimation, SourceTimestamp = dt)
-                self.result_client.publish(dest_topic, json.dumps(dest_data))
             except Exception as e:
                 logging.error("Error in depth estimation: %s", str(e))
             
+            logging.info(f"Keypoints: {l_result}")
+            logging.info(f"Depth estimation: {depth_estimation}")
+            # Prepare the topics for publishing
+            keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
+            dest_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['depth_estimation']}"
+            # Publish the results as in the configuration file              
+            keyp_data = dict(Value = l_result, SourceTimestamp = dt)
+            self.result_client.publish(keyp_topic, json.dumps(keyp_data))
+            dest_data = dict(Value = depth_estimation, SourceTimestamp = dt)
+            self.result_client.publish(dest_topic, json.dumps(dest_data))            
             
     def run(self):
         """Main method to set up MQTT clients and start listening"""
