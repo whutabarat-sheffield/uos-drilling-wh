@@ -44,7 +44,7 @@ WORKDIR /build/abyss
 RUN mkdir -p ../deps
 
 # Copy dependencies to ../deps (one level up from where setup.py will be)
-COPY deps/* ../deps/
+COPY abyss/deps/* ../deps/
 
 # Copy the package files
 COPY abyss/setup.py abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in ./
@@ -77,10 +77,4 @@ EXPOSE 1883
 # USER appuser
 
 # Specify the default command to run the application
-# CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
-# CMD ["python", "listen-continuous.py"]
-# CMD ["python", "publish-continuous.py", ""]
 CMD ["python", "mqtt-publisher.py"]
-# CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
-# Run the application.
-# CMD python listen-continuous.py 

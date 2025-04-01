@@ -1,0 +1,7 @@
+# accelerate @ file://localhost/build/abyss/src/deps/accelerate-1.2.1-py3-none-any.whl
+# transformers @ file://localhost/build/abyss/src/deps/transformers-4.41.0.dev0-py3-none-any.whl
+# tsfm_public @ file://localhost/build/abyss/src/deps/tsfm_public-0.2.17-py3-none-any.whl
+
+./accelerate-1.2.1-py3-none-any.whl
+./transformers-4.41.0.dev0-py3-none-any.whl
+./tsfm_public-0.2.17-py3-none-any.whl

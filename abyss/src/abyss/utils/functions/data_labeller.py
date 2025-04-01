@@ -1,6 +1,6 @@
-import numpy as np
+# import numpy as np
 import pandas as pd
-import os
+# import os
 from tqdm import tqdm
 
 def raw_data_checker(data):

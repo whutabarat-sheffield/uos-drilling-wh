@@ -9,7 +9,7 @@ from pathlib import Path
 from functools import reduce
 
 from abyss.dataparser import loadSetitecXls
-from abyss.inference import DepthInference
+from abyss.uos_inference import DepthInference
 
 
 abyss_path = Path(sysconfig.get_path('platlib')) / 'abyss'
