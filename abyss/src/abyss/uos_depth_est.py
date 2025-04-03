@@ -80,7 +80,11 @@ class MQTTDrillingDataAnalyser:
         self.cleanup_interval = 10 * self.time_window
 
         # Load the depth inference model
-        self.depth_inference = DepthInference() 
+        self.depth_inference = DepthInference()
+
+        self.ALGO_VERSION = "0.1.1"
+        self.MACHINE_ID = "MACHINE_ID"
+        self.RESULT_ID = "RESULT_ID"
 
         logging.debug("DrillingDataAnalyser initialized")
 
@@ -299,6 +303,12 @@ class MQTTDrillingDataAnalyser:
             assert df is not None, "Dataframe is None"
             assert not df.empty, "Dataframe is empty"
 
+            self.MACHINE_ID = str(df.iloc[0]['HOLE_ID'])
+            self.RESULT_ID = str(df.iloc[0]['local'])
+            logging.info(f"Machine ID: {self.MACHINE_ID}")
+            logging.info(f"Result ID: {self.RESULT_ID}")
+
+
             # logging.info(f"debug level: {logging.getLevelName(logging.getLogger().getEffectiveLevel())}")
             if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
                 fn = f"{result_msg.timestamp}.txt"
@@ -355,9 +365,9 @@ class MQTTDrillingDataAnalyser:
             keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
             dest_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['depth_estimation']}"
             # Publish the results as in the configuration file              
-            keyp_data = dict(Value = l_result, SourceTimestamp = dt)
+            keyp_data = dict(Value = l_result, SourceTimestamp = dt, MachineId = self.MACHINE_ID, ResultId = self.RESULT_ID, AlgoVersion = self.ALGO_VERSION)
             self.result_client.publish(keyp_topic, json.dumps(keyp_data))
-            dest_data = dict(Value = depth_estimation, SourceTimestamp = dt)
+            dest_data = dict(Value = depth_estimation, SourceTimestamp = dt, MachineId = self.MACHINE_ID, ResultId = self.RESULT_ID, AlgoVersion = self.ALGO_VERSION)
             self.result_client.publish(dest_topic, json.dumps(dest_data))            
             
     def run(self):
