@@ -25,8 +25,8 @@ mqtt:
     # - "host.docker.internal" for Docker containers to connect to host machine
     # - Actual hostname or IP for production
     # TODO: Update the host based on the actual broker location
-    # host: host.docker.internal
-    host: localhost
+    host: host.docker.internal
+    # host: localhost
     
     # Standard MQTT port (default: 1883)
     # TODO: Update the port if the broker uses a different port

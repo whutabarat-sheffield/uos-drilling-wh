@@ -83,8 +83,8 @@ mqtt:
   # These paths define where to publish or store the results of the algorithm
   # TODO: Update these paths based on the actual data structure
   estimation:
-    keypoints: 'ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints'
-    depth_estimation: 'ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation'
+    keypoints: 'ResultManagement/Results/0/ResultContent/DepthEstimation/KeyPoints'
+    depth_estimation: 'ResultManagement/Results/0/ResultContent/DepthEstimation/DepthEstimation'
 
   # Test Publisher Configuration -- For Testing Only
   # -------------------------

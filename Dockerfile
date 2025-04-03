@@ -1,5 +1,5 @@
 # Use an official Python 3 image as the base image
-ARG PYTHON_VERSION=3.10.15
+ARG PYTHON_VERSION=3.10.16
 FROM python:${PYTHON_VERSION}-slim
 
 # Prevents Python from writing pyc files.
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
     # git \
     vim \
     build-essential \
-    # sudo \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-privileged user that the app will run under.
@@ -36,37 +36,53 @@ RUN python -m pip install --upgrade pip
 # Leverage a bind mount to requirements.txt to avoid having to copy them into
 # into this layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
+    --mount=type=bind,source=abyss/requirements.txt,target=requirements.txt \
     python -m pip install -r requirements.txt
 
 # Set up the directory structure
 WORKDIR /build/abyss
-RUN mkdir -p ../deps
+# RUN mkdir -p ./deps
+RUN mkdir -p ./wheels
+# RUN mkdir -p /cache/transformers
+# RUN mkdir -p /cache/matplotlib
 
 # Copy dependencies to ../deps (one level up from where setup.py will be)
-COPY deps/* ../deps/
+# COPY deps/* ../deps/
+COPY abyss/wheels/* ./wheels
 
 # Copy the package files
-COPY abyss/setup.py abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in ./
+COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in abyss/requirements.docker ./
 COPY abyss/src ./src
 
+
+# RUN --mount=type=cache,target=/root/.cache/pip \
+#     --mount=type=bind,source=requirements.docker,target=requirements.docker \
+#     python -m pip install -r requirements.docker
+
 # Install the package
+# RUN python -m pip install .
+# RUN python -m pip install -r requirements.txt
+RUN python -m pip install ./wheels/*.whl
+# RUN python -m pip install -r requirements.docker
 RUN python -m pip install .
-# Make it editable install because couldn't find a way to copy trained_model into site-packages
-# RUN python -m pip install -e .
+
+# ENV TRANSFORMERS_CACHE=/cache/transformers
+# ENV HF_HOME=/cache/transformers
+# ENV MPLCONFIGDIR=/cache/matplotlib
 
 # Clean up and set up for running
 WORKDIR /app
+
 # RUN rm -rf /build
 
-# Now copy only your run script
-COPY abyss/run .
+# Now copy only your run scripts
+COPY abyss/src/abyss/run .
 
 #debugging
 # RUN python -c "import sys; print(sys.path)"
 # RUN pip list | grep abyss
 # RUN python -c "import site; print(site.getsitepackages())"
-RUN python -c "import abyss; print(abyss.__file__)"
+# RUN python -c "import abyss; print(abyss.__file__)"
 
 # ENV PYTHONPATH="${PYTHONPATH}:/app/abyss/src"
 
@@ -76,11 +92,19 @@ EXPOSE 1883
 # Switch to the non-privileged user to run the application.
 # USER appuser
 
+RUN mkdir -p /app/.cache/transformers
+RUN mkdir -p /app/.cache/matplotlib
+
+
+ENV MPLCONFIGDIR=/app/.cache/matplotlib
+ENV HF_HOME=/app/.cache/transformers
+
 # Specify the default command to run the application
 # CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
 # CMD ["python", "listen-continuous.py"]
 # CMD ["python", "publish-continuous.py", ""]
-CMD ["python", "listen-continuous.py"]
+# CMD ["python", "listen-continuous.py"]
 # CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
 # Run the application.
 # CMD python listen-continuous.py 
+CMD ["uos_depthest_listener", "--config", "mqtt_conf_docker.yaml", "--log-level", "INFO"]
