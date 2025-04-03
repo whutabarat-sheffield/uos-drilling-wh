@@ -43,6 +43,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 WORKDIR /build/abyss
 # RUN mkdir -p ./deps
 RUN mkdir -p ./wheels
+# RUN mkdir -p /cache/transformers
+# RUN mkdir -p /cache/matplotlib
 
 # Copy dependencies to ../deps (one level up from where setup.py will be)
 # COPY deps/* ../deps/
@@ -60,12 +62,17 @@ COPY abyss/src ./src
 # Install the package
 # RUN python -m pip install .
 # RUN python -m pip install -r requirements.txt
-RUN python -m pip install ../wheels/*.whl
+RUN python -m pip install ./wheels/*.whl
 # RUN python -m pip install -r requirements.docker
 RUN python -m pip install .
 
+# ENV TRANSFORMERS_CACHE=/cache/transformers
+# ENV HF_HOME=/cache/transformers
+# ENV MPLCONFIGDIR=/cache/matplotlib
+
 # Clean up and set up for running
 WORKDIR /app
+
 # RUN rm -rf /build
 
 # Now copy only your run scripts
@@ -84,6 +91,13 @@ EXPOSE 1883
 
 # Switch to the non-privileged user to run the application.
 # USER appuser
+
+RUN mkdir -p /app/.cache/transformers
+RUN mkdir -p /app/.cache/matplotlib
+
+
+ENV MPLCONFIGDIR=/app/.cache/matplotlib
+ENV HF_HOME=/app/.cache/transformers
 
 # Specify the default command to run the application
 # CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
