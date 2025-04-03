@@ -11,6 +11,11 @@ tokenizers==0.19.1
 urllib3==1.26.20
 fsspec==2024.12.0
 
+# To be removed
+h5py
+nptdms
+matplotlib
+
 # Deep Learning Libraries
 #--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.3.1 # >2.3.1 does not work
