@@ -92,7 +92,7 @@ def add_entry_point(df_processed):
     
     return concateenated_df, enter_pos
 
-def add_cf2ti_point(df_processed):
+def add_cf2ti_point(df_processed, offset=300):
     """
     Ze
     This fun finds&adds cf2ti point into the data.
@@ -105,7 +105,7 @@ def add_cf2ti_point(df_processed):
     # unique_hole_ids = df_processed['HOLE_ID'].nunique()
     # index_of_first_2 = df_processed[df_processed['step'] == 2].index[0]
     index_of_first_2 = df_processed[df_processed['Step (nb)'] == 2].index[0]
-    start_index = max(0, index_of_first_2 - 300)
+    start_index = max(0, index_of_first_2 - offset)
     df_local = df_processed.iloc[start_index:index_of_first_2].reset_index(drop=True)
     # logging.info(f"**** {len(df_local)} {index_of_first_2}")
 
