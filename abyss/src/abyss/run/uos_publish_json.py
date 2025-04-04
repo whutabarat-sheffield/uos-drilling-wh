@@ -5,6 +5,7 @@ import argparse
 import os
 import yaml
 import random
+from pathlib import Path
 
 # This is a simple MQTT publisher that publishes data continuously
 # to a broker. The data is read from a set of files and published to a topic.
@@ -81,11 +82,13 @@ def main():
         # Select a random data folder to publish and read the data
         random.shuffle(DATA_FOLDERS)
         data_folder = DATA_FOLDERS[0]
-        with open (f'{os.getcwd()}\\{data_folder}\\ResultManagement.json') as f:
+        data_folder = Path(data_folder) 
+        # with open (f'{os.getcwd()}\\{data_folder}\\ResultManagement.json') as f:
+        with open(data_folder / "ResultManagement.json") as f:
             d_result = f.read()
             source_timestamps = find_in_dict(dict(json.loads(d_result)), 'SourceTimestamp')
             assert len(set(source_timestamps)) == 1
-        with open (f'{os.getcwd()}\\{data_folder}\\Trace.json') as f:
+        with open(data_folder / "Trace.json") as f:
             d_trace = f.read()
             source_timestamps = find_in_dict(dict(json.loads(d_result)), 'SourceTimestamp')
             assert len(set(source_timestamps)) == 1

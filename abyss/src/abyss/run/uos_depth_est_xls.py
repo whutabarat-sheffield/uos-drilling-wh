@@ -42,6 +42,13 @@ def main():
         default='INFO',
         help='Set the logging level (default: INFO)'
     )
+    parser.add_argument(
+        '--config',
+        type=str,
+        # choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default='mqtt_conf.yaml',
+        help='Set the configuration file (default: ./mqtt_conf.yaml)'
+    )
     
     args = parser.parse_args()
     
@@ -54,8 +61,9 @@ def main():
     ## -----------------------------------------------------------------------------
     try:
         analyzer = DepthInference()
-        kp = analyzer.infer_xls(args.file_path)
-        print(f"Key points [1] {kp[0]:.2f} mm, [2] {kp[1]:.2f} mm, result: {kp[1]-kp[0]:.2f} mm depth")
+        kp = analyzer.infer3_xls(args.file_path)
+        # print(f"Key points [1] {kp[0]:.2f} mm, [2] {kp[1]:.2f} mm, result: {kp[1]-kp[0]:.2f} mm depth")
+        logging.info(f"Key points are: {kp}")
     except FileNotFoundError:
         logging.critical("Configuration file '%s' not found in %s", args.config, os.getcwd())
         sys.exit(1)
