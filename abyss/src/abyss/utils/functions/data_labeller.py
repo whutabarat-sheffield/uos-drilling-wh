@@ -124,13 +124,13 @@ def add_cf2ti_point(df_processed):
     cf2ti_pos = df_local.loc[turning_point, 'Position (mm)']
 
     # Visualisation (optional)
-    if logging.getLogger().getEffectiveLevel() <= logging.INFO:
-        plt.plot(x, signal, label='Original')
-        plt.plot(x, smoothed, label='Smoothed')
-        if turning_point is not None:
-            plt.axvline(turning_point, color='r', linestyle='--', label='Turning Point')
-        plt.legend()
-        plt.show()
+    # if logging.getLogger().getEffectiveLevel() <= logging.INFO:
+    #     plt.plot(x, signal, label='Original')
+    #     plt.plot(x, smoothed, label='Smoothed')
+    #     if turning_point is not None:
+    #         plt.axvline(turning_point, color='r', linestyle='--', label='Turning Point')
+    #     plt.legend()
+    #     plt.show()
 
     logging.info(f"Turning point local index: {turning_point}")
 
