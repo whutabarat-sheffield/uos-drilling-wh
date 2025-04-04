@@ -15,11 +15,12 @@
             ],
             "console": "integratedTerminal",
             "args": [
-                "..\\test_data\\data_20250326\\ResultManagement.json",
-                "..\\test_data\\data_20250326\\Trace.json",
-                ".\\mqtt_conf.yaml",
+                // "..\\test_data\\data_20250326\\17070141_17070141_ST_59_55.xls",
+                "../test_data/data_20250326/17070141_17070141_ST_59_55.xls",
+                "--config",
+                "mqtt_conf.yaml",
                 "--log-level",
-                "DEBUG"
+                "DEBUG",
             ]
         },
         {

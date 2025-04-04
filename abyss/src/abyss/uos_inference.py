@@ -9,6 +9,7 @@ from abyss.dataparser import loadSetitecXls
 from abyss.utils.pipelines.inference_pipeline import *
 from abyss.utils.pipelines.training_data_formater import *
 from abyss.utils.functions.load_model import load_model
+from abyss.utils.functions.data_labeller import add_cf2ti_point
 
 """
 This py is for inference
@@ -123,6 +124,33 @@ class DepthInference:
         logging.info("Estimating depth...")
         exit_depth = exit_estimation_pipeline(self.model, data)
         return enter_pos[hole_id], exit_depth
+    
+    def infer3_common(self, data):
+        """
+        Common method for performing depth inference.
+
+        Args:
+            data: The data for inference.
+            hole_id (str): Unique ID for each different hole.
+            local (int): Tool age: how many holes drilled before.
+            PREDRILLED (int): Predrilling flag, 0: False 1: True
+
+        Returns:
+            tuple: A tuple containing the enter position and exit depth.
+        """
+        self._df = data
+        assert(self._df is not None), "Please provide a data frame for inference."
+        hole_id = data['HOLE_ID'][0]
+        local = data['local'][0]  
+        PREDRILLED = data['PREDRILLED'][0]
+        logging.info("Starting inference...")
+        data, enter_pos = inference_data_pipeline(df_for_inference=self._df, ref_data_path=self.ref_data_path)
+        # model = load_model(idx_cv=4)
+        logging.info("Estimating depth...")
+        trans_depth = add_cf2ti_point(self._df)
+        exit_depth = exit_estimation_pipeline(self.model, data)
+        logging.info(f"Keypoints are: {enter_pos[hole_id]} {trans_depth} {exit_depth}")
+        return enter_pos[hole_id], trans_depth, exit_depth
 
     def infer_xls(self, xls_path, hole_id='test', local=0, PREDRILLED=1):
         """
@@ -146,6 +174,29 @@ class DepthInference:
 
         # return self.infer_common(df, hole_id, local, PREDRILLED)
         return self.infer_common(df)
+    
+    def infer3_xls(self, xls_path, hole_id='test', local=0, PREDRILLED=1):
+        """
+        Perform depth inference on data from an XLS file.
+
+        Args:
+            xls_path (str): Path to the XLS file.
+            hole_id (str): Unique ID for each different hole.
+            local (int): Tool age: how many holes drilled before.
+            PREDRILLED (int): Predrilling flag, 0: False 1: True
+
+        Returns:
+            tuple: A tuple containing the enter position and exit depth.
+        """
+        df = loadSetitecXls(xls_path, version='auto_data')
+
+        # provide additional information
+        df['HOLE_ID'] = hole_id
+        df['local'] = local
+        df['PREDRILLED'] = PREDRILLED
+
+        # return self.infer_common(df, hole_id, local, PREDRILLED)
+        return self.infer3_common(df)
 
 
 

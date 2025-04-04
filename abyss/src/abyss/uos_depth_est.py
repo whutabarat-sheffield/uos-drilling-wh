@@ -353,9 +353,11 @@ class MQTTDrillingDataAnalyser:
             depth_estimation = 0
             try:
                 # Perform keypoint identification -- this calls the deep learning model
-                l_result = self.depth_inference.infer_common(df)               
+                # l_result = self.depth_inference.infer_common(df) # two-point result
+                l_result = self.depth_inference.infer3_common(df) # two-point result                 
                 # Perform depth estimation
-                depth_estimation = l_result[1]-l_result[0]
+                # depth_estimation = l_result[1]-l_result[0]
+                depth_estimation = [l_result[i+1] - l_result[i] for i in range(len(l_result)-1)]
             except Exception as e:
                 logging.error("Error in depth estimation: %s", str(e))
             
