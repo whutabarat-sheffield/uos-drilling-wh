@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+abyss/sandbox/test_3point.ipynb
+abyss/wheels/abyss-0.1.1-py3-none-any.whl
 
 # C extensions
 *.so
