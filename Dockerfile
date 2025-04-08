@@ -38,7 +38,7 @@ RUN python -m pip install --upgrade pip
 # into this layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=abyss/requirements.txt,target=requirements.txt \
-    python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+    python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Set up the directory structure
 WORKDIR /build/abyss
@@ -63,9 +63,9 @@ COPY abyss/src ./src
 # Install the package
 # RUN python -m pip install .
 # RUN python -m pip install -r requirements.txt
-RUN python -m pip install ./wheels/*.whl
+RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
 # RUN python -m pip install -r requirements.docker
-RUN python -m pip install .
+RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
 
 # ENV TRANSFORMERS_CACHE=/cache/transformers
 # ENV HF_HOME=/cache/transformers
