@@ -11,7 +11,7 @@ ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies for git and build tools
 RUN apt-get update && apt-get install -y \
-    # git \
+    git \
     vim \
     build-essential \
     sudo \
