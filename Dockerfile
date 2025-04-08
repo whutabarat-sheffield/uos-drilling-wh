@@ -90,8 +90,7 @@ COPY abyss/src/abyss/run .
 # Expose the port that the application listens on.
 EXPOSE 1883
 
-# Switch to the non-privileged user to run the application.
-# USER appuser
+
 
 RUN mkdir -p /app/.cache/transformers
 RUN mkdir -p /app/.cache/matplotlib
@@ -99,6 +98,10 @@ RUN mkdir -p /app/.cache/matplotlib
 
 ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
+
+# Switch to the non-privileged user to run the application.
+# USER appuser
+
 
 # Specify the default command to run the application
 # CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
