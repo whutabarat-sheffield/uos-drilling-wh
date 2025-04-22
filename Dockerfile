@@ -1,7 +1,8 @@
 # Use an official Python 3 image as the base image
 # ARG PYTHON_VERSION=3.10.16
 # FROM python:${PYTHON_VERSION}-slim
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+# FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
 
 # Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -11,12 +12,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies for git and build tools
-RUN apt-get update && apt-get install -y \
-    git \
-    vim \
-    build-essential \
-    sudo \
-    && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -y \
+#     git \
+#     vim \
+#     build-essential \
+#     sudo \
+#     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
