@@ -5,7 +5,7 @@ import os
 from _io import TextIOWrapper
 import openpyxl
 import h5py
-from nptdms import TdmsFile
+# from nptdms import TdmsFile
 from statistics import stdev
 import warnings
 from glob import glob
@@ -100,58 +100,58 @@ def convertSizeToUnits(sz):
         total_sz = total_sz/1024.0
     return total_sz,sfx[sfi]
 
-def printTDMSStruct(path,del_file=True,to_log=True):
-    '''
-        Print the TDMS file structure when parsed to a HDF5 file structure
+# def printTDMSStruct(path,del_file=True,to_log=True):
+#     '''
+#         Print the TDMS file structure when parsed to a HDF5 file structure
 
-        Wrapper around printHDF5Struct
+#         Wrapper around printHDF5Struct
 
-        Loads TDMS file, creates HDF5 file and then passes the ref to printHDF5Struct
+#         Loads TDMS file, creates HDF5 file and then passes the ref to printHDF5Struct
 
-        Inputs:
-            del_file : Delete HDF5 file
-            to_log : Flag or string for sending result to log file. If a Flag and True, then the
-                    filepath is used for the logfile. If a string, then that's used as the log filepath
-    '''
-    # get filename
-    fname = os.path.splitext(os.path.basename(path))[0]
-    # load in file
-    with TdmsFile.read(path) as file:
-        # convert to hdf5
-        with file.as_hdf(fname+".hdf5") as source:
-            printHDF5Struct(source,to_log)
-    # delete file if wanted
-    if del_file:
-        if os.path.exists(fname+".hdf5"):
-            os.remove(fname+".hdf5")
+#         Inputs:
+#             del_file : Delete HDF5 file
+#             to_log : Flag or string for sending result to log file. If a Flag and True, then the
+#                     filepath is used for the logfile. If a string, then that's used as the log filepath
+#     '''
+#     # get filename
+#     fname = os.path.splitext(os.path.basename(path))[0]
+#     # load in file
+#     with TdmsFile.read(path) as file:
+#         # convert to hdf5
+#         with file.as_hdf(fname+".hdf5") as source:
+#             printHDF5Struct(source,to_log)
+#     # delete file if wanted
+#     if del_file:
+#         if os.path.exists(fname+".hdf5"):
+#             os.remove(fname+".hdf5")
 
-def printTDMSInfo(path,to_file=True):
-    '''
-        Calls the tdmsinfo command on the target file and dumps the info to
-        either the terminal or a file.
+# def printTDMSInfo(path,to_file=True):
+#     '''
+#         Calls the tdmsinfo command on the target file and dumps the info to
+#         either the terminal or a file.
 
-        The tdmsinfo command is installed with the nptdms package
+#         The tdmsinfo command is installed with the nptdms package
 
-        Inputs:
-            path : File path to TDMS file
-            to_file : Flag or file path to place the results.
-                if False, then it is returned to the user
-                if a str, then it is treated as the output file path
-                if True, then is is placed in a text file with the same name as the file
-    '''
-    import subprocess
-    # get filename
-    fname = os.path.splitext(os.path.basename(path))[0]
-    td_struct = subprocess.check_output(["tdmsinfo","-p",path])
-    td_str = td_struct.decode("utf-8")
-    if not to_file:
-        return td_str
-    else:
-        # if the user specified an output file
-        if isinstance(to_file,str):
-            open(to_file,'w').write(td_str)
-        elif isinstance(to_file,bool):
-            open(f"{fname}.txt",'w').write(td_str)
+#         Inputs:
+#             path : File path to TDMS file
+#             to_file : Flag or file path to place the results.
+#                 if False, then it is returned to the user
+#                 if a str, then it is treated as the output file path
+#                 if True, then is is placed in a text file with the same name as the file
+#     '''
+#     import subprocess
+#     # get filename
+#     fname = os.path.splitext(os.path.basename(path))[0]
+#     td_struct = subprocess.check_output(["tdmsinfo","-p",path])
+#     td_str = td_struct.decode("utf-8")
+#     if not to_file:
+#         return td_str
+#     else:
+#         # if the user specified an output file
+#         if isinstance(to_file,str):
+#             open(to_file,'w').write(td_str)
+#         elif isinstance(to_file,bool):
+#             open(f"{fname}.txt",'w').write(td_str)
 
 def get_hole_coupon(path,tool):
     '''
@@ -193,41 +193,41 @@ def max_hole_coupon(path,tool):
     all_hc = list([get_hole_coupon(pp,tool) for pp in glob(path)])
     return max(all_hc,key=lambda x : x[0]),max(all_hc,key=lambda x : x[1])
 
-def iterTDMSFile(path,repchar='-',ret_units=True):
-    '''
-        Iterate over the datasets in the target TDMS file
+# def iterTDMSFile(path,repchar='-',ret_units=True):
+#     '''
+#         Iterate over the datasets in the target TDMS file
 
-        The TDMS file is opened using a with statement and each group, channel is iterated
-        over. The found dataset along wtih group name and channel name are returned.
+#         The TDMS file is opened using a with statement and each group, channel is iterated
+#         over. The found dataset along wtih group name and channel name are returned.
 
-        Slashes in group and channel name are replaced with repchar so they can be used for plotting, saving etc.
-        If repchar is None, then the unprocessed group and channel names are returned
+#         Slashes in group and channel name are replaced with repchar so they can be used for plotting, saving etc.
+#         If repchar is None, then the unprocessed group and channel names are returned
 
-        Inputs:
-            path : Filepath to TDMS file
-            repchar : Char to replace \\ in group and channel names. Default '-'
-            ret_units : Returns units string from metadata. Default True.
+#         Inputs:
+#             path : Filepath to TDMS file
+#             repchar : Char to replace \\ in group and channel names. Default '-'
+#             ret_units : Returns units string from metadata. Default True.
 
-        Yields processed group name, processed channel name and the datasets as a Pandas dataframe. If ret_units is True,
-        the units string from metadata.
-    '''
-    with TdmsFile(path) as file:
-        # iterate over each group        
-        for gg in file.groups():
-            gg_name = gg.name
-            # format the group name
-            if repchar is not None:
-                gg_name = gg_name.replace('\\',repchar)
-            # iterate over each channel
-            for cc,units in zip(gg.channels(),[cc.properties["unit_string"] for cc in gg.channels()]):
-                cc_name = cc.name
-                # format the channel name
-                if repchar is not None:
-                    cc_name = cc_name.replace('\\',repchar)
-                if ret_units:
-                    yield gg_name,cc_name,cc.as_dataframe(time_index=True),units
-                else:
-                    yield gg_name,cc_name,cc.as_dataframe(time_index=True)
+#         Yields processed group name, processed channel name and the datasets as a Pandas dataframe. If ret_units is True,
+#         the units string from metadata.
+#     '''
+#     with TdmsFile(path) as file:
+#         # iterate over each group        
+#         for gg in file.groups():
+#             gg_name = gg.name
+#             # format the group name
+#             if repchar is not None:
+#                 gg_name = gg_name.replace('\\',repchar)
+#             # iterate over each channel
+#             for cc,units in zip(gg.channels(),[cc.properties["unit_string"] for cc in gg.channels()]):
+#                 cc_name = cc.name
+#                 # format the channel name
+#                 if repchar is not None:
+#                     cc_name = cc_name.replace('\\',repchar)
+#                 if ret_units:
+#                     yield gg_name,cc_name,cc.as_dataframe(time_index=True),units
+#                 else:
+#                     yield gg_name,cc_name,cc.as_dataframe(time_index=True)
 ############################################## SPREADSHEETS ##############################################
 def _replaceLast(ss,c,r):
     # if the character is not in the string to begin with
@@ -2590,153 +2590,153 @@ def estimateMatDataSize(fname,as_bytes=False):
         convertSizeToUnits(total_sz)
 
 ############################################## TDMS ##############################################
-def convertTDMSToHDF5(path,cp=9):
-    '''
-        Wrapper for TdmsFile.read.as_hdf function
+# def convertTDMSToHDF5(path,cp=9):
+#     '''
+#         Wrapper for TdmsFile.read.as_hdf function
 
-        Repacks the target TDMS file as a HDF5 file of the same name.
+#         Repacks the target TDMS file as a HDF5 file of the same name.
 
-        Compresses datasets using GZIP to the level cp
+#         Compresses datasets using GZIP to the level cp
 
-        Inputs:
-            path : Path to TDMS file
-            cp : Compression level, 0-9
-    '''
-    # get filename
-    fname = os.path.splitext(os.path.basename(path))[0]
-    # open file using context manager
-    with TdmsFile.read(path) as file:
-        # create uncompressed file using context manager
-        file.as_hdf(fname+".hdf5").close()
-        # if the user doesn't want it compressed, return
-        if not cp:
-            return
-        # reopen uncompressed in read mode
-        with h5py.File(fname+".hdf5",'r') as source:
-            # open destination file to hold compressed results
-            with h5py.File(fname+"-compressed.hdf5",'w') as dest:
-                # copy properties across
-                for kk,vv in file.properties.items():
-                    dest.attrs[kk] = vv
-                # start iterating over the source MAT file
-                def repack_dset(name,item):
-                    # only datasets have dtype attribute
-                    if isinstance(item,h5py.Dataset):
-                        # create a dataset with compression opts
-                        ds = dest.create_dataset(name,chunks=item.shape,dtype=item.dtype,data=source[name][()],
-                                            compression="gzip",compression_opts=cp)
-                        #ds = dest.create_dataset(name,shape=item.shape,dtype=item.dtype)
-                        # update the attributes
-                        ds.attrs.update(**source[name].attrs)
-                    # if a group
-                    elif isinstance(item,h5py.Group):
-                        gp = dest.require_group(name)
-                        # get attributes
-                        attrs = {kk:vv for kk,vv in source[name].attrs.items()}
-                        # copy attributes to dest
-                        gp.attrs.update(attrs)
-                # visit each item in source and repack it in the compressed file
-                source.visititems(repack_dset)
-        # delete uncompressed file
-        if os.path.exists(fname+".hdf5"):
-            os.remove(fname+".hdf5")
+#         Inputs:
+#             path : Path to TDMS file
+#             cp : Compression level, 0-9
+#     '''
+#     # get filename
+#     fname = os.path.splitext(os.path.basename(path))[0]
+#     # open file using context manager
+#     with TdmsFile.read(path) as file:
+#         # create uncompressed file using context manager
+#         file.as_hdf(fname+".hdf5").close()
+#         # if the user doesn't want it compressed, return
+#         if not cp:
+#             return
+#         # reopen uncompressed in read mode
+#         with h5py.File(fname+".hdf5",'r') as source:
+#             # open destination file to hold compressed results
+#             with h5py.File(fname+"-compressed.hdf5",'w') as dest:
+#                 # copy properties across
+#                 for kk,vv in file.properties.items():
+#                     dest.attrs[kk] = vv
+#                 # start iterating over the source MAT file
+#                 def repack_dset(name,item):
+#                     # only datasets have dtype attribute
+#                     if isinstance(item,h5py.Dataset):
+#                         # create a dataset with compression opts
+#                         ds = dest.create_dataset(name,chunks=item.shape,dtype=item.dtype,data=source[name][()],
+#                                             compression="gzip",compression_opts=cp)
+#                         #ds = dest.create_dataset(name,shape=item.shape,dtype=item.dtype)
+#                         # update the attributes
+#                         ds.attrs.update(**source[name].attrs)
+#                     # if a group
+#                     elif isinstance(item,h5py.Group):
+#                         gp = dest.require_group(name)
+#                         # get attributes
+#                         attrs = {kk:vv for kk,vv in source[name].attrs.items()}
+#                         # copy attributes to dest
+#                         gp.attrs.update(attrs)
+#                 # visit each item in source and repack it in the compressed file
+#                 source.visititems(repack_dset)
+#         # delete uncompressed file
+#         if os.path.exists(fname+".hdf5"):
+#             os.remove(fname+".hdf5")
 
-def convertTDMSToNPZ(path):
-    '''
-        Convert the contents of TDMS file to compressed NPZ
+# def convertTDMSToNPZ(path):
+#     '''
+#         Convert the contents of TDMS file to compressed NPZ
 
-        Opens TDMS file, converts to dataframe, converts to dictionary and then saves as NPZ
+#         Opens TDMS file, converts to dataframe, converts to dictionary and then saves as NPZ
 
-        The array names are based off the original name. Slashes and various characters are replaced
-        for easier indexing
+#         The array names are based off the original name. Slashes and various characters are replaced
+#         for easier indexing
 
-        e.g. /'H1'/'PXI1Slot2\ai0' -> H1_PXI1Slot2_ai0
+#         e.g. /'H1'/'PXI1Slot2\ai0' -> H1_PXI1Slot2_ai0
 
-        Inputs:
-            path : Filename to TDMS file
-    '''
-    # dictionary to hold values
-    data_dict = {}
-    # open TDMS file
-    with TdmsFile.read(path) as file:
-        # convert to dataframe
-        data = file.as_dataframe()
-        # iterate over entries
-        for cc,ii in data.items():
-            # format column names
-            dname = cc.replace("/'",'').replace("'","_").replace('\\',"_")[:-1]
-            # create entry in dictionary
-            data_dict[dname] = ii.values
-    # save to compressed file
-    np.savez_compressed(os.path.splitext(os.path.basename(path))[0]+".npz",**data_dict)
+#         Inputs:
+#             path : Filename to TDMS file
+#     '''
+#     # dictionary to hold values
+#     data_dict = {}
+#     # open TDMS file
+#     with TdmsFile.read(path) as file:
+#         # convert to dataframe
+#         data = file.as_dataframe()
+#         # iterate over entries
+#         for cc,ii in data.items():
+#             # format column names
+#             dname = cc.replace("/'",'').replace("'","_").replace('\\',"_")[:-1]
+#             # create entry in dictionary
+#             data_dict[dname] = ii.values
+#     # save to compressed file
+#     np.savez_compressed(os.path.splitext(os.path.basename(path))[0]+".npz",**data_dict)
 
-def findNonEmptyChannels(path,find='all'):
-    '''
-        Search TDMS file for non-empty channels.
+# def findNonEmptyChannels(path,find='all'):
+#     '''
+#         Search TDMS file for non-empty channels.
 
-        Find parameter controls how far to search and what to return
+#         Find parameter controls how far to search and what to return
 
-        Assumes single-level depth (one layer of groups with one layer of channels)
+#         Assumes single-level depth (one layer of groups with one layer of channels)
 
-        Inputs:
-            path : File path to target TDMS file
-            find : How to search the file.
-                Supported strings:
-                    all : Find all non-empty channels and return a list of tuples with their group and channel
-                    first : Return the group and channel name of the first found non-empty channel
+#         Inputs:
+#             path : File path to target TDMS file
+#             find : How to search the file.
+#                 Supported strings:
+#                     all : Find all non-empty channels and return a list of tuples with their group and channel
+#                     first : Return the group and channel name of the first found non-empty channel
                     
-        Returns a list. If find is 'first', then it's a 2-element list of group and channel name of the first non-empty channel.
-        If find is 'all', then it's a list of tuples containing the group and channel names of all found non-empty channels
-    '''
-    if not (find in ['all','first']):
-        raise ValueError(f"Invalid search mode {find}")
-    nec = []
-    with TdmsFile(path) as tdms_file:
-        for gg in tdms_file.groups():
-            for cc in gg.channels():
-                if len(cc):
-                    if find=='first':
-                        return [gg.name,cc.name]
-                    elif find=='all':
-                        nec.append((gg.name,cc.name))
-    return nec
+#         Returns a list. If find is 'first', then it's a 2-element list of group and channel name of the first non-empty channel.
+#         If find is 'all', then it's a list of tuples containing the group and channel names of all found non-empty channels
+#     '''
+#     if not (find in ['all','first']):
+#         raise ValueError(f"Invalid search mode {find}")
+#     nec = []
+#     with TdmsFile(path) as tdms_file:
+#         for gg in tdms_file.groups():
+#             for cc in gg.channels():
+#                 if len(cc):
+#                     if find=='first':
+#                         return [gg.name,cc.name]
+#                     elif find=='all':
+#                         nec.append((gg.name,cc.name))
+#     return nec
 
-def convertTDMSToParquet(path,inc_time=False):
-    '''
-        Convert the TDMS file to a Parquet compressed file
+# def convertTDMSToParquet(path,inc_time=False):
+#     '''
+#         Convert the TDMS file to a Parquet compressed file
 
-        Parses the data in a TDMS file to create a dictionary and writes it to a Parquet file of the same
-        name. Only non-empty channels found are added to the 
+#         Parses the data in a TDMS file to create a dictionary and writes it to a Parquet file of the same
+#         name. Only non-empty channels found are added to the 
 
-        Inputs:
-            path : Input path to TDMS file
-            inc_time : Flag to include time data in the new file. Increases end file size.
-    '''
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-    # find non-empty channels
-    channels = findNonEmptyChannels(path)
-    if not channels:
-        print("Unable to find non-empty channels!")
-        return
-    # open file
-    with TdmsFile(path) as tdms_file:
-        # if the user wants timestamps to be included
-        if inc_time:
-            # construct dict of the data
-            data_dict = {r'/'.join([gg,cc,'data']) : tdms_file[gg][cc] for gg,cc in channels}
-            # consttruct dict of the timestamps
-            time_dict = {r'/'.join([gg,cc,'time']) : tdms_file[gg][cc].time_track() for gg,cc in channels}
-            data_dict.update(time_dict)
-            # update data dictionary with timestamp dictionary
-            # create table out of combined dictionary
-            table = pa.table(data_dict)
-        # if the user doesn't want time
-        # only construct data dictionary
-        else:
-            table = pa.table({r'/'.join([gg,cc,'data']) : tdms_file[gg][cc] for gg,cc in channels})
-        # write table to file
-        pq.write_table(table,os.path.splitext(os.path.basename(path))[0]+'.parquet')
+#         Inputs:
+#             path : Input path to TDMS file
+#             inc_time : Flag to include time data in the new file. Increases end file size.
+#     '''
+#     import pyarrow as pa
+#     import pyarrow.parquet as pq
+#     # find non-empty channels
+#     channels = findNonEmptyChannels(path)
+#     if not channels:
+#         print("Unable to find non-empty channels!")
+#         return
+#     # open file
+#     with TdmsFile(path) as tdms_file:
+#         # if the user wants timestamps to be included
+#         if inc_time:
+#             # construct dict of the data
+#             data_dict = {r'/'.join([gg,cc,'data']) : tdms_file[gg][cc] for gg,cc in channels}
+#             # consttruct dict of the timestamps
+#             time_dict = {r'/'.join([gg,cc,'time']) : tdms_file[gg][cc].time_track() for gg,cc in channels}
+#             data_dict.update(time_dict)
+#             # update data dictionary with timestamp dictionary
+#             # create table out of combined dictionary
+#             table = pa.table(data_dict)
+#         # if the user doesn't want time
+#         # only construct data dictionary
+#         else:
+#             table = pa.table({r'/'.join([gg,cc,'data']) : tdms_file[gg][cc] for gg,cc in channels})
+#         # write table to file
+#         pq.write_table(table,os.path.splitext(os.path.basename(path))[0]+'.parquet')
 
 ############################################## NPZ ##############################################    
 def loadSetitecNPZ(path,columns,**kwargs):

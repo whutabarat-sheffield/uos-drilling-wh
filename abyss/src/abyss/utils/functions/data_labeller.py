@@ -5,7 +5,7 @@ from tqdm import tqdm
 import logging
 
 from scipy.signal import savgol_filter
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 def raw_data_checker(data):
     """
