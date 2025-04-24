@@ -4,7 +4,7 @@
 	"name": "Miniconda (Python 3)",
 	"build": { 
 		"context": "..",
-		"dockerfile": "../Dockerfile"
+		"dockerfile": "../Dockerfile.devel"
 	},
 
 	// Features to add to the dev container. More info: https://containers.dev/features.

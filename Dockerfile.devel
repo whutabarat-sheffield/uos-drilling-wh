@@ -11,12 +11,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies for git and build tools
-# RUN apt-get update && apt-get install -y \
-#     git \
-#     vim \
-#     build-essential \
-#     sudo \
-#     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    git \
+    vim \
+    build-essential \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
