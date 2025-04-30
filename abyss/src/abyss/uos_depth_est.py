@@ -195,16 +195,16 @@ class MQTTDrillingDataAnalyser:
                 matching_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
                 logging.debug("Result message received")
             else:
-                logging.info("Non-essential topic received: %s", data.source)
+                logging.debug("Non-essential topic received: %s", data.source)
                 return
 
-            logging.debug("Adding %s message to buffer - Source: %s", matching_topic, data.source)
-            logging.debug("Buffer size before: %s", len(self.buffers[matching_topic]))
+            logging.info("Adding %s message to buffer - Source: %s", matching_topic, data.source)
+            logging.info("Buffer size before: %s", len(self.buffers[matching_topic]))
             
             self.buffers[matching_topic].append(data)
             
-            logging.debug("Buffer size after: %s", len(self.buffers[matching_topic]))
-            logging.debug("All buffers: %s", {k: len(v) for k,v in self.buffers.items()})
+            logging.info("Buffer size after: %s", len(self.buffers[matching_topic]))
+            logging.info("All buffers: %s", {k: len(v) for k,v in self.buffers.items()})
             
             # First check for matches to process data as quickly as possible
             self.find_and_process_matches()
@@ -218,8 +218,23 @@ class MQTTDrillingDataAnalyser:
             logging.error("Error in add_message: %s", str(e))
 
     def find_and_process_matches(self):
-        """Find and process messages with matching timestamps and tool IDs
-        TODO 2025.04.30: message deleted too aggressively so that matches are not made. make this less aggressive."""
+        """
+        Find and process messages with matching timestamps and tool IDs.
+
+        This method iterates through the buffers of result and trace messages, 
+        attempting to find pairs of messages that share the same tool ID and 
+        have timestamps within a specified time window. When a match is found, 
+        the matched messages are processed together, and they are removed from 
+        their respective buffers to avoid duplicate processing.
+
+        The purpose of this method is to align and process data from different 
+        sources (result and trace) that are related to the same tool and time 
+        frame. This is critical for ensuring accurate and synchronized data 
+        analysis in the drilling process.
+
+        TODO 2025.04.30: message deleted too aggressively so that matches are 
+        not made. Make this less aggressive.
+        """
         try:
             logging.info("Checking for matches")
             
@@ -276,7 +291,7 @@ class MQTTDrillingDataAnalyser:
                 original_length = len(self.buffers[topic])
                 self.buffers[topic] = [
                     msg for msg in self.buffers[topic]
-                    if current_time - msg.timestamp <= self.cleanup_interval # TODO 2025.04.30: CHECK IF THIS IS CORRECT. WHERE DO WE GET THE msg.timestamp from? If this is from the setitec data then this will always fire 
+                    if current_time - self.last_cleanup <= self.cleanup_interval # TODO 2025.04.30: CHECK IF THIS IS CORRECT. WHERE DO WE GET THE msg.timestamp from? If this is from the setitec data then this will always fire 
                 ]
                 removed_count += original_length - len(self.buffers[topic])
             
