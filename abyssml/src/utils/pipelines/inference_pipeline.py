@@ -23,7 +23,7 @@ import time
 
 set_seed(42)
 
-
+# ONNX: instantiate a "model" to be passed in to the below function
 
 def depth_estimation_pipeline(model, dataset_for_evl, start_xpos, threshold=-1):
 
@@ -50,9 +50,11 @@ def depth_estimation_pipeline(model, dataset_for_evl, start_xpos, threshold=-1):
             max_index = df_onehole['torque8'].idxmax()
             input_df = df_onehole.iloc[max_index-330+j:max_index+182+j]
             input_df = input_df.reset_index(drop=True)
+# ONNX: modify the input data to be passed in to the model to a numpy array, check Ze's README note
             input_data = torch.tensor(
                 input_df.iloc[:, 0:17].values,
                 dtype=torch.float32).unsqueeze(0)
+# ONNX: modify the input data to be passed in to the model to a numpy array, check Ze's README note
             out = model(input_data)
             original_data = input_data.squeeze(0).cpu().detach().numpy()
             heatmap_data = out['prediction_outputs'].squeeze(0).cpu().detach().numpy()
