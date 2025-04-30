@@ -2,6 +2,8 @@
 Refactored implementation of the MQTT Drilling Data Analyser with clear separation of concerns.
 This design implements a modular approach with specialized components.
 """
+ALGO_VERSION = "0.2.1.b1"
+
 
 import logging
 import paho.mqtt.client as mqtt
@@ -467,11 +469,13 @@ class DepthEstimationProcessor:
         Returns:
             Dictionary with processing results or None if processing fails
         """
+        tool_info = None
         try:
             tool_info = MessageParser.extract_tool_info(result_msg.source)
             if not tool_info:
                 logging.error("Invalid topic format, cannot extract tool info")
-                return None
+                return self._create_error_result("unknown", "unknown", result_msg.timestamp, 
+                                               "Invalid topic format, cannot extract tool info")
                 
             toolbox_id, tool_id = tool_info
             
@@ -518,7 +522,8 @@ class DepthEstimationProcessor:
             if tool_info:
                 return self._create_error_result(tool_info[0], tool_info[1], result_msg.timestamp, 
                                                f"Processing error: {str(e)}")
-            return None
+            return self._create_error_result("unknown", "unknown", result_msg.timestamp,
+                                           f"Processing error: {str(e)}")
     
     def _save_debug_data(self, result_msg: TimestampedData, trace_msg: TimestampedData,
                         df, toolbox_id: str, tool_id: str) -> None:
@@ -697,18 +702,18 @@ class MQTTDrillingDataAnalyser:
         # Create payloads
         keypoints_payload = MessageParser.create_result_payload(
             result.get("keypoints_value"),
-            timestamp,
+            float(timestamp) if timestamp is not None else 0.0,
             result.get("machine_id", "MACHINE_ID"),
             result.get("result_id", "RESULT_ID"),
-            result.get("algo_version", "0.1.1")
+            result.get("algo_version", ALGO_VERSION)
         )
         
         depth_est_payload = MessageParser.create_result_payload(
             result.get("depth_est_value"),
-            timestamp,
+            float(timestamp) if timestamp is not None else 0.0,
             result.get("machine_id", "MACHINE_ID"),
             result.get("result_id", "RESULT_ID"),
-            result.get("algo_version", "0.1.1")
+            result.get("algo_version", ALGO_VERSION)
         )
         
         # Create topics
