@@ -190,19 +190,23 @@ class MQTTDrillingDataAnalyser:
             matching_topic = None
             if self.config['mqtt']['listener']['trace'] in data.source:
                 matching_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
-            else:
+                logging.debug("Trace message received")
+            elif self.config['mqtt']['listener']['result'] in data.source:
                 matching_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
-            
-            logging.debug("Adding message to buffer")
-            logging.debug("Source: %s", data.source)
-            logging.debug("Matching topic: %s", matching_topic)
-            logging.debug("Buffer size before: %s", len(self.buffers[matching_topic]))
+                logging.debug("Result message received")
+            else:
+                logging.debug("Non-essential topic received: %s", data.source)
+                return
+
+            logging.info("Adding %s message to buffer - Source: %s", matching_topic, data.source)
+            logging.info("Buffer size before: %s", len(self.buffers[matching_topic]))
             
             self.buffers[matching_topic].append(data)
             
-            logging.debug("Buffer size after: %s", len(self.buffers[matching_topic]))
-            logging.debug("All buffers: %s", {k: len(v) for k,v in self.buffers.items()})
+            logging.info("Buffer size after: %s", len(self.buffers[matching_topic]))
+            logging.info("All buffers: %s", {k: len(v) for k,v in self.buffers.items()})
             
+            # First check for matches to process data as quickly as possible
             self.find_and_process_matches()
             
             current_time = datetime.now().timestamp()
@@ -214,8 +218,23 @@ class MQTTDrillingDataAnalyser:
             logging.error("Error in add_message: %s", str(e))
 
     def find_and_process_matches(self):
-        """Find and process messages with matching timestamps and tool IDs
-        TODO 2025.04.30: message deleted too aggressively so that matches are not made. make this less aggressive."""
+        """
+        Find and process messages with matching timestamps and tool IDs.
+
+        This method iterates through the buffers of result and trace messages, 
+        attempting to find pairs of messages that share the same tool ID and 
+        have timestamps within a specified time window. When a match is found, 
+        the matched messages are processed together, and they are removed from 
+        their respective buffers to avoid duplicate processing.
+
+        The purpose of this method is to align and process data from different 
+        sources (result and trace) that are related to the same tool and time 
+        frame. This is critical for ensuring accurate and synchronized data 
+        analysis in the drilling process.
+
+        TODO 2025.04.30: message deleted too aggressively so that matches are 
+        not made. Make this less aggressive.
+        """
         try:
             logging.info("Checking for matches")
             
@@ -272,7 +291,7 @@ class MQTTDrillingDataAnalyser:
                 original_length = len(self.buffers[topic])
                 self.buffers[topic] = [
                     msg for msg in self.buffers[topic]
-                    if current_time - msg.timestamp <= self.cleanup_interval # TODO 2025.04.30: CHECK IF THIS IS CORRECT. WHERE DO WE GET THE msg.timestamp from? If this is from the setitec data then this will always fire 
+                    if current_time - self.last_cleanup <= self.cleanup_interval # TODO 2025.04.30: CHECK IF THIS IS CORRECT. WHERE DO WE GET THE msg.timestamp from? If this is from the setitec data then this will always fire 
                 ]
                 removed_count += original_length - len(self.buffers[topic])
             
@@ -283,6 +302,7 @@ class MQTTDrillingDataAnalyser:
 
     def process_matching_messages(self, matches: List[TimestampedData]):
         """Process messages that have matching timestamps"""
+        df = None
         try:
             result_msg = next(m for m in matches if self.config['mqtt']['listener']['result'] in m.source)
             trace_msg = next(m for m in matches if self.config['mqtt']['listener']['trace'] in m.source)
@@ -301,9 +321,10 @@ class MQTTDrillingDataAnalyser:
             # Example: depth_est_ml_mqtt(result_msg.data, trace_msg.data)
             # df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config['mqtt']['data_ids'])
             df = convert_mqtt_to_df(json.dumps(result_msg.data), json.dumps(trace_msg.data), conf=self.config)
-            logging.info("Dataframe:\n%s", df.head())
+            
             assert df is not None, "Dataframe is None"
             assert not df.empty, "Dataframe is empty"
+            logging.info("Dataframe:\n%s", df.head())
 
             self.MACHINE_ID = str(df.iloc[0]['HOLE_ID'])
             self.RESULT_ID = str(df.iloc[0]['local'])
@@ -329,6 +350,7 @@ class MQTTDrillingDataAnalyser:
             
         except Exception as e:
             logging.critical("Error in process_matching_messages: %s", str(e))
+            return
 
         # prepare data for publishing
         # dt = datetime.strptime(result_msg.timestamp, "%Y-%m-%dT%H:%M:%SZ")
@@ -338,7 +360,7 @@ class MQTTDrillingDataAnalyser:
         # OUTPUT: Depth estimation
         # insufficient steps to estimate keypoints
         # TODO: replace magic numbers with a better system
-        if len(df['Step (nb)'].unique()) < 2:
+        if df is None or 'Step (nb)' not in df.columns or len(df['Step (nb)'].unique()) < 2:
             keyp_topic = f"{self.config['mqtt']['listener']['root']}/{toolbox_id}/{tool_id}/{self.config['mqtt']['estimation']['keypoints']}"
             keyp_data = dict(Value = 'Not enough steps to estimate keypoints', SourceTimestamp = dt)
             self.result_client.publish(keyp_topic, json.dumps(keyp_data))
