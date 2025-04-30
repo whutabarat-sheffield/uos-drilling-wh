@@ -6,8 +6,13 @@ import logging
 import abyss
 from abyss.dataparser import loadSetitecXls
 
-from abyss.utils.pipelines.inference_pipeline import *
-from abyss.utils.pipelines.training_data_formater import *
+from abyss.utils.pipelines.inference_pipeline import (
+    # depth_estimation_pipeline, 
+    exit_estimation_pipeline,
+    )
+from abyss.utils.pipelines.training_data_formater import ( 
+    inference_data_pipeline,
+    )
 from abyss.utils.functions.load_model import load_model
 from abyss.utils.functions.data_labeller import add_cf2ti_point
 
