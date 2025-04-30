@@ -214,7 +214,8 @@ class MQTTDrillingDataAnalyser:
             logging.error("Error in add_message: %s", str(e))
 
     def find_and_process_matches(self):
-        """Find and process messages with matching timestamps and tool IDs"""
+        """Find and process messages with matching timestamps and tool IDs
+        TODO 2025.04.30: message deleted too aggressively so that matches are not made. make this less aggressive."""
         try:
             logging.info("Checking for matches")
             
@@ -237,6 +238,7 @@ class MQTTDrillingDataAnalyser:
                 
                 for trace_msg in trace_messages:
                     t_parts = trace_msg.source.split('/')
+                    logging.info("t_parts: %s", t_parts)
                     t_tool_key = f"{t_parts[1]}/{t_parts[2]}"
                     
                     if (r_tool_key == t_tool_key and 
@@ -270,7 +272,7 @@ class MQTTDrillingDataAnalyser:
                 original_length = len(self.buffers[topic])
                 self.buffers[topic] = [
                     msg for msg in self.buffers[topic]
-                    if current_time - msg.timestamp <= self.cleanup_interval
+                    if current_time - msg.timestamp <= self.cleanup_interval # TODO 2025.04.30: CHECK IF THIS IS CORRECT. WHERE DO WE GET THE msg.timestamp from? If this is from the setitec data then this will always fire 
                 ]
                 removed_count += original_length - len(self.buffers[topic])
             
