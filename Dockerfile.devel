@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     sudo \
     docker \
+    mosquitto mosquitto-clients \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-privileged user that the app will run under.

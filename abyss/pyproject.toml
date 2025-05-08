@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "abyss"
-version = "0.2.1"
+version = "0.2.2"
 authors = [
     {name = "Digital Manufacturing Group - University of Sheffield", email = "w.hutabarat@sheffield.ac.uk"},
 ]
@@ -40,3 +40,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 "*" = ["../abyss/trained_model/**/*"]
 
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = "src"
