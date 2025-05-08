@@ -102,7 +102,7 @@ ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
 
 # Switch to the non-privileged user to run the application.
-# USER appuser
+USER appuser
 
 
 # Specify the default command to run the application
