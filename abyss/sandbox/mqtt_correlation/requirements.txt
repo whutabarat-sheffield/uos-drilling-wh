@@ -1,4 +1,0 @@
-aiomqtt
-pytest
-pytest-asyncio
-pytest-mock
