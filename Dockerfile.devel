@@ -1,7 +1,7 @@
 # Use an official Python 3 image as the base image
-# ARG PYTHON_VERSION=3.10.16
-# FROM python:${PYTHON_VERSION}-slim
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+ARG PYTHON_VERSION=3.10.16
+FROM python:${PYTHON_VERSION}-slim
+# FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
 # Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -54,7 +54,7 @@ RUN mkdir -p ./wheels
 COPY abyss/wheels/* ./wheels
 
 # Copy the package files
-COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in abyss/requirements.docker ./
+COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in abyss/requirements.txt ./
 COPY abyss/src ./src
 
 
