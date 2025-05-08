@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     vim \
     build-essential \
     sudo \
+    docker \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-privileged user that the app will run under.
