@@ -1,6 +1,6 @@
 import pytest
 import json
-from abyss.mqtt_correlation.processing import JSONMessageProcessor
+from abyss.mqtt.processing import JSONMessageProcessor
 
 @pytest.mark.asyncio
 async def test_json_processor_basic():
