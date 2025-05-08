@@ -8,11 +8,11 @@ from typing import Tuple
 from pathlib import Path
 from functools import reduce
 
-from abyss.dataparser import loadSetitecXls
-from abyss.uos_inference import DepthInference
+from .dataparser import loadSetitecXls
+from .uos_inference import DepthInference
 
 
-abyss_path = Path(sysconfig.get_path('platlib')) / 'abyss'
+# abyss_path = Path(sysconfig.get_path('platlib')) / 'abyss'
 
 
 def get_setitec_signals(file_to_open: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -30,7 +30,7 @@ def get_setitec_signals(file_to_open: str) -> Tuple[np.ndarray, np.ndarray]:
 def calculate_quotient_remainder(borehole_depth: float, fastener_unit_length: float = 1.5875) -> Tuple[int, float]:
     if not isinstance(borehole_depth, float) or not isinstance(fastener_unit_length, float):
         raise TypeError("Both borehole_depth and fastener_unit_length must be floats.")
-    quotient = borehole_depth // fastener_unit_length
+    quotient = int(borehole_depth // fastener_unit_length)
     remainder = borehole_depth % fastener_unit_length
     return quotient, remainder
 
@@ -258,8 +258,18 @@ def keypoint_recognition_gradient(position, signal, smo_w = 30, wsize=None, bit_
     dftemp['diffsignalmax'] = dftemp['dsignal_dpos'].rolling(wsize).max().bfill().ffill()
     dftemp['diffsignalmin'] = dftemp['dsignal_dpos'].rolling(wsize).min().bfill().ffill()
     dftemp['diffsignalmedian'] = dftemp['dsignal_dpos'].rolling(wsize).median().bfill().ffill()
-    l_idx.append(dict( meanmin = dftemp['diffsignalmean'].idxmin(), meanmax = dftemp['diffsignalmean'].idxmax(), medianmin = dftemp['diffsignalmedian'].idxmin(), medianmax = dftemp['diffsignalmedian'].idxmax()))
-    l_pos.append(dict( meanmin = dftemp['pos'].iloc[dftemp['diffsignalmean'].idxmin()], meanmax = dftemp['pos'].iloc[dftemp['diffsignalmean'].idxmax()], medianmin = dftemp['pos'].iloc[dftemp['diffsignalmedian'].idxmin()], medianmax = dftemp['pos'].iloc[dftemp['diffsignalmedian'].idxmax()]))
+    meanmin_idx = dftemp['diffsignalmean'].idxmin()
+    meanmax_idx = dftemp['diffsignalmean'].idxmax()
+    medianmin_idx = dftemp['diffsignalmedian'].idxmin()
+    medianmax_idx = dftemp['diffsignalmedian'].idxmax()
+    
+    l_idx.append(dict(meanmin=meanmin_idx, meanmax=meanmax_idx, medianmin=medianmin_idx, medianmax=medianmax_idx))
+    l_pos.append(dict(
+        meanmin=dftemp['pos'].loc[meanmin_idx], 
+        meanmax=dftemp['pos'].loc[meanmax_idx], 
+        medianmin=dftemp['pos'].loc[medianmin_idx], 
+        medianmax=dftemp['pos'].loc[medianmax_idx]
+    ))
     return dftemp, l_pos
 
 
@@ -526,6 +536,7 @@ def depth_est_ml_mqtt(msg, conf=None):
 
 
 def depth_est_combined(file):
+    result = []  # Initialize result with a default empty list
 
     l_seg = depth_est_segmented(file)
     if len(l_seg) == 3:
@@ -562,7 +573,7 @@ class GripCodeCalc():
         code = np.dot(
             (np.array(depths)[:, None] > self.gripref_df['GLL'].values) &
             (np.array(depths)[:, None] <= self.gripref_df['GUL'].values),
-            self.gripref_df['code'].values
+            np.array(self.gripref_df['code'].values)
         )
         return code
 
