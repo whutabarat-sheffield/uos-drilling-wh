@@ -1,31 +1,3 @@
-import sys
-print(f"Python path: {sys.path}")
-from pathlib import Path
-
-# import pytest
-# from src.models import Message, MatchedMessageSet
-
-# Direct path manipulation
-# project_root = Path(__file__).parent.parent
-# sys.path.insert(0, str(project_root / 'src'))
-# print(f"Added {project_root / 'src'} to path")
-# print(f"Python path: {sys.path}")
-
-# Direct module import
-# import importlib.util
-# module_path = Path(__file__).parent.parent / 'src' / 'abyss' / 'mqtt' / 'models.py'
-# spec = importlib.util.spec_from_file_location("models", module_path)
-# if spec is None:
-#     raise ImportError(f"Could not load spec for module at {module_path}")
-# if spec.loader is None:
-#     raise ImportError(f"Could not load loader for module at {module_path}")
-# models = importlib.util.module_from_spec(spec)
-# sys.modules["models"] = models
-# spec.loader.exec_module(models)
-
-# Message = models.Message
-# MatchedMessageSet = models.MatchedMessageSet
-
 from abyss.mqtt.models import Message, MatchedMessageSet
 
 def test_message_creation():

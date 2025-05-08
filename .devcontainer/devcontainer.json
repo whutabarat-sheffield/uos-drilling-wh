@@ -116,14 +116,12 @@
 	// "updateContentCommand": "",
 
 	// 10. Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": [
-		"cd abyss",
-		"pip3 install --user -r requirements.txt",
-		"git config --global credential.helper '/usr/bin/git credential-cache --timeout=3600'"
-	]
+	// "postCreateCommand": [
+    // "pip3 install --user -r abyss/requirements.txt && pip3 install -e abyss/ && git config --global credential.helper '/usr/bin/git credential-cache --timeout=3600'"
+	// ]
 
 	// 11. Use 'postStartCommand' to run a command each time the container starts successfully.
-	// "postStartCommand": "",
+	"postStartCommand": "pip3 install --user -r abyss/requirements.txt && pip3 install -e abyss/ && git config --global credential.helper '/usr/bin/git credential-cache --timeout=3600'"
 	
 	// 12. Use 'postAttachCommand' to run a command each time a tool attaches to the container successfully. 
 	// "postAttachCommand": "",

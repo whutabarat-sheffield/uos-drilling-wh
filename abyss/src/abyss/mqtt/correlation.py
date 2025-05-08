@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional, Set
 import time
-from .models import Message, MatchedMessageSet
+from abyss.mqtt.models import Message, MatchedMessageSet
 
 class CorrelationEngine:
     """Engine for correlating messages based on matching keys."""

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Callable, Awaitable, Optional
-from .models import MatchedMessageSet
+from abyss.mqtt.models import MatchedMessageSet
 
 class OutputHandler(ABC):
     """Base class for handling matched message sets."""
