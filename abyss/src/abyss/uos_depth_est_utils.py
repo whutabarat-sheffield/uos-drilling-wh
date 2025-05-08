@@ -147,9 +147,16 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
     logging.debug(f"Configuration: {conf}\n\n")
 
     if result_msg:
-        result_data = json.loads(result_msg)
-        result_df = parse_result(result_data, conf)
-
+        logging.info("Processing RESULT message")
+        logging.debug(f"Result message: {result_msg}")
+        # Decode the JSON message
+        try:
+            result_data = json.loads(result_msg)
+        except json.JSONDecodeError as e:
+            logging.critical("Error decoding JSON: %s", str(e))
+            return None
+        logging.info(f"Decoded RESULT data: {result_data}")
+        # Parse the RESULT data
         try:
             result_df = parse_result(result_data, conf)
         except Exception as e:
