@@ -2,8 +2,8 @@ import pytest
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-from abyss.mqtt_correlation.service import MQTTCorrelationService
-from abyss.mqtt_correlation.processing import JSONMessageProcessor
+from abyss.mqtt.service import MQTTCorrelationService
+from abyss.mqtt.processing import JSONMessageProcessor
 
 @pytest.mark.asyncio
 async def test_basic_correlation_flow():

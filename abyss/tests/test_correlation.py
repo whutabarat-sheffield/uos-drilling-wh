@@ -1,7 +1,7 @@
 import pytest
 import time
-from abyss.mqtt_correlation.models import Message
-from abyss.mqtt_correlation.correlation import CorrelationEngine
+from abyss.mqtt.models import Message
+from abyss.mqtt.correlation import CorrelationEngine
 
 def test_correlation_basic_matching():
     # Create correlation engine requiring sensor and control messages
