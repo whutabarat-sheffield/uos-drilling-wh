@@ -73,6 +73,7 @@
 				"ms-toolsai.vscode-jupyter-slideshow",
 				"ms-toolsai.tensorboard",
 				"ms-azuretools.vscode-containers",
+				"ms-azuretools.vscode-docker",
 				"charliermarsh.ruff"
 			]
 		}
