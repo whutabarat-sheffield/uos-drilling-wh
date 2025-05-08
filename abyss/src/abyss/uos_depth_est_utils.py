@@ -179,4 +179,4 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         except Exception as e:
             logging.critical("Error merging RESULT and TRACE DataFrames: %s", str(e))
 
-    return result_df or trace_df
+    return result_df if result_df is not None else trace_df
