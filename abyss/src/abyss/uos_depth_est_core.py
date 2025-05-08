@@ -359,6 +359,7 @@ def kp_recognition_gradient(file, signal = 'Torque', smo_w = 30, wsize=30, bit_d
     df = standard_xls_loading(file, signal=signal)
     i_steps = df['Step (nb)'].unique().tolist()
     l_idx, l_pos = [], []
+    dfresult = None
 
     for i_step in i_steps:
         dfcyc = df[df['Step (nb)']==i_step]
