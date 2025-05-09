@@ -15,9 +15,11 @@ from abyss.uos_depth_est_core import (
     depth_est_xls_persegment_stats,
     depth_est_persegment_stats,
     keypoint_recognition_gradient,
-    standard_xls_loading,
-    kp_conversion,
-    kp_recognition_gradient
+    convert_raw_mqtt_to_df,
+
+    # standard_xls_loading,
+    # kp_conversion,
+    # kp_recognition_gradient
 )
 
 
@@ -142,3 +144,187 @@ class TestKeypointRecognition:
         assert isinstance(l_pos, list)
         assert len(l_pos) == 1
         assert all(key in l_pos[0] for key in ['meanmin', 'meanmax', 'medianmin', 'medianmax'])
+        
+class TestConvertRawMqttToDF:
+    def test_convert_raw_mqtt_with_default_conf(self):
+        # Create sample MQTT message in JSON format with the expected structure
+        sample_msg = json.dumps({
+            "Messages": {
+                "Payload": {
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber": {
+                        "Value": "12345"
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position": {
+                        "Value": [-0.1, -0.2, -0.3]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque": {
+                        "Value": [1.0, 1.2, 1.5]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty": {
+                        "Value": [0.1, 0.2, 0.3]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb": {
+                        "Value": [1, 1, 1]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.ToolAge": {
+                        "Value": 10
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.Predrilled": {
+                        "Value": 1
+                    }
+                }
+            }
+        })
+        
+        # Call the function
+        df = convert_raw_mqtt_to_df(sample_msg)
+        
+        # Assertions
+        assert isinstance(df, pd.DataFrame)
+        assert 'Position (mm)' in df.columns
+        assert 'I Torque (A)' in df.columns
+        assert 'I Torque Empty (A)' in df.columns
+        assert 'Step (nb)' in df.columns
+        assert 'HOLE_ID' in df.columns
+        assert 'local' in df.columns
+        assert 'PREDRILLED' in df.columns
+        assert df.shape[0] == 3
+        assert df['HOLE_ID'].iloc[0] == "12345"
+        assert df['Position (mm)'].iloc[0] == 0.1  # Negated from -0.1
+        assert df['I Torque (A)'].iloc[0] == 1.0
+        assert df['I Torque Empty (A)'].iloc[0] == 0.1
+        assert df['Step (nb)'].iloc[0] == 1
+        assert df['local'].iloc[0] == 10
+        assert df['PREDRILLED'].iloc[0] == 1
+
+    def test_convert_raw_mqtt_with_custom_conf(self):
+        # Create sample MQTT message with different structure
+        sample_msg = json.dumps({
+            "data": {
+                "drilling": {
+                    "hole_id": {
+                        "value": "67890"
+                    },
+                    "position": {
+                        "value": [-0.5, -0.6, -0.7]
+                    },
+                    "torque": {
+                        "value": [2.0, 2.2, 2.5]
+                    },
+                    "torque_empty": {
+                        "value": [0.5, 0.6, 0.7]
+                    },
+                    "step": {
+                        "value": [2, 2, 2]
+                    },
+                    "tool_age": {
+                        "value": 20
+                    },
+                    "predrilled_status": {
+                        "value": 0
+                    }
+                }
+            }
+        })
+        
+        # Custom configuration
+        custom_conf = {
+            'hole_id': ('data', 'drilling', 'hole_id', 'value'),
+            'position_keys': ('data', 'drilling', 'position', 'value'),
+            'torque_keys': ('data', 'drilling', 'torque', 'value'),
+            'torque_empty_keys': ('data', 'drilling', 'torque_empty', 'value'),
+            'step_keys': ('data', 'drilling', 'step', 'value'),
+            'local_keys': ('data', 'drilling', 'tool_age', 'value'),
+            'predrilled_keys': ('data', 'drilling', 'predrilled_status', 'value')
+        }
+        
+        # Call the function
+        df = convert_raw_mqtt_to_df(sample_msg, conf=custom_conf)
+        
+        # Assertions
+        assert isinstance(df, pd.DataFrame)
+        assert df.shape[0] == 3
+        assert df['HOLE_ID'].iloc[0] == "67890"
+        assert df['Position (mm)'].iloc[0] == 0.5  # Negated from -0.5
+        assert df['I Torque (A)'].iloc[0] == 2.0
+        assert df['I Torque Empty (A)'].iloc[0] == 0.5
+        assert df['Step (nb)'].iloc[0] == 2
+        assert df['local'].iloc[0] == 20
+        assert df['PREDRILLED'].iloc[0] == 0
+
+    def test_convert_raw_mqtt_with_missing_optional_keys(self):
+        # Create sample MQTT message with missing optional fields
+        sample_msg = json.dumps({
+            "Messages": {
+                "Payload": {
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber": {
+                        "Value": "12345"
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position": {
+                        "Value": [-0.1, -0.2, -0.3]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque": {
+                        "Value": [1.0, 1.2, 1.5]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty": {
+                        "Value": [0.1, 0.2, 0.3]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb": {
+                        "Value": [1, 1, 1]
+                    }
+                    # Missing ToolAge and Predrilled
+                }
+            }
+        })
+        
+        # Custom conf with nonexistent paths for optional fields
+        custom_conf = {
+            'hole_id': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber', 'Value'),
+            'position_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position', 'Value'),
+            'torque_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque', 'Value'),
+            'torque_empty_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty', 'Value'),
+            'step_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb', 'Value'),
+            'local_keys': ('Messages', 'Payload', 'missing_local_key', 'Value'),  # Key that doesn't exist
+            'predrilled_keys': ('Messages', 'Payload', 'missing_predrilled_key', 'Value')  # Key that doesn't exist
+        }
+        
+        # Call the function
+        df = convert_raw_mqtt_to_df(sample_msg, conf=custom_conf)
+        
+        # Assertions
+        assert isinstance(df, pd.DataFrame)
+        assert df.shape[0] == 3
+        assert df['HOLE_ID'].iloc[0] == "12345"
+        assert df['local'].iloc[0] == 0  # Default value when local_keys path doesn't resolve
+        assert df['PREDRILLED'].iloc[0] == 1  # Default value when predrilled_keys path doesn't resolve
+
+    def test_convert_raw_mqtt_null_hole_id(self):
+        # Create sample MQTT message with null hole_id
+        sample_msg = json.dumps({
+            "Messages": {
+                "Payload": {
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber": {
+                        "Value": None
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position": {
+                        "Value": [-0.1, -0.2, -0.3]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque": {
+                        "Value": [1.0, 1.2, 1.5]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty": {
+                        "Value": [0.1, 0.2, 0.3]
+                    },
+                    "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb": {
+                        "Value": [1, 1, 1]
+                    }
+                }
+            }
+        })
+        
+        # Call the function
+        df = convert_raw_mqtt_to_df(sample_msg)
+        
+        # Assertions
+        assert isinstance(df, pd.DataFrame)
+        assert df['HOLE_ID'].iloc[0] == "UNKNOWN"  # Default value when hole_id is None

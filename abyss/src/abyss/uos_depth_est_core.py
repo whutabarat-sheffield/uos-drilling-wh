@@ -1,4 +1,3 @@
-
 import numpy as np
 import pandas as pd
 import sysconfig
@@ -456,67 +455,85 @@ def depth_est_ml(file):
     l_result = kp_recognition_ml(file)
     return l_result
 
-def convert_mqtt_to_df(msg, conf=None):
+def convert_raw_mqtt_to_df(mqtt_msg, conf=None):
     """
-    Convert a MQTT message to a Pandas DataFrame.
-
-    Parameters:
-    msg (str): The MQTT message containing the data.
-    conf (dict): The configuration dictionary containing the key paths to the required data.
-
-    Returns:
-    DataFrame: The converted DataFrame with the required columns.
-
-    Notes:
-    - The configuration dictionary should contain the following keys: 'hole_id', 'position_keys', 'torque_keys', 'torque_empty_keys', 'step_keys', 'local_keys', 'predrilled_keys'.
-    - The function uses the `reduce` function to access the hierarchical dictionary elements from the list of keys.
-    - The function converts the DataFrame columns to the required types using the `astype` method.
-    - The function returns the converted DataFrame with the required columns.
-
+    Converting raw mqtt message to pandas dataframe
     """
+    # Load the message
+    try:
+        data = json.loads(mqtt_msg)
+    except:
+        # Already a dict
+        data = mqtt_msg
+        
+    # Default confiugration for raw mqtt with position, torque, torque_empty, step, local and predrilled keys
     if conf is None:
-        hole_id_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber','Value')
-        position_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position','Value')
-        torque_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque','Value')
-        torque_empty_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty','Value')
-        step_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb','Value')
-        local_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.ToolAge','Value')
-        predrilled_keys = ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.Predrilled','Value')
+        conf = {
+            'hole_id': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.SerialNumber', 'Value'),
+            'position_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Position', 'Value'),
+            'torque_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Torque', 'Value'),
+            'torque_empty_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.TorqueEmpty', 'Value'),
+            'step_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNb', 'Value'),
+            'local_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.ToolAge', 'Value'),
+            'predrilled_keys': ('Messages', 'Payload', 'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecxls.ResultManagement.Results.0.ResultMetaData.Predrilled', 'Value')
+        }
+        
+    # Extract values recursively
+    def get_value_from_path(d, path):
+        try:
+            return reduce(lambda d, k: d[k], path, d)
+        except (KeyError, TypeError):
+            return None
+        
+    # Getting serie number
+    hole_id = get_value_from_path(data, conf['hole_id'])
+    if hole_id is None:
+        hole_id = "UNKNOWN"
+    
+    # Getting position
+    position = get_value_from_path(data, conf['position_keys'])
+    # Invert sign for position (to make them positive)
+    if position is not None:
+        position = [-p for p in position]
     else:
-        hole_id_keys = conf['hole_id']
-        position_keys = conf['position_keys']
-        torque_keys = conf['torque_keys']
-        torque_empty_keys = conf['torque_empty_keys']
-        step_keys = conf['step_keys']
-        local_keys = conf['local_keys']
-        predrilled_keys = conf['predrilled_keys']
-
-    d = json.loads(msg)
-
-    # https://stackoverflow.com/questions/34209587/python-access-hierarchical-dict-element-from-list-of-keys
-    position = reduce(dict.get, position_keys, d)
-    torque = reduce(dict.get, torque_keys, d)
-    torque_empty = reduce(dict.get, torque_empty_keys, d)
-    step = reduce(dict.get, step_keys, d)
-    hole_id = reduce(dict.get, hole_id_keys, d)
-    local = reduce(dict.get, local_keys, d) if local_keys else 0
-    predrilled = reduce(dict.get, predrilled_keys, d) if predrilled_keys else 1
-    # df = pd.DataFrame({'Position': position, 'Torque': torque, 'Torque_Empty': torque_empty})
-    df = pd.DataFrame({'Position (mm)': position, 
-                       'I Torque (A)': torque, 
-                       'I Torque Empty (A)': torque_empty, 
-                       'Step (nb)': step})
-    #Expected columns: 'i_torque', 'HOLE_ID', 'step', 'xpos', 'local', 'PREDRILLED'
-    # df['i_torque'] = df['I Torque (A)'] + df['I Torque Empty (A)']
-    df = df.convert_dtypes()
-    df['Step (nb)'] = df['Step (nb)'].astype('int32')
-    # Negating the 'Position (mm)' column to ensure consistency with expected data format.
-    df['HOLE_ID'] = str(hole_id) if hole_id is not None else "UNKNOWN"
-    df['Position (mm)'] = -df['Position (mm)']
-    df['HOLE_ID'] = str(hole_id)
-    df['local'] = local
-    df['PREDRILLED'] = predrilled
-    # df = df.convert_dtypes()
+        position = []
+    
+    # Getting torque
+    torque = get_value_from_path(data, conf['torque_keys'])
+    if torque is None:
+        torque = []
+    
+    # Getting torque_empty
+    torque_empty = get_value_from_path(data, conf['torque_empty_keys'])
+    if torque_empty is None:
+        torque_empty = []
+    
+    # Getting step
+    step = get_value_from_path(data, conf['step_keys'])
+    if step is None:
+        step = []
+        
+    # Getting local
+    local = get_value_from_path(data, conf['local_keys'])
+    if local is None:
+        local = 0
+        
+    # Getting predrilled
+    predrilled = get_value_from_path(data, conf['predrilled_keys'])
+    if predrilled is None:
+        predrilled = 1
+    
+    # Create pandas dataframe
+    df = pd.DataFrame({
+        'Position (mm)': position,
+        'I Torque (A)': torque,
+        'I Torque Empty (A)': torque_empty,
+        'Step (nb)': step,
+        'HOLE_ID': hole_id,
+        'local': local,
+        'PREDRILLED': predrilled
+    })
+    
     return df
 
 def depth_est_ml_mqtt(msg, conf=None):
@@ -616,4 +633,3 @@ if __name__ == '__main__':
     print("depth_keypoints_ml :"+str(dest_ml))
     dest = depth_est_combined(path)
     print("depth_keypoints_combined:"+str(dest))
-    
