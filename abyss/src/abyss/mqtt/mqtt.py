@@ -1,6 +1,7 @@
-# import asyncio
+import asyncio
 from typing import Dict, Callable, Coroutine, Any, Set, Optional
 import aiomqtt
+import ssl
 
 class MQTTSubscriber:
     """Handles MQTT connection and message subscription."""
@@ -31,39 +32,46 @@ class MQTTSubscriber:
         self.message_callbacks[topic] = callback
         
     async def start(self):
-        """Start receiving messages using context manager for aiomqtt.Client."""
+        """Start the MQTT subscriber and process messages."""
         self.running = True
         
-        # Create client within context manager - no need for explicit connect/disconnect
-        async with aiomqtt.Client(
-            hostname=self.broker,
-            port=self.port,
-            identifier=self.client_id,
-            username=self.username,
-            password=self.password,
-            # tls_params=None if not self.use_tls else True
-        ) as client:
-            try:
-                # Subscribe to all topics
+        try:
+            async with aiomqtt.Client(
+                hostname=self.broker,
+                port=self.port,
+                identifier=self.client_id,
+                username=self.username,
+                password=self.password,
+                tls_context=ssl.create_default_context() if self.use_tls else None
+            ) as client:
+                # Subscribe to all registered topics
                 for topic in self.subscribed_topics:
                     await client.subscribe(topic)
                     
-                # Process messages until stopped
+                # Process messages
                 async for message in client.messages:
-                        if not self.running:
-                            break
+                    if not self.running:
+                        break
                             
-                        # Find matching topic handlers (supporting wildcards)
                         topic = message.topic.value
                         payload = message.payload
                         
-                        # Process message with matching handlers
+                        # Find matching callbacks
                         for pattern, callback in self.message_callbacks.items():
                             if self._topic_matches(topic, pattern):
-                                await callback(topic, payload)
-            except Exception as e:
-                print(f"MQTT error: {e}")
-                self.running = False
+                                try:
+                                    # Call the callback with await since it's an async function
+                                    await callback(topic, payload)
+                                except Exception as e:
+                                    print(f"MQTT error: {e}")
+                                    self.running = False
+                                    break
+        except Exception as e:
+            print(f"MQTT connection error: {e}")
+            self.running = False
+        finally:
+            # Ensure proper cleanup when the method exits
+            self.running = False
     
     def _topic_matches(self, topic: str, pattern: str) -> bool:
         """Check if a topic matches a pattern with wildcards."""

@@ -1,17 +1,13 @@
 from typing import Dict, List, Optional, Set
 import time
+import logging
 from abyss.mqtt.models import Message, MatchedMessageSet
 
 class CorrelationEngine:
     """Engine for correlating messages based on matching keys."""
     
     def __init__(self, required_types: Set[str], match_timeout: float = 60.0):
-        """Initialize correlation engine.
-        
-        Args:
-            required_types: Set of message types required for a complete match
-            match_timeout: Time in seconds before partial matches expire
-        """
+        """Initialize correlation engine."""
         self.required_types = required_types
         self.match_timeout = match_timeout
         self.partial_matches: Dict[str, Dict[str, Message]] = {}
@@ -19,14 +15,7 @@ class CorrelationEngine:
         self.last_cleanup = time.time()
     
     def add_message(self, message: Message) -> Optional[MatchedMessageSet]:
-        """Add a message and check if it completes a match.
-        
-        Args:
-            message: The message to add
-            
-        Returns:
-            A complete MatchedMessageSet if one was formed, otherwise None
-        """
+        """Add a message and check if it completes a match."""
         key = message.key
         type_id = message.type_id
         
@@ -36,6 +25,9 @@ class CorrelationEngine:
             
         # Add this message to the partial match
         self.partial_matches[key][type_id] = message
+        
+        # Always clean up expired matches when adding a new message
+        self._cleanup_expired_matches()
         
         # Check if we have a complete match
         if set(self.partial_matches[key].keys()) == self.required_types:
@@ -50,9 +42,6 @@ class CorrelationEngine:
             
             # Store in complete matches
             self.complete_matches.append(matched_set)
-            
-            # Periodically clean up expired matches
-            self._cleanup_expired_matches()
             
             return matched_set
             
@@ -73,12 +62,9 @@ class CorrelationEngine:
     
     def _cleanup_expired_matches(self) -> None:
         """Remove partial matches that have expired."""
-        # Only run cleanup occasionally to avoid overhead
         current_time = time.time()
-        if current_time - self.last_cleanup < 5.0:  # Run every 5 seconds
-            return
-            
-        self.last_cleanup = current_time
+        # Always run cleanup, don't throttle in tests
+        
         expired_keys = []
         
         for key, matches in self.partial_matches.items():
@@ -86,8 +72,12 @@ class CorrelationEngine:
             for _, message in matches.items():
                 if current_time - message.timestamp > self.match_timeout:
                     expired_keys.append(key)
+                    logging.warning(f"Correlation timeout for key {key}, type {message.type_id}")
                     break
                     
         # Remove expired matches
         for key in expired_keys:
             del self.partial_matches[key]
+            
+        # Update cleanup timestamp
+        self.last_cleanup = current_time
