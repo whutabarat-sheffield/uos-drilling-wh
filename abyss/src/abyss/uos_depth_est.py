@@ -222,6 +222,12 @@ class MQTTDrillingDataAnalyser:
             
             # First check for matches to process data as quickly as possible
             self.find_and_process_matches()
+
+            # Check if any buffer is exceeding the maximum size
+            for topic, buffer in self.buffers.items():
+                if len(buffer) >= 10000:
+                    self.cleanup_old_messages()
+                    break
             
             current_time = datetime.now().timestamp()
             if current_time - self.last_cleanup >= self.cleanup_interval:
@@ -294,35 +300,49 @@ class MQTTDrillingDataAnalyser:
             for msg in to_remove_trace:
                 msg.processed = True
 
-            # Only remove messages that are both processed and older than the time window
+            # Only remove messages that are processed
             self.buffers[result_topic] = [
-                msg for msg in result_messages 
-                if not msg.processed or (datetime.now().timestamp() - msg.timestamp <= self.time_window)
+                msg for msg in result_messages if not msg.processed 
             ]
             self.buffers[trace_topic] = [
-                msg for msg in trace_messages 
-                if not msg.processed or (datetime.now().timestamp() - msg.timestamp <= self.time_window)
+                msg for msg in trace_messages if not msg.processed
             ]
             
         except Exception as e:
             logging.error("Error in find_and_process_matches: %s", str(e))
 
     def cleanup_old_messages(self):
-        """Remove messages older than the cleanup interval"""
+        """
+        Manage buffer size by:
+        1. First removing all processed messages
+        2. If still over max size, remove oldest unprocessed messages
+        """
         try:
-            logging.debug("Cleaning up old messages")
-            current_time = datetime.now().timestamp()
+            logging.debug("Cleaning up messages")
+            MAX_BUFFER_SIZE = 10000  # Maximum number of messages per buffer
             removed_count = 0
             
             for topic in self.topics:
+                # First remove all processed messages
                 original_length = len(self.buffers[topic])
-                self.buffers[topic] = [
-                    msg for msg in self.buffers[topic]
-                    if current_time - self.last_cleanup <= self.cleanup_interval # TODO 2025.04.30: CHECK IF THIS IS CORRECT. WHERE DO WE GET THE msg.timestamp from? If this is from the setitec data then this will always fire 
-                ]
-                removed_count += original_length - len(self.buffers[topic])
+                self.buffers[topic] = [msg for msg in self.buffers[topic] if not msg.processed]
+                processed_removed = original_length - len(self.buffers[topic])
+                
+                # If still over the limit, sort by timestamp and keep only the newest MAX_BUFFER_SIZE
+                if len(self.buffers[topic]) > MAX_BUFFER_SIZE:
+                    # Sort by timestamp (oldest first)
+                    self.buffers[topic].sort(key=lambda msg: msg.timestamp)
+                    # Remove oldest messages to get down to MAX_BUFFER_SIZE
+                    excess = len(self.buffers[topic]) - MAX_BUFFER_SIZE
+                    self.buffers[topic] = self.buffers[topic][excess:]
+                    removed_count += processed_removed + excess
+                    logging.info("Buffer %s: removed %s processed messages and %s old messages", 
+                                 topic, processed_removed, excess)
+                else:
+                    removed_count += processed_removed
+                    logging.info("Buffer %s: removed %s processed messages", topic, processed_removed)
             
-            logging.info("Removed %s old messages", removed_count)
+            logging.info("Total removed: %s messages", removed_count)
             
         except Exception as e:
             logging.error("Error in cleanup_old_messages: %s", str(e))
