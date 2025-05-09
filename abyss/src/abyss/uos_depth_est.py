@@ -3,6 +3,7 @@ import paho.mqtt.client as mqtt
 import yaml
 import json
 import time
+import threading
 from typing import Dict, List
 from functools import reduce
 
@@ -85,18 +86,24 @@ class MQTTDrillingDataAnalyser:
         self.topics = []
         
         # Time window for matching messages (in seconds)
-        self.time_window = 1.0
+        self.time_window = 0.1
         
         # Last cleanup timestamp
         self.last_cleanup = datetime.now().timestamp()
         
         # Cleanup interval (10 times the time window)
-        self.cleanup_interval = 10 * self.time_window
+        self.cleanup_interval = 1000 * self.time_window
 
         # Load the depth inference model
         self.depth_inference = DepthInference()
 
-        self.ALGO_VERSION = "0.1.1"
+        # Add thread for continuous processing
+        self.processing_active = True
+        self.processing_thread = threading.Thread(target=self.continuous_processing)
+        self.processing_thread.daemon = True
+        self.processing_thread.start()
+
+        self.ALGO_VERSION = "0.2.2"
         self.MACHINE_ID = "MACHINE_ID"
         self.RESULT_ID = "RESULT_ID"
 
@@ -220,8 +227,10 @@ class MQTTDrillingDataAnalyser:
             logging.info("Buffer size after: %s", len(self.buffers[matching_topic]))
             logging.info("All buffers: %s", {k: len(v) for k,v in self.buffers.items()})
             
-            # First check for matches to process data as quickly as possible
-            self.find_and_process_matches()
+            # Process all possible matches repeatedly until no more matches are found
+            # This is now handled in a separate thread
+            # while self.find_and_process_matches():
+            #     logging.debug("Found and processed matches, checking for more...")
 
             # Check if any buffer is exceeding the maximum size
             for topic, buffer in self.buffers.items():
@@ -252,11 +261,9 @@ class MQTTDrillingDataAnalyser:
         frame. This is critical for ensuring accurate and synchronized data 
         analysis in the drilling process.
 
-        TODO 2025.04.30: message deleted too aggressively so that matches are 
-        not made. Make this less aggressive.
         """
         try:
-            logging.info("Checking for matches")
+            logging.debug("Checking for matches")
             
             result_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
             trace_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
@@ -264,15 +271,16 @@ class MQTTDrillingDataAnalyser:
             result_messages = self.buffers.get(result_topic, [])
             trace_messages = self.buffers.get(trace_topic, [])
             
-            logging.info("Result messages: %s", len(result_messages))
-            logging.info("Trace messages: %s", len(trace_messages))
+            logging.debug("Result messages: %s", len(result_messages))
+            logging.debug("Trace messages: %s", len(trace_messages))
             
             to_remove_result = []
             to_remove_trace = []
+            matches_found = False
             
             for result_msg in result_messages:
                 r_parts = result_msg.source.split('/')
-                logging.info("r_parts: %s", r_parts)
+                logging.debug("r_parts: %s", r_parts)
                 r_tool_key = f"{r_parts[1]}/{r_parts[2]}"
                 
                 for trace_msg in trace_messages:
@@ -288,6 +296,8 @@ class MQTTDrillingDataAnalyser:
                         logging.info("Found matching pair!")
                         logging.info("Tool: %s", r_tool_key)
                         logging.info("Timestamp: %s", datetime.fromtimestamp(result_msg.timestamp))
+
+                        matches_found = True  # Set to True when a match is found
                         
                         self.process_matching_messages([result_msg, trace_msg])
                         
@@ -300,16 +310,15 @@ class MQTTDrillingDataAnalyser:
             for msg in to_remove_trace:
                 msg.processed = True
 
-            # Only remove messages that are processed
-            self.buffers[result_topic] = [
-                msg for msg in result_messages if not msg.processed 
-            ]
-            self.buffers[trace_topic] = [
-                msg for msg in trace_messages if not msg.processed
-            ]
+            # Update buffers
+            self.buffers[result_topic] = [msg for msg in result_messages if not msg.processed]
+            self.buffers[trace_topic] = [msg for msg in trace_messages if not msg.processed]
+
+            return matches_found  # Return True if any matches were found and processed
             
         except Exception as e:
             logging.error("Error in find_and_process_matches: %s", str(e))
+            return False  # Return False on error 
 
     def cleanup_old_messages(self):
         """
@@ -443,6 +452,14 @@ class MQTTDrillingDataAnalyser:
             dest_data = dict(Value = depth_estimation, SourceTimestamp = dt, MachineId = self.MACHINE_ID, ResultId = self.RESULT_ID, AlgoVersion = self.ALGO_VERSION)
             self.result_client.publish(dest_topic, json.dumps(dest_data))            
             
+    def continuous_processing(self):
+        """Continuously check for and process matches in a separate thread"""
+        while self.processing_active:
+            matches_found = self.find_and_process_matches()
+            if not matches_found:
+                # Sleep if no matches found to avoid CPU spinning
+                time.sleep(0.1)    
+
     def run(self):
         """Main method to set up MQTT clients and start listening"""
         result_client = self.create_result_listener()
@@ -465,3 +482,5 @@ class MQTTDrillingDataAnalyser:
             trace_client.loop_stop()
             result_client.disconnect()
             trace_client.disconnect()
+            self.processing_active = False
+            self.processing_thread.join(timeout=1.0)
