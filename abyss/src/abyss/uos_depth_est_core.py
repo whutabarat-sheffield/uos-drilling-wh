@@ -499,8 +499,8 @@ def convert_mqtt_to_df(msg, conf=None):
     torque_empty = reduce(dict.get, torque_empty_keys, d)
     step = reduce(dict.get, step_keys, d)
     hole_id = reduce(dict.get, hole_id_keys, d)
-    local = 0 #reduce(dict.get, local_keys, d)
-    predrilled = 1 #reduce(dict.get, predrilled_keys, d)
+    local = reduce(dict.get, local_keys, d) if local_keys else 0
+    predrilled = reduce(dict.get, predrilled_keys, d) if predrilled_keys else 1
     # df = pd.DataFrame({'Position': position, 'Torque': torque, 'Torque_Empty': torque_empty})
     df = pd.DataFrame({'Position (mm)': position, 
                        'I Torque (A)': torque, 
@@ -508,7 +508,10 @@ def convert_mqtt_to_df(msg, conf=None):
                        'Step (nb)': step})
     #Expected columns: 'i_torque', 'HOLE_ID', 'step', 'xpos', 'local', 'PREDRILLED'
     # df['i_torque'] = df['I Torque (A)'] + df['I Torque Empty (A)']
-    df = df.astype({'Step (nb)': 'int32'})
+    df = df.convert_dtypes()
+    df['Step (nb)'] = df['Step (nb)'].astype('int32')
+    # Negating the 'Position (mm)' column to ensure consistency with expected data format.
+    df['HOLE_ID'] = str(hole_id) if hole_id is not None else "UNKNOWN"
     df['Position (mm)'] = -df['Position (mm)']
     df['HOLE_ID'] = str(hole_id)
     df['local'] = local
