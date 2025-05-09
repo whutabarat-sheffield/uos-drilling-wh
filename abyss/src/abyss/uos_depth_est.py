@@ -40,11 +40,25 @@ def find_in_dict(data: dict, target_key: str) -> list:
 
 T = TypeVar('T')  # Generic type for the data
 
-@dataclass(frozen=True)  # Make the class immutable and hashable
+# @dataclass(frozen=True)  # Make the class immutable and hashable
+@dataclass(frozen=False)  
 class TimestampedData(Generic[T]):
-    timestamp: float  # Unix timestamp
-    data: T
-    source: str
+    _timestamp: float  # Unix timestamp
+    _data: T
+    _source: str
+    
+    @property
+    def timestamp(self) -> float:
+        return self._timestamp
+    
+    @property
+    def data(self) -> T:
+        return self._data
+    
+    @property
+    def source(self) -> str:
+        return self._source
+    processed: bool = False  # Flag to indicate if the message has been processed
     
     def __hash__(self):
         return hash((self.timestamp, self.source))
@@ -90,7 +104,7 @@ class MQTTDrillingDataAnalyser:
 
     def create_mqtt_client(self, client_id):
         """Create MQTT client with basic configuration"""
-        client = mqtt.Client(client_id, callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
+        client = mqtt.Client(client_id)
         
         if self.broker.get('username') and self.broker.get('password'):
             client.username_pw_set(
@@ -123,9 +137,9 @@ class MQTTDrillingDataAnalyser:
                 unix_timestamp = dt.timestamp()
                 
                 tsdata = TimestampedData(
-                    timestamp=unix_timestamp,
-                    data=data,
-                    source=msg.topic
+                    _timestamp=unix_timestamp,
+                    _data=data,
+                    _source=msg.topic
                 )
                 self.add_message(tsdata)
                 logging.debug("Unix Timestamp: %s", unix_timestamp)
@@ -136,7 +150,7 @@ class MQTTDrillingDataAnalyser:
             except Exception as e:
                 logging.error(f"Error processing message: {str(e)}")
 
-        client = mqtt.Client("result_listener")
+        client = mqtt.Client(client_id="result_listener")
         client.on_connect = on_connect
         client.on_message = on_message
         self.result_client = client
@@ -164,9 +178,9 @@ class MQTTDrillingDataAnalyser:
                 unix_timestamp = dt.timestamp()
                 
                 tsdata = TimestampedData(
-                    timestamp=unix_timestamp,
-                    data=data,
-                    source=msg.topic
+                    _timestamp=unix_timestamp,
+                    _data=data,
+                    _source=msg.topic
                 )
                 self.add_message(tsdata)
                 logging.debug("Unix Timestamp: %s", unix_timestamp)
@@ -177,7 +191,7 @@ class MQTTDrillingDataAnalyser:
             except Exception as e:
                 logging.error(f"Error processing message: {str(e)}")
 
-        client = mqtt.Client("trace_listener")
+        client = mqtt.Client(client_id="trace_listener")
         client.on_connect = on_connect
         client.on_message = on_message
 
@@ -188,10 +202,10 @@ class MQTTDrillingDataAnalyser:
         """Add a message to the buffer and check for matches"""
         try:
             matching_topic = None
-            if self.config['mqtt']['listener']['trace'] in data.source:
+            if data.source and self.config['mqtt']['listener']['trace'] in data.source:
                 matching_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
                 logging.debug("Trace message received")
-            elif self.config['mqtt']['listener']['result'] in data.source:
+            elif data.source and self.config['mqtt']['listener']['result'] in data.source:
                 matching_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['result']}"
                 logging.debug("Result message received")
             else:
@@ -274,8 +288,21 @@ class MQTTDrillingDataAnalyser:
                         to_remove_result.append(result_msg)
                         to_remove_trace.append(trace_msg)
             
-            self.buffers[result_topic] = [msg for msg in result_messages if msg not in to_remove_result]
-            self.buffers[trace_topic] = [msg for msg in trace_messages if msg not in to_remove_trace]
+            # Retain messages for a longer period by marking them as processed instead of immediate deletion
+            for msg in to_remove_result:
+                msg.processed = True
+            for msg in to_remove_trace:
+                msg.processed = True
+
+            # Only remove messages that are both processed and older than the time window
+            self.buffers[result_topic] = [
+                msg for msg in result_messages 
+                if not msg.processed or (datetime.now().timestamp() - msg.timestamp <= self.time_window)
+            ]
+            self.buffers[trace_topic] = [
+                msg for msg in trace_messages 
+                if not msg.processed or (datetime.now().timestamp() - msg.timestamp <= self.time_window)
+            ]
             
         except Exception as e:
             logging.error("Error in find_and_process_matches: %s", str(e))
