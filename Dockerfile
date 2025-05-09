@@ -37,7 +37,7 @@ RUN python -m pip install --upgrade pip
 # Leverage a bind mount to requirements.txt to avoid having to copy them into
 # into this layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=uos/requirements.txt,target=requirements.txt \
+    --mount=type=bind,source=abyss/requirements.txt,target=requirements.txt \
     python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Set up the directory structure
