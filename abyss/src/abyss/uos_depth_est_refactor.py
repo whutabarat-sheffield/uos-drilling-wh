@@ -362,8 +362,8 @@ class MQTTClientManager:
         Returns:
             Configured MQTT client
         """
-        # client = mqtt.Client(client_id, callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
-        client = mqtt.Client(client_id)
+        # Create client with proper parameter order
+        client = mqtt.Client(client_id=client_id)
         
         broker_config = self.config_manager.get_broker_config()
         if broker_config.get('username') and broker_config.get('password'):

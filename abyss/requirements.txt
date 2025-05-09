@@ -22,8 +22,15 @@ h5py
 torch==2.3.1 # >2.3.1 does not work
 
 # Communication and Configuration
-paho-mqtt<2.0.0
+# paho-mqtt<2.0.0
+paho-mqtt
+aiomqtt
 pyyaml
+
+# Tests
+pytest
+pytest-asyncio
+pytest-mock
 
 # Hard dependencies (must use provided packages)
 # ./wheels/accelerate-1.2.1-py3-none-any.whl

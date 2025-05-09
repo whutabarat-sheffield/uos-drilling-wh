@@ -1,7 +1,7 @@
 # Use an official Python 3 image as the base image
-# ARG PYTHON_VERSION=3.10.16
-# FROM python:${PYTHON_VERSION}-slim
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
+ARG PYTHON_VERSION=3.10.16
+FROM python:${PYTHON_VERSION}-slim
+# FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
 # Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y \
     vim \
     build-essential \
     sudo \
+    docker \
+    mosquitto mosquitto-clients \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-privileged user that the app will run under.
@@ -52,7 +54,7 @@ RUN mkdir -p ./wheels
 COPY abyss/wheels/* ./wheels
 
 # Copy the package files
-COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in abyss/requirements.docker ./
+COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in abyss/requirements.txt ./
 COPY abyss/src ./src
 
 
@@ -100,7 +102,7 @@ ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
 
 # Switch to the non-privileged user to run the application.
-# USER appuser
+USER appuser
 
 
 # Specify the default command to run the application

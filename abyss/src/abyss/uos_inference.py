@@ -102,7 +102,8 @@ class DepthInference:
         df['local'] = local
         df['PREDRILLED'] = PREDRILLED
 
-        return self.infer_common(df, hole_id, local, PREDRILLED)
+        # return self.infer_common(df, hole_id, local, PREDRILLED)
+        return self.infer_common(df)
 
     # def infer_common(self, data, hole_id='test', local=0, PREDRILLED=1):
     def infer_common(self, data):

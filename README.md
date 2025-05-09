@@ -1,6 +1,6 @@
 # uos-drilling
 Latest version of depth estimation algorithm.
-Please go into abyss for more details.
+Please go into the release page for more up-to-date details.
 
 ## Quick installation
 Clone the repository
@@ -18,37 +18,27 @@ Go into test and run it
 3. Run the Docker images
 
 Details on step #1
-```
+```bash
 git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
 ```
 
 Details on step #2 and #3
-CPU version:
-```
-#  step #2 build the publisher and listener
-docker build -t publisher -f Dockerfile.local.publisher .
-docker build -t listener.cpu -f Dockerfile.local.cpu .
-# step #3 run the publisher then listener
-docker run -t publisher
-docker run -t listener.cpu
+```bash
+#  step #2 build the listener
+docker build -t listener .
 ```
 
-GPU version:
 ```
-# step #2 build the publisher and listener
-docker build -t publisher -f Dockerfile.local.publisher .
-docker build -t listener.gpu -f Dockerfile.local.gpu .
-# step #3 run the publisher then listener
-docker run -t publisher
-docker run -t listener.gpu
+# step #3 run the listener
+docker run -t listener
 ```
 
-For testing with a Raspberry Pi (still flaky and only on simple network):
-```
-docker build -t publisher -f Dockerfile.rpi.publisher .
-docker run -t publisher
+The listener is callable from the command line as 
+```bash 
+uos_depthest_listener --config (path to the configuration file)
 ```
 
+The docker build will already setup a workspace under `/app` directory, which contains the configuration file `mqtt_conf.yaml`. 
 
 
 Below are Windo's notes on how to manage Docker -- please ignore:
