@@ -108,7 +108,8 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Publish data continuously
-    while True:
+    # while True:
+    for i in range(20):
         # Select a random data folder to publish and read the data
         random.shuffle(DATA_FOLDERS)
         data_folder = DATA_FOLDERS[0]
