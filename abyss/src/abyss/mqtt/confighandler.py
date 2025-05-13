@@ -1,10 +1,8 @@
 """MQTT Configuration Handler for the Drilling Data Analysis System."""
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-
+from typing import Dict, List, Optional, Union
 import yaml
 
 
