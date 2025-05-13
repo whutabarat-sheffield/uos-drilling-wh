@@ -1,7 +1,7 @@
 # Hard dependencies (must use provided packages)
-accelerate @ file://localhost/build/abyss/wheels/accelerate-1.2.1-py3-none-any.whl
-transformers @ file://localhost/build/abyss/wheels/transformers-4.41.0.dev0-py3-none-any.whl
-tsfm_public @ file://localhost/build/abyss/wheels/tsfm_public-0.2.17-py3-none-any.whl
+accelerate @ file://localhost/workspaces/uos-drilling-wh/abyss/wheels/accelerate-1.2.1-py3-none-any.whl
+transformers @ file://localhost/workspaces/uos-drilling-wh/abyss/wheels/transformers-4.41.0.dev0-py3-none-any.whl
+tsfm_public @ file://localhost/workspaces/uos-drilling-wh/abyss/wheels/tsfm_public-0.2.17-py3-none-any.whl
 
 # Core Scientific and Data Processing Libraries
 numpy==1.26.4
@@ -20,6 +20,7 @@ h5py
 # Deep Learning Libraries
 #--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.3.1 # >2.3.1 does not work
+ray
 
 # Communication and Configuration
 # paho-mqtt<2.0.0

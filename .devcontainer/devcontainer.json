@@ -117,16 +117,10 @@
 	// "updateContentCommand": "",
 
 	// 10. Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": [
-    // "pip3 install --user -r abyss/requirements.txt && pip3 install -e abyss/ && git config --global credential.helper '/usr/bin/git credential-cache --timeout=3600'"
-	// ]
-    // Fix permissions on mounted volumes
-	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.cache/pip /opt/conda/pkgs ${containerWorkspaceFolder}/node_modules",
-
+	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.cache/pip /opt/conda/pkgs ${containerWorkspaceFolder}/node_modules && pip3 install --user -r abyss/requirements.devcontainer && pip3 install -e abyss/",
 
 	// 11. Use 'postStartCommand' to run a command each time the container starts successfully.
-	// "postStartCommand": "pip3 install --user -r abyss/requirements.txt && pip3 install -e abyss/ && git config --global credential.helper '/usr/bin/git credential-cache --timeout=3600'"
-	"postStartCommand": "pip3 install --user -r abyss/requirements.txt && pip3 install -e abyss/"
+	// "postStartCommand": ""
 	
 	// 12. Use 'postAttachCommand' to run a command each time a tool attaches to the container successfully. 
 	// "postAttachCommand": "",
