@@ -36,8 +36,48 @@ When matching result and trace messages are received, the system processes them 
 - The `abyss` package
 - Key dependencies, namely `transformers`, `tsfm_public`, and `accelerate`
 - For local testing, an MQTT broker such as `mosquitto` should already be installed
+- Docker for virtual machine installation
 
-### Installation Steps
+
+### Steps for virtual machine installation (using Docker)
+
+1. Clone the entire repository
+2. Build the Docker images for publisher and listener
+3. Run the Docker images
+
+Details on step #1
+```bash
+git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
+```
+
+Details on step #2 and #3
+```bash
+#  step #2 build the listener
+docker build -t listener .
+```
+
+```
+# step #3 run the listener
+docker run -t listener
+```
+
+The listener is callable from the command line as 
+```bash 
+uos_depthest_listener --config (path to the configuration file)
+```
+
+The docker build will already setup a workspace under `/app` directory, which contains the configuration file `mqtt_conf.yaml`. 
+
+### Steps for direct installation using sources
+Clone the repository
+
+Change into abyss/
+
+Type 'pip install .'
+
+Go into abyss/src/tests and run it
+
+### Steps for direct installation using wheels
 1. Download all of the files in the `release` section apart from the source code files. 
 <img width="920" alt="image" src="https://github.airbus.corp/Airbus/uos-drilling/assets/13312/398b8773-cabb-466d-8893-3a5db5f5c1b5">
 
