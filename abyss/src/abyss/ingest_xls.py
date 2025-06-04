@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import glob
 import abyss.dataparser as dp
 
 def process_xls_file(filename: object, columns_selected: list) -> pd.DataFrame:
@@ -175,3 +176,58 @@ def create_dataframe_from_xls_files__firmware_v3(filelist: list, df: pd.DataFram
         })
 
     return df
+
+
+
+def ingest_all_xls_files(directory_path):
+    """
+    Ingest data from all .xls files in the given directory.
+    
+    Args:
+        directory_path (str): Path to directory containing .xls files
+        
+    Returns:
+        pd.DataFrame: Combined data from all .xls files
+    """
+    all_data = []
+    
+    # Find all .xls files in the directory
+    xls_files = glob(os.path.join(directory_path, "*.xls"))
+    
+    if not xls_files:
+        print(f"No .xls files found in {directory_path}")
+        return pd.DataFrame()
+    
+    for file_path in xls_files:
+        try:
+            print(f"Processing: {os.path.basename(file_path)}")
+            
+            # Read the Excel file
+            df = dp.loadSetitecXls(file_path)[-1]
+            
+            # Add source file column for tracking
+            df['filename'] = os.path.basename(file_path)
+            
+            # Basic data cleaning (adjust based on your needs)
+            # Remove rows where all values are NaN
+            # df = df.dropna(how='all')
+            
+            # Remove columns where all values are NaN
+            # df = df.dropna(axis=1, how='all')
+            
+            all_data.append(df)
+            
+        except Exception as e:
+            print(f"Error processing {file_path}: {str(e)}")
+            continue
+    
+    if all_data:
+        # Combine all DataFrames
+        combined_df = pd.concat(all_data, ignore_index=True)
+        combined_df['Position (mm)'] = -combined_df['Position (mm)']
+        print(f"Successfully processed {len(all_data)} files")
+        print(f"Combined dataset shape: {combined_df.shape}")
+        return combined_df
+    else:
+        print("No data was successfully processed")
+        return pd.DataFrame()
