@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import glob
+from glob import glob
 import abyss.dataparser as dp
 
 def process_xls_file(filename: object, columns_selected: list) -> pd.DataFrame:
@@ -95,6 +95,8 @@ def create_dataframe_from_xls_files__firmware_v3(filelist: list, df: pd.DataFram
         # columns_selected = ['BOX SN', 'Motor SN', 'Head Name','Head Global Counter','Head Local Counter', 'Cycle Time (s)', 'Distance (mm)']
         columns_selected_0 = ['BOX SN', 'Motor SN', 'Head Name','Head Global Counter','Head Local Counter', 'Cycle Time (s)', 'Distance (mm)']
         columns_selected_1 = ['BOX SN', 'Motor SN', 'Head Name','Head Global Counter','Head Local Counter 1', 'Head Local Counter 2', 'Cycle Time (s)', 'Distance (mm)']
+    else:
+        columns_selected_1 = columns_selected
     if df is None:
         df = pd.DataFrame()
 
@@ -203,7 +205,7 @@ def ingest_all_xls_files(directory_path):
             print(f"Processing: {os.path.basename(file_path)}")
             
             # Read the Excel file
-            df = dp.loadSetitecXls(file_path)[-1]
+            df = dp.loadSetitecXls(file_path, version='auto_data')
             
             # Add source file column for tracking
             df['filename'] = os.path.basename(file_path)

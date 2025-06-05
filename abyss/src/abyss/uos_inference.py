@@ -146,9 +146,9 @@ class DepthInference:
         """
         self._df = data
         assert(self._df is not None), "Please provide a data frame for inference."
-        hole_id = data['HOLE_ID'][0]
-        local = data['local'][0]  
-        PREDRILLED = data['PREDRILLED'][0]
+        hole_id = data['HOLE_ID'].iloc[0]
+        local = data['local'].iloc[0]  
+        PREDRILLED = data['PREDRILLED'].iloc[0]
         logging.info("Starting inference...")
         data, enter_pos = inference_data_pipeline(df_for_inference=self._df, ref_data_path=self.ref_data_path)
         # model = load_model(idx_cv=4)
