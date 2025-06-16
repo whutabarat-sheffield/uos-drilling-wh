@@ -3,6 +3,8 @@ import pandas as pd
 from glob import glob
 import abyss.dataparser as dp
 import warnings
+from joblib import Parallel, delayed
+from multiprocessing import cpu_count
 
 def process_xls_file(filename: object, columns_selected: list) -> pd.DataFrame:
     '''        
@@ -446,3 +448,112 @@ def ingest_all_xls_files(directory_path):
     else:
         print("No data was successfully processed")
         return pd.DataFrame()
+    
+    
+# Setitec XLS to Series conversion function
+# This function reads a Setitec XLS file and converts its contents to a pandas Series.
+# Necessary for getting metadata from Setitec XLS files that are not organised in a DataFrame format.
+# def read_setitec_xls_to_series(file_path: str) -> pd.Series:
+#     try:
+#         l_stc = dp.loadSetitecXls(file_path)
+#         s0 = pd.Series()
+#         for item in l_stc:
+#             if isinstance(item, dict):
+#                 s1 = pd.Series(item)
+#                 # break
+#             if isinstance(item, pd.DataFrame):
+#                 s1 = pd.Series(item.to_dict(orient='list'))
+#                 # break
+#             s0 = pd.concat([s0, s1], axis=0)
+#         return s0
+#     except Exception as e:
+#         print(f"Error processing {file_path}: {e}")
+#         return pd.Series()  # Return an empty Series on error
+    
+
+def read_setitec_xls_to_series(file_path: str, with_data=True) -> pd.Series:
+    """
+    Read a Setitec XLS file and convert it to a pandas Series.
+    This function loads a Setitec XLS file using the dp.loadSetitecXls function
+    and processes the resulting data structure into a flattened pandas Series.
+    The function handles both dictionary and DataFrame objects from the loaded data.
+    Args:
+        file_path (str): Path to the Setitec XLS file to be processed.
+        with_data (bool, optional): If True, includes data values in the Series.
+                                  If False, replaces list values with None while
+                                  keeping single-element list values. Defaults to True.
+    Returns:
+        pd.Series: A pandas Series containing the processed data with the following
+                  structure:
+                  - 'filename': The stem of the file path (filename without extension)
+                  - 'directory': The parent directory name of the file
+                  - Additional keys from dictionaries and DataFrames in the loaded data
+                  Single-element lists are flattened to their contained value.
+                  DataFrames are converted to dictionary format with list values
+                  (only when with_data=True).
+    Raises:
+        Exception: Any exception during file processing is caught and printed.
+                  Returns an empty Series if an error occurs.
+    Note:
+        Requires the dp module with loadSetitecXls function and pandas library.
+        The function expects the loaded data to be a list containing dictionaries
+        and/or DataFrames.
+    """
+    try:
+        l_stc = dp.loadSetitecXls(file_path)
+        s0 = pd.Series()
+        # s1 = pd.Series()
+        s0['filename'] = Path(file_path).stem
+        s0['directory'] = Path(file_path).parts[-2]
+        for item in l_stc:
+            if isinstance(item, dict):
+                s = pd.Series(item)
+            # Flatten single-element lists
+                if with_data:
+                    s1 = s.apply(lambda x: x[0] if isinstance(x, list) and len(x) == 1 else x)
+                else:
+                    s1 = s.apply(lambda x: x[0] if isinstance(x, list) and len(x) == 1 else None)
+            elif isinstance(item, pd.DataFrame) and with_data:
+            # Convert DataFrame to Dict with flattened lists
+                s1 = pd.Series(item.to_dict(orient='list'))
+            s0 = pd.concat([s0, s1], axis=0)
+        
+        return s0
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return pd.Series()  # Return an empty Series on error
+    
+
+def process_setitec_xls_files_parallel(file_paths: list[str], with_data=False, n_jobs=None) -> list:
+    """
+    Process multiple SETITEC XLS files in parallel using joblib.
+    This function reads and processes SETITEC XLS files concurrently to improve
+    performance when dealing with large numbers of files. Each file is converted
+    to a pandas Series and then to a dictionary format.
+    Args:
+        file_paths (list[str]): List of file paths to SETITEC XLS files to process.
+        with_data (bool, optional): Whether to include data when reading the files.
+            Defaults to False.
+        n_jobs (int, optional): Number of parallel jobs to run. If None, uses
+            CPU count minus 1 to leave one core free. Defaults to None.
+    Returns:
+        list: List of dictionaries containing the processed data from each file.
+            Files that are empty or failed to process will return None in the list.
+    Note:
+        Uses joblib.Parallel for parallelization with verbose output showing
+        progress. A progress bar is displayed using tqdm during processing.
+    """
+    if n_jobs is None:
+        n_jobs = cpu_count() - 1  # Leave one core free
+    
+    def process_file_parallel(file_path: str, with_data=True) -> dict:
+        s = read_setitec_xls_to_series(file_path, with_data=with_data)
+        if not s.empty:
+            return s.to_dict()
+        return None
+
+    s_parallel = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(process_file_parallel)(file_path, with_data=with_data) for file_path in tqdm(file_paths, desc="Processing SETITEC XLS files in parallel")
+    )
+    
+    return s_parallel
