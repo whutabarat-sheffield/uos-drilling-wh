@@ -5,6 +5,8 @@ import abyss.dataparser as dp
 import warnings
 from joblib import Parallel, delayed
 from multiprocessing import cpu_count
+from tqdm import tqdm
+from pathlib import Path
 
 def process_xls_file(filename: object, columns_selected: list) -> pd.DataFrame:
     '''        
@@ -524,7 +526,7 @@ def read_setitec_xls_to_series(file_path: str, with_data=True) -> pd.Series:
         return pd.Series()  # Return an empty Series on error
     
 
-def process_setitec_xls_files_parallel(file_paths: list[str], with_data=False, n_jobs=None) -> list:
+def process_setitec_xls_files_parallel(file_paths: list[str], with_data=True, n_jobs=None) -> list:
     """
     Process multiple SETITEC XLS files in parallel using joblib.
     This function reads and processes SETITEC XLS files concurrently to improve
@@ -557,3 +559,85 @@ def process_setitec_xls_files_parallel(file_paths: list[str], with_data=False, n
     )
     
     return s_parallel
+
+
+l_keys_metadata = ['filename',
+'directory',
+'Date',
+'Drilling Cycle ID',
+'BOX Name',
+'BOX SN',
+'BOX Firmware Version',
+'Motor Name',
+'Motor SN',
+'Head Global Counter',
+'Head Local Counter 1',
+]
+
+l_keys_data = ['Position (mm)',
+               'I Torque (A)', 'I Thrust (A)', 
+               'I Torque Empty (A)', 'I Thrust Empty (A)', 
+               'Step (nb)', 'Stop code', 'Torque Power (W)']
+
+
+def process_dicts_to_dataframe_parallel(item):
+    """
+    Process a dictionary item into a pandas DataFrame by separating metadata and data.
+    
+    This function extracts data and metadata from a dictionary using predefined key lists,
+    creates separate DataFrames for each, and then combines them by repeating metadata
+    rows to match the length of the data rows.
+    
+    Args:
+        item: A dictionary containing both metadata and data keys, or any other type
+              that will be handled as an empty result.
+    
+    Returns:
+        pd.DataFrame: A DataFrame combining metadata and data with metadata repeated
+                     for each data row. Returns an empty DataFrame if the item is not
+                     a dictionary or if an error occurs during processing.
+    
+    Notes:
+        - Requires global variables `l_keys_data` and `l_keys_metadata` to be defined
+          as lists of keys for data and metadata extraction respectively.
+        - The resulting DataFrame has its index reset and data types converted using
+          pandas convert_dtypes() method.
+        - Errors during processing are printed to console and result in an empty DataFrame.
+    """
+    if isinstance(item, dict):
+        try:
+            # If the item is a dictionary, extract metadata and data
+            s_data = {key: item[key] for key in l_keys_data if key in item}
+            df_data = pd.DataFrame(s_data)
+            s_metadata = {key: item[key] for key in l_keys_metadata if key in item}
+            df_metadata = pd.DataFrame(s_metadata, index=[0])
+            # Concatenate metadata and data, repeating metadata for each row of data
+            df_metadata = pd.concat([df_metadata] * len(df_data), ignore_index=True)
+            df_item = pd.concat([df_metadata, df_data], axis=1)
+            # Ensure the DataFrame has a consistent index
+            df_item.reset_index(drop=True, inplace=True)
+            df_item = df_item.convert_dtypes()
+            return df_item
+        except Exception as e:
+            print(f"Error processing item: {e}")
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+
+# Example usage:
+# n_jobs = 8
+# from joblib import Parallel, delayed
+# list_df_parallel = Parallel(n_jobs=n_jobs, verbose=10)(
+#     delayed(process_dicts_to_dataframe_parallel)(item) for item in tqdm(s, desc="Creating SETITEC dataframes  in parallel")
+# )
+# # Combine all DataFrames into a single DataFrame
+# df = pd.concat(list_df_parallel, ignore_index=True)
+# df.reset_index(drop=True, inplace=True)
+# # Corrected some remaining column datatypes
+# df1 = df.astype({
+#            "BOX Name": "string",
+#            "BOX SN": "string",
+#            "BOX Firmware Version": "string",
+#           })
+# # Save the DataFrame to a parquet file
+# df1.to_parquet(ham_selected_dir / "HAM_selected_setitec_data.parquet", index=False, compression="brotli")
