@@ -25,8 +25,8 @@ mqtt:
     # - "host.docker.internal" for Docker containers to connect to host machine
     # - Actual hostname or IP for production
     # TODO: Update the host based on the actual broker location
-    # host: "mqtt-broker"  # Use "host.docker.internal" for Docker or "mqtt-broker" for service name in Docker Compose
-    host: "host.docker.internal"
+    host: "mqtt-broker"  # Use "host.docker.internal" for Docker or "mqtt-broker" for service name in Docker Compose
+    # host: "host.docker.internal"
     # host: localhost
     # host: "192.168.1.97"  # Example IP address, replace with actual broker IP if needed
     
