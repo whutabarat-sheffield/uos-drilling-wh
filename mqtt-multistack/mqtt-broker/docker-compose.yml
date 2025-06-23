@@ -1,0 +1,32 @@
+# Use of named volumes for Portainer compatibility
+# Afterwards we need to copy the config files to the named volume, like this:
+# docker run --rm -v mosquitto_config:/config -v /home/windo/github/uos-drilling-wh/mqtt-multistack/mqtt-broker/config:/src alpine cp /src/mosquitto.conf /config/
+version: '3'
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: mqtt-broker
+    restart: always
+    ports:
+      - "1883:1883"
+      - "9001:9001"  # WebSocket port
+      - "8883:8883"  # MQTT over TLS
+    volumes:
+      - mqtt-broker_config:/mosquitto/config
+      - mqtt-broker_data:/mosquitto/data
+      - mqtt-broker_logs:/mosquitto/log
+    # user: "1883:1883"
+    networks:
+      - toolbox-network
+
+networks:
+  toolbox-network:
+#     external: True
+
+volumes:
+  mqtt-broker_config:
+    # driver: local
+  mqtt-broker_data:
+    # driver: local
+  mqtt-broker_logs:
+    # driver: local

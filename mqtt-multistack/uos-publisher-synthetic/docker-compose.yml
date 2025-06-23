@@ -1,0 +1,40 @@
+version: '3.8'
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: mqtt-broker
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"  # WebSocket port
+    volumes:
+      - ./config:/mosquitto/config
+      - ./data:/mosquitto/data
+      - ./logs:/mosquitto/log
+    user: "1883:1883"
+    networks:
+      - toolbox-network
+
+  uos-depthest-listener:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: uos-depthest-listener
+    stdin_open: true  # equivalent to docker run -i
+    tty: true         # equivalent to docker run -t
+    volumes:
+      # For persistent cache storage
+      - ./cache/transformers:/app/.cache/transformers
+      - ./cache/matplotlib:/app/.cache/matplotlib
+      # If you need to mount configuration
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+    restart: unless-stopped
+    networks:
+      - toolbox-network
+
+networks:
+  toolbox-network:
+    external: True
