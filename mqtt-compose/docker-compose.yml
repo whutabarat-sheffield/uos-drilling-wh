@@ -1,3 +1,4 @@
+version: '3.8'
 services:
   mqtt-broker:
     image: eclipse-mosquitto:latest
@@ -13,11 +14,14 @@ services:
     user: "1883:1883"
     networks:
       - toolbox-network
+
   uos-depthest-listener:
     build:
       context: ..
       dockerfile: Dockerfile
     container_name: uos-depthest-listener
+    stdin_open: true  # equivalent to docker run -i
+    tty: true         # equivalent to docker run -t
     volumes:
       # For persistent cache storage
       - ./cache/transformers:/app/.cache/transformers
@@ -33,5 +37,4 @@ services:
 
 networks:
   toolbox-network:
-    driver: bridge
-    enable_ipv6: false
+    external: True

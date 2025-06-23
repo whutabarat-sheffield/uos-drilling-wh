@@ -1,0 +1,63 @@
+version: '3.8'
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    command: mosquitto -c /mosquitto/config/mosquitto.conf -v
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    configs:
+      - source: mosquitto-conf
+        target: /mosquitto/config/mosquitto.conf
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      update_config:
+        delay: 10s
+    # Add healthcheck to ensure broker is ready before client connects
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$", "-C", "1", "-i", "healthcheck", "-W", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  uos-depthest-listener:
+    image: uos-depthest-listener:latest
+    stdin_open: true
+    tty: true
+    volumes:
+      - transformers_cache:/app/.cache/transformers
+      - matplotlib_cache:/app/.cache/matplotlib
+      - app_config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      update_config:
+        delay: 20s
+
+networks:
+  mqtt-overlay:
+    driver: overlay
+    attachable: true
+
+# Uncomment and use named volumes
+volumes:
+  mosquitto_config:
+  mosquitto_data:
+  mosquitto_logs:
+  transformers_cache:
+  matplotlib_cache:
+  app_config:
