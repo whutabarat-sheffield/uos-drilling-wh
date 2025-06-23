@@ -115,40 +115,51 @@ def main():
         data_folder = DATA_FOLDERS[0]
         data_folder = Path(data_folder) 
         # with open (f'{os.getcwd()}\\{data_folder}\\ResultManagement.json') as f:
-        with open(data_folder / "ResultManagement.json") as f:
-            d_result = f.read()
-            source_timestamps = find_in_dict(json.loads(d_result), 'SourceTimestamp')
-            # source_timestamps = find_in_dict(dict(json.loads(d_result)), 'SourceTimestamp')
-            if len(set(source_timestamps)) != 1:
-                raise ValueError("SourceTimestamp values are not identical.")
-        with open(data_folder / "Trace.json") as f:
-            d_trace = f.read()
-            source_timestamps = find_in_dict(json.loads(d_trace), 'SourceTimestamp')
-            assert len(set(source_timestamps)) == 1
+        try:
+            with open(data_folder / "ResultManagement.json") as f:
+                d_result = f.read()
+                source_timestamps = find_in_dict(json.loads(d_result), 'SourceTimestamp')
+                # source_timestamps = find_in_dict(dict(json.loads(d_result)), 'SourceTimestamp')
+                if len(set(source_timestamps)) != 1:
+                    raise ValueError("SourceTimestamp values are not identical.")
+            with open(data_folder / "Trace.json") as f:
+                d_trace = f.read()
+                source_timestamps = find_in_dict(json.loads(d_trace), 'SourceTimestamp')
+                assert len(set(source_timestamps)) == 1
+            with open(data_folder / "Heads.json") as f:
+                d_heads = f.read()
+                source_timestamps = find_in_dict(json.loads(d_trace), 'SourceTimestamp')
+                assert len(set(source_timestamps)) == 1
 
-        # Update the source timestamp        
-        original_source_timestamp = source_timestamps[0]
-        new_source_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
+            # Update the source timestamp        
+            original_source_timestamp = source_timestamps[0]
+            new_source_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
+            
+            
+            # Prepare a shuffled topic set
+            random.shuffle(TOOLBOXIDS)
+            random.shuffle(TOOLIDS)
+            
+            # Prepare the topics
+            topic_result = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['result']}"
+            topic_trace = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['trace']}"
+            topic_heads = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['heads']}"
+
+
+
+            # Shuffle the data order
+            list_to_publish = [(topic_result, d_result), (topic_trace, d_trace), (topic_heads, d_heads)] 
+            random.shuffle(list_to_publish)
+
+            # Publish the data
+            for item in list_to_publish:
+                publish(client, item[0], item[1], original_source_timestamp, new_source_timestamp)
+                time.sleep(random.uniform(0.1, 0.3))  # Sleep for a random time between 0.1 and 0.3 seconds
         
-        
-        # Prepare a shuffled topic set
-        random.shuffle(TOOLBOXIDS)
-        random.shuffle(TOOLIDS)
-        
-        # Prepare the topics
-        topic_result = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['result']}"
-        topic_trace = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['trace']}"
-
-
-
-        # Shuffle the data order
-        list_to_publish = [(topic_result, d_result), (topic_trace, d_trace)]
-        random.shuffle(list_to_publish)
-
-        # Publish the data
-        for item in list_to_publish:
-            publish(client, item[0], item[1], original_source_timestamp, new_source_timestamp)
-            time.sleep(random.uniform(0.1, 0.3))  # Sleep for a random time between 0.1 and 0.3 seconds
+        except FileNotFoundError as e:
+            print(f"File not found: {e}. Skipping this data folder.")
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}. Skipping this data folder.")
 
 if __name__ == "__main__":
     main()
