@@ -25,7 +25,8 @@ mqtt:
     # - "host.docker.internal" for Docker containers to connect to host machine
     # - Actual hostname or IP for production
     # TODO: Update the host based on the actual broker location
-    host: "mqtt-broker"  # Use "host.docker.internal" for Docker or "mqtt-broker" for service name in Docker Compose
+    # host: "mqtt-broker"  # Use "host.docker.internal" for Docker or "mqtt-broker" for service name in Docker Compose
+    host: "host.docker.internal"
     # host: localhost
     # host: "192.168.1.97"  # Example IP address, replace with actual broker IP if needed
     
@@ -57,6 +58,7 @@ mqtt:
     # Message type suffixes
     result: "ResultManagement"        # Suffix for result messages
     trace: "ResultManagement/Trace"   # Suffix for trace messages
+    heads: "AssetManagement/Head"
 
   # Data Field Mappings
   # -----------------
@@ -65,6 +67,7 @@ mqtt:
   data_ids:
     # Machine identification
     machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'
+    head_id: 'AssetManagement.Assets.Heads.0.Identification.SerialNumber'
     result_id: 'ResultManagement.Results.0.ResultMetaData.ResultId'
     trace_result_id: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepResultId'
     
