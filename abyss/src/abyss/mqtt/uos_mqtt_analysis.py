@@ -52,6 +52,7 @@ class MQTTDataConverter:
     def _reduce_dict(self, data_dict: Dict, search_key: str) -> Any:
         """Helper method to extract values from nested dictionaries."""
         logger.debug(f"Reducing dictionary for key: {search_key}")
+        logger.debug(f"Data dictionary keys: {data_dict}")
         
         values = reduce(
             lambda acc, key: acc + [data_dict[key]] if search_key in key else acc,
