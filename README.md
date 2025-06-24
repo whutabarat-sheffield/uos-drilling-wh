@@ -2,6 +2,9 @@
 
 This documentation provides a guide to the Deep Learning Drilling Depth Estimation System, which processes drilling data from MQTT messages to perform depth estimation.
 
+### Changes in 0.2.3
+1. Modified the arrangement of configuration files within a Docker instance. This is to avoid future problems due to mistaken location of config files.
+
 ### Changes in 0.2.2
 1. Addressed a bug that led to the subscriber always dropping the first MQTT message received. This is done by ensuring that the main function calls the listening thread and the analysis thread independently.
 
