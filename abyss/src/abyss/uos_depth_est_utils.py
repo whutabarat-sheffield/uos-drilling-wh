@@ -44,6 +44,13 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         logging.info("Reducing dictionary")
         logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
     
+        if not isinstance(data_dict, dict):
+            logging.error("Provided data_dict is not a dictionary")
+            return []
+        if not isinstance(search_key, str):
+            logging.error("Provided search_key is not a string")
+            return []
+        
         values = reduce(
             # lambda function that takes in two arguments, an accumulator list and a key
             lambda acc, key: acc + [data_dict[key]] if search_key in key else acc,
@@ -52,6 +59,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
             # initial value for the accumulator (an empty list)
             []
         )
+        logging.debug(f"Reduced values: {values}")
         return values[0]['Value']
     
 
@@ -67,9 +75,12 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         thrust_empty_vals = reduce_dict(data, conf['mqtt']['data_ids']['thrust_empty_vals'])
         logging.info(f"Thrust empty values: {thrust_empty_vals}")
         step_vals = reduce_dict(data, conf['mqtt']['data_ids']['step_vals'])
+        if not isinstance(step_vals, list):
+            step_vals = [step_vals]
         logging.info(f"Step values: {step_vals}")
         # hole_id = reduce_dict(data, conf['mqtt']['data_ids']['machine_id']) + '_' + reduce_dict(data, conf['mqtt']['data_ids']['result_id'])
         hole_id = reduce_dict(data, conf['mqtt']['data_ids']['machine_id'])# TODO rethink whether this is correct
+        # logging.debug(f"Hole ID: {hole_id}")
         hole_id = [str(hole_id)] * len(step_vals)
         logging.info(f"Hole ID: {hole_id}")
         local = reduce_dict(data, conf['mqtt']['data_ids']['result_id'])# TODO rethink whether this is correct
