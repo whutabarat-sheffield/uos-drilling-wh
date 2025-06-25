@@ -100,7 +100,14 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
                 'local': local,
                 'PREDRILLED': [1] * len(step_vals),
             })
-        except:
+        except Exception as e:
+            logging.warning("DataFrame creation failed, using fallback format", extra={
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'step_vals_length': len(step_vals),
+                'torque_vals_length': len(torque_empty_vals),
+                'thrust_vals_length': len(thrust_empty_vals)
+            })
             df = pd.DataFrame({
                 'Step (nb)': step_vals,
                 'I Torque Empty (A)': torque_empty_vals,

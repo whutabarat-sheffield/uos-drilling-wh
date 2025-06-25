@@ -172,10 +172,19 @@ class MQTTDrillingDataAnalyser:
                 logging.debug("Unix Timestamp: %s", unix_timestamp)
                 logging.debug("ToolboxId: %s", msg.topic.split('/')[1])
                 logging.debug("ToolId: %s", msg.topic.split('/')[2])
-            except json.JSONDecodeError:
-                logging.error(f"Error decoding JSON from {msg.topic}")
+            except json.JSONDecodeError as e:
+                logging.error("JSON decode error", extra={
+                    'topic': msg.topic,
+                    'payload_size': len(msg.payload),
+                    'error_position': getattr(e, 'pos', None),
+                    'error_message': str(e)
+                })
             except Exception as e:
-                logging.error(f"Error processing message: {str(e)}")
+                logging.error("Message processing error", extra={
+                    'topic': msg.topic,
+                    'error_type': type(e).__name__,
+                    'error_message': str(e)
+                }, exc_info=True)
 
         client = mqtt.Client(client_id=client_id)
         client.on_connect = on_connect
@@ -311,13 +320,25 @@ class MQTTDrillingDataAnalyser:
             return matches_found
             
         except ValueError as e:
-            logging.error("Value error in find_and_process_matches: %s", str(e))
+            logging.error("Value error in message matching", extra={
+                'error_message': str(e),
+                'buffer_sizes': {k: len(v) for k, v in self.buffers.items()},
+                'time_window': getattr(self, 'time_window', 'unknown')
+            })
             return False
         except KeyError as e:
-            logging.error("Configuration key error in find_and_process_matches: %s", str(e))
+            logging.error("Configuration key missing", extra={
+                'missing_key': str(e),
+                'config_section': 'mqtt.listener',
+                'available_keys': list(self.config.get('mqtt', {}).get('listener', {}).keys()) if hasattr(self, 'config') else []
+            })
             return False
         except Exception as e:
-            logging.error("Unexpected error in find_and_process_matches: %s", str(e))
+            logging.error("Unexpected error in message matching", extra={
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'buffer_sizes': {k: len(v) for k, v in self.buffers.items()}
+            }, exc_info=True)
             return False
 
     def _process_time_bucket_matches(self, result_msgs, trace_msgs, heads_msgs, processed_messages):
