@@ -5,7 +5,7 @@ from glob import glob
 import numpy as np
 import os
 from ruptures.base import BaseCost
-from abyss.modelling import rolling_gradient
+from abyss.legacy.modelling import rolling_gradient
 from scipy.signal import wiener
 
 class ForcedSpacing(BaseCost):
