@@ -1,1 +1,89 @@
-{"MessageId":"f3ff8d4f-0aee-417d-8145-8864104ef546","MessageType":"ua-data","PublisherId":"dc45-toolbox-simulator","Messages":{"DataSetWriterId":1,"SequenceNumber":1742832412374,"Timestamp":"2025-03-24T16:06:52Z","MessageType":"ua-keyframe","Payload":{"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.CreationTime":{"Value":"2024-05-15T07:29:33Z","SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.SerialNumber":{"Value":"0","SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.InternalRecipeType":{"Value":"Standard","SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.InternalRecipeId":{"Value":244,"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.InternalRecipeVersion":{"Value":9,"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty":{"Value":[4.687,2.295,5.029],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty":{"Value":[0.176,0.047,0.176],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber":{"Value":[1,2,3],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StopCode":{"Value":[1,2048,8],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.OverallResultValues.CycleTime":{"Value":109.82,"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.ResultId":{"Value":440,"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.ResultEvaluation":{"Value":"Ok","SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.Distance":{"Value":0.551,"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M1MaxAmperage":{"Value":[3.076,10.4,1.953],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M2MaxAmperage":{"Value":[0.082,0.504,2.73],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M1Distance":{"Value":[0,0,0],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M2Distance":{"Value":[21.659,9.397,13.209],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.GapMax":{"Value":[0,1.558,0],"SourceTimestamp":"2024-05-15T07:29:33Z"},"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Duration":{"Value":[22.95,66.79,15.18],"SourceTimestamp":"2024-05-15T07:29:33Z"}}}}
+{
+  "MessageId": "f3ff8d4f-0aee-417d-8145-8864104ef546",
+  "MessageType": "ua-data",
+  "PublisherId": "dc45-toolbox-simulator",
+  "Messages": {
+    "DataSetWriterId": 1,
+    "SequenceNumber": 1742832412374,
+    "Timestamp": "2025-03-24T16:06:52Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.CreationTime": {
+        "Value": "2024-05-15T07:29:33Z",
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.SerialNumber": {
+        "Value": "0",
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.InternalRecipeType": {
+        "Value": "Standard",
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.InternalRecipeId": {
+        "Value": 244,
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.InternalRecipeVersion": {
+        "Value": 9,
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty": {
+        "Value": [4.687, 2.295, 5.029],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty": {
+        "Value": [0.176, 0.047, 0.176],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber": {
+        "Value": [1, 2, 3],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StopCode": {
+        "Value": [1, 2048, 8],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.OverallResultValues.CycleTime": {
+        "Value": 109.82,
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.ResultId": {
+        "Value": 440,
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.ResultEvaluation": {
+        "Value": "Ok",
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultMetaData.Distance": {
+        "Value": 0.551,
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M1MaxAmperage": {
+        "Value": [3.076, 10.4, 1.953],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M2MaxAmperage": {
+        "Value": [0.082, 0.504, 2.73],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M1Distance": {
+        "Value": [0, 0, 0],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.M2Distance": {
+        "Value": [21.659, 9.397, 13.209],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.GapMax": {
+        "Value": [0, 1.558, 0],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.SetitecXLS-SIM.ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.Duration": {
+        "Value": [22.95, 66.79, 15.18],
+        "SourceTimestamp": "2024-05-15T07:29:33Z"
+      }
+    }
+  }
+}
