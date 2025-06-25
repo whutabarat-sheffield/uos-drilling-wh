@@ -1,4 +1,4 @@
-from abyss.mqtt.models import Message, MatchedMessageSet
+from abyss.mqtt.async_components.models import Message, MatchedMessageSet
 
 def test_message_creation():
     # Create a basic message
