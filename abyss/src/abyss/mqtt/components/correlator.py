@@ -7,7 +7,7 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple, Any, Callable
+from typing import Dict, List, Set, Tuple, Any, Callable, Optional
 
 from ...uos_depth_est import TimestampedData
 
@@ -143,9 +143,9 @@ class MessageCorrelator:
             """Convert timestamp to time bucket."""
             return round(timestamp / self.time_window) * self.time_window
         
-        result_by_time = defaultdict(list)
-        trace_by_time = defaultdict(list)
-        heads_by_time = defaultdict(list)
+        result_by_time: Dict[float, List[TimestampedData]] = defaultdict(list)
+        trace_by_time: Dict[float, List[TimestampedData]] = defaultdict(list)
+        heads_by_time: Dict[float, List[TimestampedData]] = defaultdict(list)
         
         # Group result messages
         for msg in result_messages:
@@ -297,7 +297,7 @@ class MessageCorrelator:
     
     def _find_matching_heads_message(self, result_msg: TimestampedData,
                                    heads_msgs: List[TimestampedData],
-                                   processed_messages: Set[TimestampedData]) -> TimestampedData:
+                                   processed_messages: Set[TimestampedData]) -> Optional[TimestampedData]:
         """Find heads message that matches the result message timestamp."""
         for heads_msg in heads_msgs:
             if (heads_msg not in processed_messages and
@@ -305,7 +305,7 @@ class MessageCorrelator:
                 return heads_msg
         return None
     
-    def _extract_tool_key(self, source: str) -> str:
+    def _extract_tool_key(self, source: str) -> Optional[str]:
         """Extract tool key from message source topic."""
         try:
             parts = source.split('/')

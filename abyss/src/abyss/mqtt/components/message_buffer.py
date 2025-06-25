@@ -8,7 +8,7 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from ...uos_depth_est import TimestampedData, ConfigurationError
 
@@ -36,7 +36,7 @@ class MessageBuffer:
             max_age_seconds: Maximum age of messages before cleanup (seconds)
         """
         self.config = config
-        self.buffers = defaultdict(list)
+        self.buffers: Dict[str, List[TimestampedData]] = defaultdict(list)
         self.cleanup_interval = cleanup_interval
         self.max_buffer_size = max_buffer_size
         self.max_age_seconds = max_age_seconds
@@ -123,7 +123,7 @@ class MessageBuffer:
             })
             return False
     
-    def _get_matching_topic(self, source: str) -> str:
+    def _get_matching_topic(self, source: str) -> Optional[str]:
         """
         Determine which topic pattern matches the message source.
         
@@ -276,7 +276,7 @@ class MessageBuffer:
         """
         return {topic: buffer.copy() for topic, buffer in self.buffers.items()}
     
-    def clear_buffer(self, topic_pattern: str = None):
+    def clear_buffer(self, topic_pattern: Optional[str] = None):
         """
         Clear buffer(s).
         
