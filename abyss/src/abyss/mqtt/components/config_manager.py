@@ -205,6 +205,38 @@ class ConfigurationManager:
             'heads': f"{root}/+/+/{listener_config.get('heads', '')}"
         }
     
+    def build_result_topic(self, toolbox_id: str, tool_id: str, result_type: str) -> str:
+        """
+        Build MQTT topic for result publishing.
+        
+        Args:
+            toolbox_id: Toolbox identifier
+            tool_id: Tool identifier
+            result_type: Type of result ('keypoints' or 'depth_estimation')
+            
+        Returns:
+            Complete MQTT topic for publishing results
+            
+        Raises:
+            ConfigurationError: If required configuration is missing
+        """
+        try:
+            listener_config = self.get_mqtt_listener_config()
+            estimation_config = self.get_mqtt_estimation_config()
+            
+            root = listener_config.get('root')
+            if not root:
+                raise ConfigurationError("MQTT listener root not configured")
+            
+            endpoint = estimation_config.get(result_type)
+            if not endpoint:
+                raise ConfigurationError(f"MQTT estimation endpoint for '{result_type}' not configured")
+            
+            return f"{root}/{toolbox_id}/{tool_id}/{endpoint}"
+            
+        except Exception as e:
+            raise ConfigurationError(f"Error building result topic: {e}")
+    
     def get_raw_config(self) -> Dict[str, Any]:
         """Get the raw configuration dictionary."""
         return self.config.copy() if self.config else {}
