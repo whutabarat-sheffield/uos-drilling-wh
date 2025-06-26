@@ -14,7 +14,7 @@ import yaml
 import argparse
 
 # Add the source directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from abyss.mqtt.components import DrillingDataAnalyser
 from abyss.uos_depth_est_utils import setup_logging
