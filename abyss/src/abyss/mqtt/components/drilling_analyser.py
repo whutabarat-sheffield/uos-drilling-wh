@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Any
 from .config_manager import ConfigurationManager
 from .client_manager import MQTTClientManager
 from .message_buffer import MessageBuffer
-from .correlator import MessageCorrelator
+from .simple_correlator import SimpleMessageCorrelator
 from .message_processor import MessageProcessor
 from .data_converter import DataFrameConverter
 from .result_publisher import ResultPublisher
@@ -71,8 +71,8 @@ class DrillingDataAnalyser:
             )
             
             # Message correlation
-            self.message_correlator = MessageCorrelator(
-                config=config,
+            self.message_correlator = SimpleMessageCorrelator(
+                config=self.config_manager,
                 time_window=self.config_manager.get_time_window()
             )
             
@@ -115,7 +115,7 @@ class DrillingDataAnalyser:
             if result_client:
                 self.result_publisher = ResultPublisher(
                     mqtt_client=result_client,
-                    config=self.config_manager.get_raw_config()
+                    config=self.config_manager
                 )
                 logging.info("Result publisher initialized")
             else:
@@ -187,25 +187,27 @@ class DrillingDataAnalyser:
                 
                 # Publish results if publisher is available
                 if self.result_publisher:
-                    success = self.result_publisher.publish_processing_result(
-                        processing_result=processing_result,
-                        toolbox_id=toolbox_id,
-                        tool_id=tool_id,
-                        timestamp=first_message.timestamp,
-                        algo_version=self.ALGO_VERSION
-                    )
-                    
-                    if success:
+                    try:
+                        self.result_publisher.publish_processing_result(
+                            processing_result=processing_result,
+                            toolbox_id=toolbox_id,
+                            tool_id=tool_id,
+                            timestamp=first_message.timestamp,
+                            algo_version=self.ALGO_VERSION
+                        )
+                        
                         logging.info("Results published successfully", extra={
                             'toolbox_id': toolbox_id,
                             'tool_id': tool_id,
                             'has_keypoints': processing_result.keypoints is not None,
                             'has_depth_estimation': processing_result.depth_estimation is not None
                         })
-                    else:
+                    except Exception as e:
                         logging.warning("Failed to publish results", extra={
                             'toolbox_id': toolbox_id,
-                            'tool_id': tool_id
+                            'tool_id': tool_id,
+                            'error_type': type(e).__name__,
+                            'error_message': str(e)
                         })
                 else:
                     logging.warning("No result publisher available for publishing results")
