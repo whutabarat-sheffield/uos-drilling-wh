@@ -167,7 +167,7 @@ class ComponentInitializationError(AbyssSystemError):
 
 
 # Utility functions for exception handling
-def wrap_exception(exc: Exception, new_exc_type: type, message: str = None) -> Exception:
+def wrap_exception(exc: Exception, new_exc_type: type, message: str | None = None) -> Exception:
     """
     Wrap an existing exception in a new exception type while preserving the original.
     
