@@ -7,7 +7,7 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union, List, cast
 import pandas as pd
 
 from ...uos_depth_est import TimestampedData, MessageProcessingError
@@ -277,24 +277,42 @@ class DataFrameConverter:
                 if key.isdigit():
                     array_index = int(key)
                     # Navigate through list/array
-                    if isinstance(current, list) and 0 <= array_index < len(current):
-                        current = current[array_index]
+                    if isinstance(current, list):
+                        if 0 <= array_index < len(current):
+                            # Type checker workaround: current is definitely a list here
+                            current_as_list = cast(List[Any], current)
+                            current = current_as_list[array_index]
+                        else:
+                            logging.debug("Array index out of bounds", extra={
+                                'path': path,
+                                'index': array_index,
+                                'array_length': len(current)
+                            })
+                            return None
                     else:
-                        logging.debug("Array index out of bounds", extra={
+                        logging.debug("Expected list but found different type", extra={
                             'path': path,
                             'index': array_index,
-                            'array_length': len(current) if isinstance(current, list) else 'not_list'
+                            'current_type': type(current).__name__
                         })
                         return None
                 else:
                     # Navigate through dictionary
-                    if isinstance(current, dict) and key in current:
-                        current = current[key]
+                    if isinstance(current, dict):
+                        if key in current:
+                            current = current[key]
+                        else:
+                            logging.debug("Key not found in dictionary", extra={
+                                'path': path,
+                                'missing_key': key,
+                                'available_keys': list(current.keys())
+                            })
+                            return None
                     else:
-                        logging.debug("Key not found in dictionary", extra={
+                        logging.debug("Expected dictionary but found different type", extra={
                             'path': path,
                             'missing_key': key,
-                            'available_keys': list(current.keys()) if isinstance(current, dict) else 'not_dict'
+                            'current_type': type(current).__name__
                         })
                         return None
             
