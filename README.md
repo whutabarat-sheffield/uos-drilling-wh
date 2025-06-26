@@ -2,6 +2,10 @@
 
 This documentation provides a guide to the Deep Learning Drilling Depth Estimation System, which processes drilling data from MQTT messages to perform depth estimation.
 
+### Changes in 0.2.4
+1. Added the HeadId element in the published results.
+2. Major reorganisation and refactoring of the codebase. Key files are now under 'src/abyss/mqtt' and 'src/abyss/run'
+
 ### Changes in 0.2.3
 1. Modified the arrangement of configuration files within a Docker instance. This is to avoid future problems due to mistaken location of config files.
 
