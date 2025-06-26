@@ -7,7 +7,7 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 import json
-from typing import Dict, Any, Optional, Union, List, cast
+from typing import Dict, Any, Optional, Union
 import pandas as pd
 
 from ...uos_depth_est import TimestampedData, MessageProcessingError
@@ -173,8 +173,8 @@ class DataFrameConverter:
                 })
                 return extracted
             
-            # Extract head_id using configuration path
-            head_id = self._extract_head_id_from_config(heads_data)
+            # Extract head_id using simple search
+            head_id = self._find_in_dict(heads_data, 'head_id')
             if head_id is not None:
                 extracted['head_id'] = head_id
                 logging.debug("Extracted head_id", extra={
@@ -210,122 +210,41 @@ class DataFrameConverter:
             })
             return {}
     
-    def _extract_head_id_from_config(self, heads_data: Dict[str, Any]) -> Optional[str]:
+    def _find_in_dict(self, data: Any, target_key: str) -> Optional[str]:
         """
-        Extract head_id from heads message using configuration path.
+        Recursively search for a key in nested dictionary/list structures.
         
         Args:
-            heads_data: Raw heads message data
+            data: Data structure to search in
+            target_key: Key to search for
             
         Returns:
-            Extracted head_id value or None if not found
+            First matching value found or None
         """
         try:
-            # Get head_id path from configuration
-            head_id_path = self.config.get('mqtt', {}).get('data_ids', {}).get('head_id')
+            if isinstance(data, dict):
+                # Check if target key exists at this level
+                if target_key in data:
+                    return str(data[target_key])
+                
+                # Search recursively in all values
+                for value in data.values():
+                    result = self._find_in_dict(value, target_key)
+                    if result is not None:
+                        return result
             
-            if not head_id_path:
-                logging.warning("head_id path not found in configuration")
-                return None
-            
-            logging.debug("Extracting head_id using config path", extra={
-                'head_id_path': head_id_path
-            })
-            
-            # Extract value using dot notation path
-            head_id = self._extract_value_by_path(heads_data, head_id_path)
-            
-            if head_id is not None:
-                logging.info("Successfully extracted head_id", extra={
-                    'head_id': head_id,
-                    'path': head_id_path
-                })
-            else:
-                logging.warning("Failed to extract head_id using config path", extra={
-                    'path': head_id_path
-                })
-            
-            return head_id
-            
-        except Exception as e:
-            logging.warning("Error extracting head_id from config", extra={
-                'error_type': type(e).__name__,
-                'error_message': str(e)
-            })
-            return None
-    
-    def _extract_value_by_path(self, data: Dict[str, Any], path: str) -> Optional[str]:
-        """
-        Extract value from nested dictionary using dot notation path.
-        
-        Args:
-            data: Dictionary to search in
-            path: Dot notation path like 'AssetManagement.Assets.Heads.0.Identification.SerialNumber'
-            
-        Returns:
-            Extracted value or None if path not found
-        """
-        try:
-            if not path or not isinstance(data, dict):
-                return None
-            
-            keys = path.split('.')
-            current = data
-            
-            for key in keys:
-                # Handle array indices (numeric keys)
-                if key.isdigit():
-                    array_index = int(key)
-                    # Navigate through list/array
-                    if isinstance(current, list):
-                        if 0 <= array_index < len(current):
-                            # Type checker workaround: current is definitely a list here
-                            current_as_list = cast(List[Any], current)
-                            current = current_as_list[array_index]
-                        else:
-                            logging.debug("Array index out of bounds", extra={
-                                'path': path,
-                                'index': array_index,
-                                'array_length': len(current)
-                            })
-                            return None
-                    else:
-                        logging.debug("Expected list but found different type", extra={
-                            'path': path,
-                            'index': array_index,
-                            'current_type': type(current).__name__
-                        })
-                        return None
-                else:
-                    # Navigate through dictionary
-                    if isinstance(current, dict):
-                        if key in current:
-                            current = current[key]
-                        else:
-                            logging.debug("Key not found in dictionary", extra={
-                                'path': path,
-                                'missing_key': key,
-                                'available_keys': list(current.keys())
-                            })
-                            return None
-                    else:
-                        logging.debug("Expected dictionary but found different type", extra={
-                            'path': path,
-                            'missing_key': key,
-                            'current_type': type(current).__name__
-                        })
-                        return None
-            
-            # Convert result to string if it's not None
-            if current is not None:
-                return str(current)
+            elif isinstance(data, list):
+                # Search recursively in all list items
+                for item in data:
+                    result = self._find_in_dict(item, target_key)
+                    if result is not None:
+                        return result
             
             return None
             
         except Exception as e:
-            logging.warning("Error extracting value by path", extra={
-                'path': path,
-                'error_type': type(e).__name__,
+            logging.debug("Error in recursive search", extra={
+                'target_key': target_key,
                 'error_message': str(e)
             })
             return None

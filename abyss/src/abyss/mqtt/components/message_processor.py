@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 # Import the TimestampedData from the main module
 from ...uos_depth_est import TimestampedData, MessageProcessingError
+from ...uos_depth_est_utils import reduce_dict
 
 
 @dataclass
@@ -69,6 +70,12 @@ class MessageProcessor:
         try:
             # Separate message types
             result_msg, trace_msg, heads_msg = self._separate_message_types(matches)
+            logging.info(f"Heads message is {heads_msg}")
+            
+            # Extract head_id directly from heads_msg if available
+            extracted_head_id = self._extract_head_id_simple(heads_msg)
+            if extracted_head_id is not None:
+                self.head_id = extracted_head_id
             
             if not result_msg or not trace_msg:
                 return ProcessingResult(
@@ -95,9 +102,6 @@ class MessageProcessor:
             # Extract machine and result IDs
             self.machine_id = str(df.iloc[0]['HOLE_ID'])
             self.result_id = str(df.iloc[0]['local'])
-            
-            # Extract head_id from heads message if available
-            self.head_id = self._extract_head_id(heads_msg)
             
             logging.info(f"Machine ID: {self.machine_id}")
             logging.info(f"Result ID: {self.result_id}")
@@ -234,9 +238,9 @@ class MessageProcessor:
                 error_message=f"Depth estimation failed: {str(e)}"
             )
     
-    def _extract_head_id(self, heads_msg: Optional[TimestampedData]) -> Optional[str]:
+    def _extract_head_id_simple(self, heads_msg: Optional[TimestampedData]) -> Optional[str]:
         """
-        Extract head_id from heads message using the data converter.
+        Extract head_id from heads message using find_in_dict.
         
         Args:
             heads_msg: Optional heads message data
@@ -246,34 +250,24 @@ class MessageProcessor:
         """
         try:
             if not heads_msg or not heads_msg.data:
-                logging.debug("No heads message available for head_id extraction")
                 return None
             
-            # Parse JSON data from heads message
-            heads_data = json.loads(heads_msg.data)
-            
-            # Use data converter to extract heads data including head_id
-            extracted_heads_data = self.data_converter._extract_heads_data(heads_data)
-            
-            head_id = extracted_heads_data.get('head_id')
-            
-            if head_id:
-                logging.info("Successfully extracted head_id from heads message", extra={
-                    'head_id': head_id
-                })
+            # Handle both string and dict data
+            if isinstance(heads_msg.data, str):
+                heads_data = json.loads(heads_msg.data)
             else:
-                logging.warning("head_id not found in heads message")
+                heads_data = heads_msg.data
             
-            return head_id
+            # Use find_in_dict to extract head_id using the last part of the config path
+            head_id_path = self.config['mqtt']['data_ids']['head_id']
+            # Extract the final key from the path: 'AssetManagement.Assets.Heads.0.Identification.SerialNumber' -> 'SerialNumber'
+            heads_data = heads_data["Messages"]["Payload"]
+            head_id = reduce_dict(heads_data, head_id_path)
             
-        except json.JSONDecodeError as e:
-            logging.warning("Failed to parse heads message JSON", extra={
-                'error_message': str(e)
-            })
+            # Ensure we return a string or None
+            if head_id is not None:
+                return str(head_id) if not isinstance(head_id, list) else str(head_id[0]) if head_id else None
             return None
-        except Exception as e:
-            logging.warning("Error extracting head_id from heads message", extra={
-                'error_type': type(e).__name__,
-                'error_message': str(e)
-            })
+            
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError):
             return None

@@ -4,6 +4,48 @@ import pandas as pd
 from functools import reduce
 
 
+def find_in_dict(data, target_key: str) -> list:
+    """
+    This function performs a depth-first search through nested dictionaries and lists
+    to find all occurrences of a specified key and returns their corresponding values.
+    Args:
+        data: The nested dictionary/list structure to search through. Can be a dict,
+              list, or any combination of nested dicts and lists.
+        target_key (str): The key to search for in the nested structure.
+    Returns:
+        list: A list containing all values found for the target key. Returns an
+              empty list if the key is not found anywhere in the structure.
+    Examples:
+        >>> data = {"a": 1, "b": {"a": 2, "c": {"a": 3}}}
+        >>> find_in_dict(data, "a")
+        [1, 2, 3]
+        >>> data = [{"name": "John"}, {"name": "Jane", "details": {"name": "Detail"}}]
+        >>> find_in_dict(data, "name")
+        ["John", "Jane", "Detail"]
+        >>> find_in_dict({}, "nonexistent")
+        []
+
+    Recursively search for a key in a nested dictionary/list structure.
+    Returns list of values found for that key.
+    """
+    results = []
+    
+    def _search(current_data):
+        if isinstance(current_data, dict):
+            for key, value in current_data.items():
+                if key == target_key:
+                    results.append(value)
+                if isinstance(value, (dict, list)):
+                    _search(value)
+        elif isinstance(current_data, list):
+            for item in current_data:
+                if isinstance(item, (dict, list)):
+                    _search(item)
+    
+    _search(data)
+    return results
+
+
 # Set up logging configuration
 def setup_logging(level):
     """
@@ -17,6 +59,50 @@ def setup_logging(level):
         format='%(asctime)s [%(levelname)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
+    
+
+def reduce_dict(data_dict, search_key):
+    """
+    Filter dictionary values based on a substring match in the keys.
+    This function uses the reduce function to find all dictionary entries where
+    the key contains the specified search string, then returns the 'Value' field
+    from the first matching entry.
+    Args:
+        data_dict (dict): The dictionary to search through
+        search_key (str): The substring to search for in dictionary keys
+    Returns:
+        Any: The 'Value' field from the first matching dictionary entry,
+             or an empty list if no matches found or invalid input
+    Raises:
+        IndexError: If no matching entries are found (returns empty list instead)
+        KeyError: If the first matching entry doesn't contain a 'Value' key
+    Example:
+        >>> data = {'sensor_temp_1': {'Value': 25.5}, 'sensor_pressure_1': {'Value': 1013}}
+        >>> reduce_dict(data, 'temp')
+        25.5
+    """
+    # Using reduce function to filter dictionary values based on search_key
+    # from https://www.geeksforgeeks.org/python-substring-key-match-in-dictionary/
+    logging.info("Reducing dictionary")
+    logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
+
+    if not isinstance(data_dict, dict):
+        logging.error("Provided data_dict is not a dictionary")
+        return []
+    if not isinstance(search_key, str):
+        logging.error("Provided search_key is not a string")
+        return []
+    
+    values = reduce(
+        # lambda function that takes in two arguments, an accumulator list and a key
+        lambda acc, key: acc + [data_dict[key]] if search_key in key else acc,
+        # list of keys from the test_dict
+        data_dict.keys(),
+        # initial value for the accumulator (an empty list)
+        []
+    )
+    logging.info(f"Reduced values: {values}")
+    return values[0]['Value']
 
 
 def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
@@ -35,32 +121,6 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
     - If both `result_msg` and `trace_msg` are provided, the data is merged using step values as a key.
     - The paths in the configuration should be provided as tuples representing the hierarchical keys.
     """
-    
-
-
-    def reduce_dict(data_dict, search_key):
-        # Using reduce function to filter dictionary values based on search_key
-        # from https://www.geeksforgeeks.org/python-substring-key-match-in-dictionary/
-        logging.info("Reducing dictionary")
-        logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
-    
-        if not isinstance(data_dict, dict):
-            logging.error("Provided data_dict is not a dictionary")
-            return []
-        if not isinstance(search_key, str):
-            logging.error("Provided search_key is not a string")
-            return []
-        
-        values = reduce(
-            # lambda function that takes in two arguments, an accumulator list and a key
-            lambda acc, key: acc + [data_dict[key]] if search_key in key else acc,
-            # list of keys from the test_dict
-            data_dict.keys(),
-            # initial value for the accumulator (an empty list)
-            []
-        )
-        logging.debug(f"Reduced values: {values}")
-        return values[0]['Value']
     
 
     def parse_result(data, conf):

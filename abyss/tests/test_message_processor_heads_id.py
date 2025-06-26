@@ -86,13 +86,13 @@ class TestMessageProcessorHeadsId:
             _source='test/AssetManagement/Head'
         )
         
-        result = message_processor._extract_head_id(heads_msg)
+        result = message_processor._extract_head_id_simple(heads_msg)
         
-        assert result == 'HEAD987654'  # From mock data converter
+        assert result == 'HEAD12345'  # Extracted from actual test data
     
     def test_extract_head_id_no_message(self, message_processor):
         """Test head_id extraction with no heads message"""
-        result = message_processor._extract_head_id(None)
+        result = message_processor._extract_head_id_simple(None)
         assert result is None
     
     def test_extract_head_id_invalid_json(self, message_processor):
@@ -103,7 +103,7 @@ class TestMessageProcessorHeadsId:
             _source='test/AssetManagement/Head'
         )
         
-        result = message_processor._extract_head_id(heads_msg)
+        result = message_processor._extract_head_id_simple(heads_msg)
         assert result is None
     
     def test_head_id_extraction_integration(self, message_processor):
@@ -130,10 +130,10 @@ class TestMessageProcessorHeadsId:
         )
         
         # Extract head_id
-        head_id = message_processor._extract_head_id(heads_msg)
+        head_id = message_processor._extract_head_id_simple(heads_msg)
         
-        # Should get the mocked value from data converter
-        assert head_id == 'HEAD987654'
+        # Should get the actual value from test data
+        assert head_id == 'INTEGRATION_TEST_HEAD'
     
     def test_process_matching_messages_no_heads_message(self, message_processor):
         """Test processing without heads message"""
