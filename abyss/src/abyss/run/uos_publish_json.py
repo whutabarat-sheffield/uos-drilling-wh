@@ -39,24 +39,44 @@ def find_in_dict(data: dict, target_key: str) -> list:
     return results
 
 def publish(client, topic, payload, timestamp0, timestamp1) -> None:
+    """
+    Publishes a payload to a specified MQTT topic after replacing an old timestamp with a new one.
+
+    Args:
+        client: The MQTT client instance used for publishing.
+        topic (str): The MQTT topic to publish to.
+        payload (str): The message payload (JSON as string).
+        timestamp0 (str): The original timestamp string to be replaced.
+        timestamp1 (str): The new timestamp string to use in the payload.
+
+
+    # Initialise parser
+    """
     if timestamp0 in payload:
         payload = payload.replace(timestamp0, timestamp1)
     else:
         print(f"Warning: '{timestamp0}' not found in payload. Skipping replacement.")
-    d = json.loads(payload)
-    client.publish(topic, json.dumps(d))
+    client.publish(topic, payload)
     t = time.localtime()
     current_time = time.strftime("%H:%M:%S", t)
     print(f"[{current_time}]: Publish data on {topic} '{timestamp1}'")
 
 
 def main():
+    """
+    Main function to continuously publish JSON data from specified files to MQTT topics.
+    Reads configuration from a YAML file, selects random data, updates timestamps, and publishes to MQTT broker.
+    """
+    # Parse command line arguments
     # Initialise parser
     parser = argparse.ArgumentParser()
 
     # Add arguments
     parser.add_argument("path", type=str, help="Path to the data folder")
-    parser.add_argument("-c", "--conf", type=str, help="YAML configuration file", default="mqtt_conf.yaml")
+    parser.add_argument("-c", "--conf", type=str, help="YAML configuration file", default="config/mqtt_conf_docker.yaml")
+    parser.add_argument("--sleep-min", type=float, default=0.1, help="Minimum sleep interval between publishes (seconds)")
+    parser.add_argument("--sleep-max", type=float, default=0.3, help="Maximum sleep interval between publishes (seconds)")
+    parser.add_argument("-r","--repetitions", type=int, default=10, help="Number of repetitions for publishing data")
 
     # Read arguments
     args = parser.parse_args()
@@ -109,46 +129,56 @@ def main():
 
     # Publish data continuously
     # while True:
-    for i in range(20):
+    for i in range(args.repetitions):
         # Select a random data folder to publish and read the data
         random.shuffle(DATA_FOLDERS)
         data_folder = DATA_FOLDERS[0]
         data_folder = Path(data_folder) 
         # with open (f'{os.getcwd()}\\{data_folder}\\ResultManagement.json') as f:
-        with open(data_folder / "ResultManagement.json") as f:
-            d_result = f.read()
-            source_timestamps = find_in_dict(json.loads(d_result), 'SourceTimestamp')
-            # source_timestamps = find_in_dict(dict(json.loads(d_result)), 'SourceTimestamp')
-            if len(set(source_timestamps)) != 1:
-                raise ValueError("SourceTimestamp values are not identical.")
-        with open(data_folder / "Trace.json") as f:
-            d_trace = f.read()
-            source_timestamps = find_in_dict(json.loads(d_trace), 'SourceTimestamp')
-            assert len(set(source_timestamps)) == 1
+        try:
+            # Read the JSON files
+            with open(data_folder / "ResultManagement.json") as f:
+                d_result = f.read()
+                result_source_timestamps = find_in_dict(json.loads(d_result), 'SourceTimestamp')
+                if len(set(result_source_timestamps)) != 1:
+                    raise ValueError("SourceTimestamp values are not identical.")
+                original_source_timestamp = result_source_timestamps[0]
+            with open(data_folder / "Trace.json") as f:
+                d_trace = f.read()
+                trace_source_timestamps = find_in_dict(json.loads(d_trace), 'SourceTimestamp')
+                assert len(set(trace_source_timestamps)) == 1
+            with open(data_folder / "Heads.json") as f:
+                d_heads = f.read()
+                heads_source_timestamps = find_in_dict(json.loads(d_heads), 'SourceTimestamp')
+                assert len(set(heads_source_timestamps)) == 1
 
-        # Update the source timestamp        
-        original_source_timestamp = source_timestamps[0]
-        new_source_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
+            # Update the source timestamp        
+            new_source_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
+            
+            # Prepare a shuffled topic set
+            random.shuffle(TOOLBOXIDS)
+            random.shuffle(TOOLIDS)
+            
+            # Prepare the topics
+            topic_result = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['result']}"
+            topic_trace = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['trace']}"
+            topic_heads = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['heads']}"
+
+
+
+            # Shuffle the data order
+            list_to_publish = [(topic_result, d_result), (topic_trace, d_trace), (topic_heads, d_heads)] 
+            random.shuffle(list_to_publish)
+
+            # Publish the data
+            for item in list_to_publish:
+                publish(client, item[0], item[1], original_source_timestamp, new_source_timestamp)
+                time.sleep(random.uniform(args.sleep_min, args.sleep_max))  # Sleep for a random time between min and max
         
-        
-        # Prepare a shuffled topic set
-        random.shuffle(TOOLBOXIDS)
-        random.shuffle(TOOLIDS)
-        
-        # Prepare the topics
-        topic_result = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['result']}"
-        topic_trace = f"{config['mqtt']['listener']['root']}/{TOOLBOXIDS[0]}/{TOOLIDS[0]}/{config['mqtt']['listener']['trace']}"
-
-
-
-        # Shuffle the data order
-        list_to_publish = [(topic_result, d_result), (topic_trace, d_trace)]
-        random.shuffle(list_to_publish)
-
-        # Publish the data
-        for item in list_to_publish:
-            publish(client, item[0], item[1], original_source_timestamp, new_source_timestamp)
-            time.sleep(random.uniform(0.1, 0.3))  # Sleep for a random time between 0.1 and 0.3 seconds
+        except FileNotFoundError as e:
+            print(f"File not found: {e}. Skipping this data folder.")
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}. Skipping this data folder.")
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,33 @@
+{
+  "MessageId": "ae7896c8-fa2a-4800-9b3b-132cba2072c2",
+  "MessageType": "ua-data",
+  "PublisherId": "260-670P-WINS07",
+  "Messages": {
+    "DataSetWriterId": "setitec40",
+    "SequenceNumber": 1750684215180,
+    "Timestamp": "2025-06-23T13:10:15Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitec40.AssetManagement.Assets.Servos.0.Identification.DefaultInstanceBrowseName": {
+        "Value": "test1",
+        "SourceTimestamp": "2025-06-23T14:07:43Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitec40.AssetManagement.Assets.Servos.0.Identification.Model": {
+        "Value": "M_EDU",
+        "SourceTimestamp": "2025-06-23T14:07:43Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitec40.AssetManagement.Assets.Servos.0.Identification.ProductCode": {
+        "Value": "0",
+        "SourceTimestamp": "2025-06-23T14:07:43Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitec40.AssetManagement.Assets.Servos.0.Identification.InitialOperationDate": {
+        "Value": "2016-04-07T00:00:00Z",
+        "SourceTimestamp": "2025-06-23T14:07:43Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitec40.AssetManagement.Assets.Servos.0.OperationCounters.OperationDuration": {
+        "Value": 14,
+        "SourceTimestamp": "2025-06-23T14:07:43Z"
+      }
+    }
+  }
+}

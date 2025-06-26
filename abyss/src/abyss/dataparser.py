@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import json
 import os
+import logging
 from _io import TextIOWrapper
 import openpyxl
 import h5py
@@ -888,6 +889,11 @@ def getProgramTriggers(fn):
                 line = open_file.readline().strip('\n').split('\t')
             break
         else:
+            logging.error("Critical parsing error - Step column not found", extra={
+                'filename': fn,
+                'file_size': os.path.getsize(fn) if os.path.exists(fn) else 0,
+                'expected_column': 'Step (Nb)'
+            })
             raise ValueError(f"Reached EOF in {fn}! Couldn't find Step (Nb)")
     # filter to where step on/off is 1
     av = {kk:[vv[i] for i in si] for kk,vv in av.items()}
@@ -1961,7 +1967,11 @@ def repackMAT(path,**kwargs):
             ds_lim = kwargs.get('dsf_lim',)
             # if the user gave a negative number raise error
             if ds_lim<=0:
-                raise ValueError(f"Downsampling Limit has to be positive, non-zero (got {ds_lim}")
+                logging.error("Invalid downsampling limit configuration", extra={
+                    'provided_value': ds_lim,
+                    'expected': 'positive, non-zero integer'
+                })
+                raise ValueError(f"Downsampling Limit has to be positive, non-zero (got {ds_lim})")
             # get downsampling factor
             dsf = int(kwargs.get('dsf',1))
             # function to check indicies

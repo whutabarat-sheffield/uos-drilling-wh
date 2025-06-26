@@ -4,7 +4,7 @@ import os
 from glob import glob
 from plotting import plotSetitecHistory
 import matplotlib.pyplot as plt
-from abyss.modelling import depth_est_rolling
+from abyss.legacy.modelling import depth_est_rolling
 
 # get holenumber
 def isAir(fn):

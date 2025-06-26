@@ -43,10 +43,16 @@ class DepthInference:
         infer_xls: Perform depth inference on data from an XLS file.
     """
     def __init__(self, n_model=4, ref_data_path=None):
-        try:
-            ref_data_path = abyss.__path__[0] + '/trained_model/reference_data/ref_15T.csv'
-        except:
-            assert ref_data_path is not None, "Please provide a reference data path."
+        if ref_data_path is None:
+            try:
+                ref_data_path = abyss.__path__[0] + '/trained_model/reference_data/ref_15T.csv'
+            except Exception as e:
+                logging.error("Failed to construct default reference data path", extra={
+                    'abyss_path': abyss.__path__[0] if abyss.__path__ else 'unknown',
+                    'error_type': type(e).__name__,
+                    'error_message': str(e)
+                })
+                raise ValueError("Reference data path must be provided when default path construction fails") from e
         self.ref_data_path = ref_data_path
         self.model = load_model(n_model)
         self.idx_cv = n_model

@@ -4,6 +4,48 @@ import pandas as pd
 from functools import reduce
 
 
+def find_in_dict(data, target_key: str) -> list:
+    """
+    This function performs a depth-first search through nested dictionaries and lists
+    to find all occurrences of a specified key and returns their corresponding values.
+    Args:
+        data: The nested dictionary/list structure to search through. Can be a dict,
+              list, or any combination of nested dicts and lists.
+        target_key (str): The key to search for in the nested structure.
+    Returns:
+        list: A list containing all values found for the target key. Returns an
+              empty list if the key is not found anywhere in the structure.
+    Examples:
+        >>> data = {"a": 1, "b": {"a": 2, "c": {"a": 3}}}
+        >>> find_in_dict(data, "a")
+        [1, 2, 3]
+        >>> data = [{"name": "John"}, {"name": "Jane", "details": {"name": "Detail"}}]
+        >>> find_in_dict(data, "name")
+        ["John", "Jane", "Detail"]
+        >>> find_in_dict({}, "nonexistent")
+        []
+
+    Recursively search for a key in a nested dictionary/list structure.
+    Returns list of values found for that key.
+    """
+    results = []
+    
+    def _search(current_data):
+        if isinstance(current_data, dict):
+            for key, value in current_data.items():
+                if key == target_key:
+                    results.append(value)
+                if isinstance(value, (dict, list)):
+                    _search(value)
+        elif isinstance(current_data, list):
+            for item in current_data:
+                if isinstance(item, (dict, list)):
+                    _search(item)
+    
+    _search(data)
+    return results
+
+
 # Set up logging configuration
 def setup_logging(level):
     """
@@ -17,6 +59,50 @@ def setup_logging(level):
         format='%(asctime)s [%(levelname)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
+    
+
+def reduce_dict(data_dict, search_key):
+    """
+    Filter dictionary values based on a substring match in the keys.
+    This function uses the reduce function to find all dictionary entries where
+    the key contains the specified search string, then returns the 'Value' field
+    from the first matching entry.
+    Args:
+        data_dict (dict): The dictionary to search through
+        search_key (str): The substring to search for in dictionary keys
+    Returns:
+        Any: The 'Value' field from the first matching dictionary entry,
+             or an empty list if no matches found or invalid input
+    Raises:
+        IndexError: If no matching entries are found (returns empty list instead)
+        KeyError: If the first matching entry doesn't contain a 'Value' key
+    Example:
+        >>> data = {'sensor_temp_1': {'Value': 25.5}, 'sensor_pressure_1': {'Value': 1013}}
+        >>> reduce_dict(data, 'temp')
+        25.5
+    """
+    # Using reduce function to filter dictionary values based on search_key
+    # from https://www.geeksforgeeks.org/python-substring-key-match-in-dictionary/
+    logging.info("Reducing dictionary")
+    logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
+
+    if not isinstance(data_dict, dict):
+        logging.error("Provided data_dict is not a dictionary")
+        return []
+    if not isinstance(search_key, str):
+        logging.error("Provided search_key is not a string")
+        return []
+    
+    values = reduce(
+        # lambda function that takes in two arguments, an accumulator list and a key
+        lambda acc, key: acc + [data_dict[key]] if search_key in key else acc,
+        # list of keys from the test_dict
+        data_dict.keys(),
+        # initial value for the accumulator (an empty list)
+        []
+    )
+    logging.info(f"Reduced values: {values}")
+    return values[0]['Value']
 
 
 def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
@@ -37,24 +123,6 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
     """
     
 
-
-    def reduce_dict(data_dict, search_key):
-        # Using reduce function to filter dictionary values based on search_key
-        # from https://www.geeksforgeeks.org/python-substring-key-match-in-dictionary/
-        logging.info("Reducing dictionary")
-        logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
-    
-        values = reduce(
-            # lambda function that takes in two arguments, an accumulator list and a key
-            lambda acc, key: acc + [data_dict[key]] if search_key in key else acc,
-            # list of keys from the test_dict
-            data_dict.keys(),
-            # initial value for the accumulator (an empty list)
-            []
-        )
-        return values[0]['Value']
-    
-
     def parse_result(data, conf):
         # Default key paths for RESULT structure
         fore = ['Messages', 'Payload']
@@ -67,9 +135,12 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         thrust_empty_vals = reduce_dict(data, conf['mqtt']['data_ids']['thrust_empty_vals'])
         logging.info(f"Thrust empty values: {thrust_empty_vals}")
         step_vals = reduce_dict(data, conf['mqtt']['data_ids']['step_vals'])
+        if not isinstance(step_vals, list):
+            step_vals = [step_vals]
         logging.info(f"Step values: {step_vals}")
         # hole_id = reduce_dict(data, conf['mqtt']['data_ids']['machine_id']) + '_' + reduce_dict(data, conf['mqtt']['data_ids']['result_id'])
         hole_id = reduce_dict(data, conf['mqtt']['data_ids']['machine_id'])# TODO rethink whether this is correct
+        # logging.debug(f"Hole ID: {hole_id}")
         hole_id = [str(hole_id)] * len(step_vals)
         logging.info(f"Hole ID: {hole_id}")
         local = reduce_dict(data, conf['mqtt']['data_ids']['result_id'])# TODO rethink whether this is correct
@@ -89,7 +160,14 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
                 'local': local,
                 'PREDRILLED': [1] * len(step_vals),
             })
-        except:
+        except Exception as e:
+            logging.warning("DataFrame creation failed, using fallback format", extra={
+                'error_type': type(e).__name__,
+                'error_message': str(e),
+                'step_vals_length': len(step_vals),
+                'torque_vals_length': len(torque_empty_vals),
+                'thrust_vals_length': len(thrust_empty_vals)
+            })
             df = pd.DataFrame({
                 'Step (nb)': step_vals,
                 'I Torque Empty (A)': torque_empty_vals,

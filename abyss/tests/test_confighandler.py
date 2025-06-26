@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
-from abyss.mqtt.confighandler import ConfigHandler, MQTTConfig, ListenerConfig, BrokerConfig, DataIdsConfig, EstimationConfig, PublisherConfig
+from abyss.mqtt.async_components.confighandler import ConfigHandler, MQTTConfig, ListenerConfig, BrokerConfig, DataIdsConfig, EstimationConfig, PublisherConfig
 
 class TestConfigHandler:
     

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "abyss"
-version = "0.2.3"
+version = "0.2.4"
 authors = [
     {name = "Digital Manufacturing Group - University of Sheffield", email = "w.hutabarat@sheffield.ac.uk"},
 ]
@@ -25,7 +25,7 @@ dependencies = {file = "requirements.txt"}
 "Bug Tracker" = "https://github.airbus.corp/Airbus/uos-drilling/issues"
 
 [project.scripts]
-uos_depthest_listener = "abyss.run.listen_continuous:main"
+uos_depthest_listener = "abyss.run.uos_depth_est_mqtt:main"
 uos_depthest_xls = "abyss.run.uos_depth_est_xls:main"
 uos_depthest_json = "abyss.run.uos_depth_est_json:main"
 uos_publish_json = "abyss.run.uos_publish_json:main"
