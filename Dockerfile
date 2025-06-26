@@ -73,11 +73,12 @@ RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --tr
 
 # Clean up and set up for running
 WORKDIR /app
-
+RUN mkdir -p ./config
 # RUN rm -rf /build
 
 # Now copy only your run scripts
 COPY abyss/src/abyss/run .
+COPY abyss/src/abyss/run/config ./config
 
 #debugging
 # RUN python -c "import sys; print(sys.path)"
