@@ -23,7 +23,7 @@ class ProcessingResult:
     depth_estimation: Optional[List[float]] = None
     machine_id: Optional[str] = None
     result_id: Optional[str] = None
-    heads_id: Optional[str] = None
+    head_id: Optional[str] = None  # Head identifier from heads message
     error_message: Optional[str] = None
 
 
@@ -54,7 +54,7 @@ class MessageProcessor:
         self.algo_version = algo_version
         self.machine_id = None
         self.result_id = None
-        self.heads_id = None
+        self.head_id = None
     
     def process_matching_messages(self, matches: List[TimestampedData]) -> ProcessingResult:
         """
@@ -73,7 +73,7 @@ class MessageProcessor:
             if not result_msg or not trace_msg:
                 return ProcessingResult(
                     success=False,
-                    heads_id=self.heads_id,
+                    head_id=self.head_id,
                     error_message="Missing required result or trace message"
                 )
             
@@ -88,7 +88,7 @@ class MessageProcessor:
             if df is None or df.empty:
                 return ProcessingResult(
                     success=False,
-                    heads_id=self.heads_id,
+                    head_id=self.head_id,
                     error_message="Failed to convert messages to DataFrame"
                 )
             
@@ -97,11 +97,11 @@ class MessageProcessor:
             self.result_id = str(df.iloc[0]['local'])
             
             # Extract head_id from heads message if available
-            self.heads_id = self._extract_heads_id(heads_msg)
+            self.head_id = self._extract_head_id(heads_msg)
             
             logging.info(f"Machine ID: {self.machine_id}")
             logging.info(f"Result ID: {self.result_id}")
-            logging.info(f"Heads ID: {self.heads_id}")
+            logging.info(f"Head ID: {self.head_id}")
             
             # Debug file output if enabled
             self._write_debug_files(result_msg, trace_msg, heads_msg, toolbox_id, tool_id, df)
@@ -116,7 +116,7 @@ class MessageProcessor:
             })
             return ProcessingResult(
                 success=False, 
-                heads_id=self.heads_id,
+                head_id=self.head_id,
                 error_message=str(e)
             )
         except Exception as e:
@@ -126,7 +126,7 @@ class MessageProcessor:
             }, exc_info=True)
             return ProcessingResult(
                 success=False, 
-                heads_id=self.heads_id,
+                head_id=self.head_id,
                 error_message=str(e)
             )
     
@@ -193,7 +193,7 @@ class MessageProcessor:
                 depth_estimation=None,
                 machine_id=self.machine_id,
                 result_id=self.result_id,
-                heads_id=self.heads_id,
+                head_id=self.head_id,
                 error_message="Not enough steps to estimate depth"
             )
         
@@ -216,7 +216,7 @@ class MessageProcessor:
                 depth_estimation=depth_estimation,
                 machine_id=self.machine_id,
                 result_id=self.result_id,
-                heads_id=self.heads_id
+                head_id=self.head_id
             )
             
         except Exception as e:
@@ -230,11 +230,11 @@ class MessageProcessor:
                 success=False,
                 machine_id=self.machine_id,
                 result_id=self.result_id,
-                heads_id=self.heads_id,
+                head_id=self.head_id,
                 error_message=f"Depth estimation failed: {str(e)}"
             )
     
-    def _extract_heads_id(self, heads_msg: Optional[TimestampedData]) -> Optional[str]:
+    def _extract_head_id(self, heads_msg: Optional[TimestampedData]) -> Optional[str]:
         """
         Extract head_id from heads message using the data converter.
         

@@ -59,14 +59,14 @@ class ResultPublisher:
             
             if not processing_result.success or processing_result.error_message:
                 return self._publish_error_result(
-                    toolbox_id, tool_id, dt_string, 
+                    processing_result, toolbox_id, tool_id, dt_string, 
                     processing_result.error_message or "Processing failed"
                 )
             
             if (processing_result.keypoints is None or 
                 processing_result.depth_estimation is None):
                 return self._publish_insufficient_data_result(
-                    toolbox_id, tool_id, dt_string
+                    processing_result, toolbox_id, tool_id, dt_string
                 )
             
             return self._publish_successful_result(
@@ -98,6 +98,7 @@ class ResultPublisher:
                 'SourceTimestamp': dt_string,
                 'MachineId': processing_result.machine_id,
                 'ResultId': processing_result.result_id,
+                'HeadId': processing_result.head_id,
                 'AlgoVersion': algo_version
             }
             
@@ -107,6 +108,7 @@ class ResultPublisher:
                 'SourceTimestamp': dt_string,
                 'MachineId': processing_result.machine_id,
                 'ResultId': processing_result.result_id,
+                'HeadId': processing_result.head_id,
                 'AlgoVersion': algo_version
             }
             
@@ -121,7 +123,8 @@ class ResultPublisher:
                     'keypoints': processing_result.keypoints,
                     'depth_estimation': processing_result.depth_estimation,
                     'machine_id': processing_result.machine_id,
-                    'result_id': processing_result.result_id
+                    'result_id': processing_result.result_id,
+                    'head_id': processing_result.head_id
                 })
                 return True
             else:
@@ -140,7 +143,8 @@ class ResultPublisher:
             })
             return False
     
-    def _publish_insufficient_data_result(self, toolbox_id: str, tool_id: str,
+    def _publish_insufficient_data_result(self, processing_result: ProcessingResult,
+                                        toolbox_id: str, tool_id: str,
                                         dt_string: str) -> bool:
         """Publish result when there's insufficient data for estimation."""
         try:
@@ -151,12 +155,18 @@ class ResultPublisher:
             # Prepare insufficient data messages
             keyp_data = {
                 'Value': 'Not enough steps to estimate keypoints',
-                'SourceTimestamp': dt_string
+                'SourceTimestamp': dt_string,
+                'MachineId': processing_result.machine_id,
+                'ResultId': processing_result.result_id,
+                'HeadId': processing_result.head_id
             }
             
             dest_data = {
                 'Value': 'Not enough steps to estimate depth',
-                'SourceTimestamp': dt_string
+                'SourceTimestamp': dt_string,
+                'MachineId': processing_result.machine_id,
+                'ResultId': processing_result.result_id,
+                'HeadId': processing_result.head_id
             }
             
             # Publish messages
@@ -181,7 +191,8 @@ class ResultPublisher:
             })
             return False
     
-    def _publish_error_result(self, toolbox_id: str, tool_id: str,
+    def _publish_error_result(self, processing_result: ProcessingResult,
+                            toolbox_id: str, tool_id: str,
                             dt_string: str, error_message: str) -> bool:
         """Publish result when processing encountered an error."""
         try:
@@ -193,12 +204,18 @@ class ResultPublisher:
             keyp_data = {
                 'Value': f'Error in keypoint estimation: {error_message}',
                 'SourceTimestamp': dt_string,
+                'MachineId': processing_result.machine_id,
+                'ResultId': processing_result.result_id,
+                'HeadId': processing_result.head_id,
                 'Error': True
             }
             
             dest_data = {
                 'Value': f'Error in depth estimation: {error_message}',
                 'SourceTimestamp': dt_string,
+                'MachineId': processing_result.machine_id,
+                'ResultId': processing_result.result_id,
+                'HeadId': processing_result.head_id,
                 'Error': True
             }
             

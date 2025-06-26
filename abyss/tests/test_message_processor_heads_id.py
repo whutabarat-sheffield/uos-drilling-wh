@@ -64,7 +64,7 @@ class TestMessageProcessorHeadsId:
             config=mock_config
         )
     
-    def test_extract_heads_id_success(self, message_processor):
+    def test_extract_head_id_success(self, message_processor):
         """Test successful head_id extraction from heads message"""
         heads_data = {
             'AssetManagement': {
@@ -86,16 +86,16 @@ class TestMessageProcessorHeadsId:
             _source='test/AssetManagement/Head'
         )
         
-        result = message_processor._extract_heads_id(heads_msg)
+        result = message_processor._extract_head_id(heads_msg)
         
         assert result == 'HEAD987654'  # From mock data converter
     
-    def test_extract_heads_id_no_message(self, message_processor):
+    def test_extract_head_id_no_message(self, message_processor):
         """Test head_id extraction with no heads message"""
-        result = message_processor._extract_heads_id(None)
+        result = message_processor._extract_head_id(None)
         assert result is None
     
-    def test_extract_heads_id_invalid_json(self, message_processor):
+    def test_extract_head_id_invalid_json(self, message_processor):
         """Test head_id extraction with invalid JSON"""
         heads_msg = TimestampedData(
             _timestamp=1234567890.0,
@@ -103,10 +103,10 @@ class TestMessageProcessorHeadsId:
             _source='test/AssetManagement/Head'
         )
         
-        result = message_processor._extract_heads_id(heads_msg)
+        result = message_processor._extract_head_id(heads_msg)
         assert result is None
     
-    def test_heads_id_extraction_integration(self, message_processor):
+    def test_head_id_extraction_integration(self, message_processor):
         """Test that head_id extraction works in isolation"""
         # Test the head_id extraction method directly
         heads_data = {
@@ -130,7 +130,7 @@ class TestMessageProcessorHeadsId:
         )
         
         # Extract head_id
-        head_id = message_processor._extract_heads_id(heads_msg)
+        head_id = message_processor._extract_head_id(heads_msg)
         
         # Should get the mocked value from data converter
         assert head_id == 'HEAD987654'
@@ -158,12 +158,12 @@ class TestMessageProcessorHeadsId:
         # Verify the result has None for head_id
         assert isinstance(result, ProcessingResult)
         assert result.success is True
-        assert result.heads_id is None  # Should be None when no heads message
+        assert result.head_id is None  # Should be None when no heads message
         assert result.machine_id == 'TEST123'
         assert result.result_id == '456'
     
-    def test_processing_result_includes_heads_id_in_error_cases(self, message_processor):
-        """Test that error cases also include heads_id"""
+    def test_processing_result_includes_head_id_in_error_cases(self, message_processor):
+        """Test that error cases also include head_id"""
         # Test with missing trace message
         result_msg = TimestampedData(
             _timestamp=1234567890.0,
@@ -177,14 +177,14 @@ class TestMessageProcessorHeadsId:
         
         assert isinstance(result, ProcessingResult)
         assert result.success is False
-        assert result.heads_id is None  # Should be None initially
+        assert result.head_id is None  # Should be None initially
         assert result.error_message is not None
         assert "Missing required result or trace message" in str(result.error_message)
     
-    def test_heads_id_preserved_across_processing_steps(self, message_processor):
-        """Test that heads_id is preserved across all processing steps"""
-        # Set up a heads_id value manually
-        message_processor.heads_id = "MANUAL_HEAD_ID"
+    def test_head_id_preserved_across_processing_steps(self, message_processor):
+        """Test that head_id is preserved across all processing steps"""
+        # Set up a head_id value manually
+        message_processor.head_id = "MANUAL_HEAD_ID"
         
         # Mock insufficient data scenario
         message_processor.data_converter.convert_messages_to_df.return_value = None
@@ -205,6 +205,6 @@ class TestMessageProcessorHeadsId:
         
         result = message_processor.process_matching_messages(matches)
         
-        # Even in error case, heads_id should be preserved
-        assert result.heads_id == "MANUAL_HEAD_ID"
+        # Even in error case, head_id should be preserved
+        assert result.head_id == "MANUAL_HEAD_ID"
         assert result.success is False
