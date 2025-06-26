@@ -76,6 +76,7 @@ def main():
     parser.add_argument("-c", "--conf", type=str, help="YAML configuration file", default="config/mqtt_conf_docker.yaml")
     parser.add_argument("--sleep-min", type=float, default=0.1, help="Minimum sleep interval between publishes (seconds)")
     parser.add_argument("--sleep-max", type=float, default=0.3, help="Maximum sleep interval between publishes (seconds)")
+    parser.add_argument("-r","--repetitions", type=int, default=10, help="Number of repetitions for publishing data")
 
     # Read arguments
     args = parser.parse_args()
@@ -128,7 +129,7 @@ def main():
 
     # Publish data continuously
     # while True:
-    for i in range(20):
+    for i in range(args.repetitions):
         # Select a random data folder to publish and read the data
         random.shuffle(DATA_FOLDERS)
         data_folder = DATA_FOLDERS[0]
