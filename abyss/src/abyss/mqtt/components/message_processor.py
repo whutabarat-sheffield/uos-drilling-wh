@@ -23,6 +23,7 @@ class ProcessingResult:
     depth_estimation: Optional[List[float]] = None
     machine_id: Optional[str] = None
     result_id: Optional[str] = None
+    heads_id: Optional[str] = None
     error_message: Optional[str] = None
 
 
@@ -53,6 +54,7 @@ class MessageProcessor:
         self.algo_version = algo_version
         self.machine_id = None
         self.result_id = None
+        self.heads_id = None
     
     def process_matching_messages(self, matches: List[TimestampedData]) -> ProcessingResult:
         """
@@ -71,6 +73,7 @@ class MessageProcessor:
             if not result_msg or not trace_msg:
                 return ProcessingResult(
                     success=False,
+                    heads_id=self.heads_id,
                     error_message="Missing required result or trace message"
                 )
             
@@ -85,6 +88,7 @@ class MessageProcessor:
             if df is None or df.empty:
                 return ProcessingResult(
                     success=False,
+                    heads_id=self.heads_id,
                     error_message="Failed to convert messages to DataFrame"
                 )
             
@@ -92,8 +96,12 @@ class MessageProcessor:
             self.machine_id = str(df.iloc[0]['HOLE_ID'])
             self.result_id = str(df.iloc[0]['local'])
             
+            # Extract head_id from heads message if available
+            self.heads_id = self._extract_heads_id(heads_msg)
+            
             logging.info(f"Machine ID: {self.machine_id}")
             logging.info(f"Result ID: {self.result_id}")
+            logging.info(f"Heads ID: {self.heads_id}")
             
             # Debug file output if enabled
             self._write_debug_files(result_msg, trace_msg, heads_msg, toolbox_id, tool_id, df)
@@ -106,13 +114,21 @@ class MessageProcessor:
                 'error_message': str(e),
                 'error_type': type(e).__name__
             })
-            return ProcessingResult(success=False, error_message=str(e))
+            return ProcessingResult(
+                success=False, 
+                heads_id=self.heads_id,
+                error_message=str(e)
+            )
         except Exception as e:
             logging.error("Unexpected error in message processing", extra={
                 'error_type': type(e).__name__,
                 'error_message': str(e)
             }, exc_info=True)
-            return ProcessingResult(success=False, error_message=str(e))
+            return ProcessingResult(
+                success=False, 
+                heads_id=self.heads_id,
+                error_message=str(e)
+            )
     
     def _separate_message_types(self, matches: List[TimestampedData]) -> tuple:
         """Separate messages by type (result, trace, heads)."""
@@ -177,6 +193,7 @@ class MessageProcessor:
                 depth_estimation=None,
                 machine_id=self.machine_id,
                 result_id=self.result_id,
+                heads_id=self.heads_id,
                 error_message="Not enough steps to estimate depth"
             )
         
@@ -198,7 +215,8 @@ class MessageProcessor:
                 keypoints=keypoints,
                 depth_estimation=depth_estimation,
                 machine_id=self.machine_id,
-                result_id=self.result_id
+                result_id=self.result_id,
+                heads_id=self.heads_id
             )
             
         except Exception as e:
@@ -212,5 +230,50 @@ class MessageProcessor:
                 success=False,
                 machine_id=self.machine_id,
                 result_id=self.result_id,
+                heads_id=self.heads_id,
                 error_message=f"Depth estimation failed: {str(e)}"
             )
+    
+    def _extract_heads_id(self, heads_msg: Optional[TimestampedData]) -> Optional[str]:
+        """
+        Extract head_id from heads message using the data converter.
+        
+        Args:
+            heads_msg: Optional heads message data
+            
+        Returns:
+            Extracted head_id or None if not available
+        """
+        try:
+            if not heads_msg or not heads_msg.data:
+                logging.debug("No heads message available for head_id extraction")
+                return None
+            
+            # Parse JSON data from heads message
+            heads_data = json.loads(heads_msg.data)
+            
+            # Use data converter to extract heads data including head_id
+            extracted_heads_data = self.data_converter._extract_heads_data(heads_data)
+            
+            head_id = extracted_heads_data.get('head_id')
+            
+            if head_id:
+                logging.info("Successfully extracted head_id from heads message", extra={
+                    'head_id': head_id
+                })
+            else:
+                logging.warning("head_id not found in heads message")
+            
+            return head_id
+            
+        except json.JSONDecodeError as e:
+            logging.warning("Failed to parse heads message JSON", extra={
+                'error_message': str(e)
+            })
+            return None
+        except Exception as e:
+            logging.warning("Error extracting head_id from heads message", extra={
+                'error_type': type(e).__name__,
+                'error_message': str(e)
+            })
+            return None
