@@ -83,7 +83,7 @@ def reduce_dict(data_dict, search_key):
     """
     # Using reduce function to filter dictionary values based on search_key
     # from https://www.geeksforgeeks.org/python-substring-key-match-in-dictionary/
-    logging.info("Reducing dictionary for {search_key}")
+    logging.info(f"Reducing dictionary for {search_key}")
     logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
 
     if not isinstance(data_dict, dict):
