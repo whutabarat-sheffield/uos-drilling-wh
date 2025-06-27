@@ -26,8 +26,8 @@ if [ ! -f "$DOCKERFILE" ]; then
 fi
 
 # Check if requirements file exists
-if [ ! -f "abyss/requirements.cpu.txt" ]; then
-    echo -e "${RED}Error: abyss/requirements.cpu.txt not found!${NC}"
+if [ ! -f "abyss/requirements.cpu" ]; then
+    echo -e "${RED}Error: abyss/requirements.cpu not found!${NC}"
     exit 1
 fi
 

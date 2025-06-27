@@ -1,0 +1,48 @@
+# CPU-only requirements - eliminates CUDA dependencies
+# Optimized for Docker image size and CPU-only inference
+
+# Core Scientific and Data Processing Libraries
+numpy==1.26.4
+pandas==2.2.3
+openpyxl==3.1.5
+scikit-learn==1.3.2
+
+# Deep Learning Libraries - CPU-only versions
+# Install PyTorch CPU-only version (much smaller than CUDA version)
+torch==2.3.1+cpu
+
+# Essential utilities for PyTorch/transformers
+tokenizers==0.19.1
+safetensors==0.5.3
+urllib3==1.26.20
+fsspec==2024.12.0
+
+# Communication and Configuration  
+# Fix dependency conflict: aiomqtt 2.3.0 requires paho-mqtt>=2.1.0,<3.0.0
+paho-mqtt>=2.1.0,<3.0.0
+aiomqtt==2.3.0
+pyyaml==6.0.1
+
+# Testing frameworks
+pytest==7.4.4
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+
+# File processing (minimal set)
+h5py==3.11.0
+
+# Remove heavy dependencies that aren't needed:
+# matplotlib - plotting not needed in production
+# nptdms - specific file format not used in core inference
+# datasets - HuggingFace datasets not needed for inference-only
+
+# Hard dependencies (wheels) will be installed separately:
+# - accelerate (CPU-optimized version)
+# - transformers (custom build)
+# - tsfm_public (IBM time series models)
+
+# Production optimizations:
+# - Removed development/debugging packages
+# - Removed CUDA-specific packages
+# - Minimized file I/O libraries
+# - Focused on inference-only dependencies
