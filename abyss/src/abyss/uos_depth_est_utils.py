@@ -56,7 +56,7 @@ def setup_logging(level):
     """
     logging.basicConfig(
         level=level,
-        format='%(asctime)s [%(levelname)s] %(message)s',
+        format='%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
@@ -83,7 +83,7 @@ def reduce_dict(data_dict, search_key):
     """
     # Using reduce function to filter dictionary values based on search_key
     # from https://www.geeksforgeeks.org/python-substring-key-match-in-dictionary/
-    logging.info("Reducing dictionary")
+    logging.info("Reducing dictionary for {search_key}")
     logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
 
     if not isinstance(data_dict, dict):
@@ -101,7 +101,8 @@ def reduce_dict(data_dict, search_key):
         # initial value for the accumulator (an empty list)
         []
     )
-    logging.info(f"Reduced values: {values}")
+    logging.info(f"Found {len(values)} matching entries for '{search_key}'")
+    logging.debug(f"Reduced values: {values}")
     return values[0]['Value']
 
 
