@@ -1,0 +1,66 @@
+# CPU-only Docker Compose configuration
+# Optimized for production deployment without CUDA dependencies
+
+version: '3.8'
+
+services:
+  uos-depthest-listener-cpu:
+    image: uos-depthest-listener:cpu
+    container_name: uos-depthest-listener-cpu
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - MPLCONFIGDIR=/app/.cache/matplotlib
+      - HF_HOME=/app/.cache/transformers
+      - TRANSFORMERS_CACHE=/app/.cache/transformers
+    
+    # Volume mounts for persistence and configuration
+    volumes:
+      # Configuration files
+      # - ./abyss/src/abyss/run/config:/app/config:ro
+      # Persistent cache for models and libraries
+      # - uos_cpu_cache_transformers:/app/.cache/transformers
+      # - uos_cpu_cache_matplotlib:/app/.cache/matplotlib
+      # Optional: Mount trained models if external
+      # - ./abyss/src/abyss/trained_model:/app/trained_model:ro
+      - uos-depthest-listener-cpu_config:/app/config
+    
+    # Network configuration
+    networks:
+      - mqtt-broker_toolbox-network
+    
+    # Resource limits (CPU-only)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'        # Limit to 2 CPU cores
+          memory: 4G         # 4GB memory limit
+        reservations:
+          cpus: '0.5'        # Reserve at least 0.5 CPU
+          memory: 1G         # Reserve 1GB memory
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import abyss; print('healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+networks:
+    mqtt-broker_toolbox-network:
+      external: True
+
+volumes:
+  uos-depthest-listener-cpu_config:
+    # driver: local

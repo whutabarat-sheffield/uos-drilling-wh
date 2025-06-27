@@ -1,0 +1,98 @@
+# CPU-only optimized Dockerfile - eliminates all CUDA dependencies
+# Base image: Python 3.10.16 slim (no PyTorch/CUDA)
+ARG PYTHON_VERSION=3.10.16
+FROM python:${PYTHON_VERSION}-slim
+
+# Python environment configuration
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install minimal system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Required for some Python packages compilation
+    build-essential \
+    # Required for ONNX Runtime CPU optimizations
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-privileged user
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    appuser
+
+# Upgrade pip for better dependency resolution
+RUN python -m pip install --upgrade pip
+
+# Create working directory for build
+WORKDIR /build/abyss
+
+# Copy requirements and install CPU-only dependencies
+COPY abyss/requirements.cpu.txt ./requirements.cpu.txt
+
+# Install CPU-only Python dependencies with caching
+# Skip certificate validation for simplified build
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    --trusted-host download.pytorch.org \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.cpu.txt
+
+# Set up directory structure
+RUN mkdir -p ./wheels
+
+# Copy wheel dependencies (CPU-optimized versions)
+COPY abyss/wheels/*.whl ./wheels/
+
+# Copy package files
+COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in ./
+COPY abyss/src ./src
+
+# Install wheel dependencies
+RUN python -m pip install \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    ./wheels/*.whl
+
+# Install the abyss package itself
+RUN python -m pip install \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    .
+
+# Set up runtime environment
+WORKDIR /app
+RUN mkdir -p ./config ./cache
+
+# Copy runtime files
+COPY abyss/src/abyss/run .
+COPY abyss/src/abyss/run/config ./config
+
+# Create cache directories for models and libraries
+RUN mkdir -p /app/.cache/transformers /app/.cache/matplotlib
+
+# Set environment variables for cache locations
+ENV MPLCONFIGDIR=/app/.cache/matplotlib
+ENV HF_HOME=/app/.cache/transformers
+ENV TRANSFORMERS_CACHE=/app/.cache/transformers
+
+# Expose MQTT port
+EXPOSE 1883
+
+# Optional: Switch to non-privileged user (commented for debugging)
+# USER appuser
+
+# Health check to verify service is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import abyss; print('Service healthy')" || exit 1
+
+# Default command
+CMD ["uos_depthest_listener", "--config", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
