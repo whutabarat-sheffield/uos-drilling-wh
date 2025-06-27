@@ -234,7 +234,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         except json.JSONDecodeError as e:
             logging.critical("Error decoding JSON: %s", str(e))
             return None
-        logging.info(f"Decoded RESULT data: {result_data}")
+        logging.debug(f"Decoded RESULT data: {result_data}")
         # Parse the RESULT data
         try:
             result_df = parse_result(result_data, conf)
@@ -243,6 +243,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
 
     if trace_msg:
         trace_data = json.loads(trace_msg)
+        logging.info("Processing TRACE message")
         try:
             trace_df = parse_trace(trace_data, conf)
         except Exception as e:
@@ -252,8 +253,8 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
     if result_df is not None and trace_df is not None:
         try:
             combined_df = pd.merge(result_df, trace_df, on='Step (nb)', how='outer')
-            logging.info(str(combined_df.dtypes))
-            logging.info(f"Combined DataFrame: {combined_df.head()}")
+            logging.debug(str(combined_df.dtypes))
+            logging.debug(f"Combined DataFrame: {combined_df.head()}")
             return combined_df
         except Exception as e:
             logging.critical("Error merging RESULT and TRACE DataFrames: %s", str(e))
