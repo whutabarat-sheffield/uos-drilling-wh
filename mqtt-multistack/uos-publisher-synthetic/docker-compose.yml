@@ -1,40 +1,31 @@
-version: '3.8'
+version: '3'
 services:
-  mqtt-broker:
-    image: eclipse-mosquitto:latest
-    container_name: mqtt-broker
-    restart: unless-stopped
-    ports:
-      - "1883:1883"
-      - "9001:9001"  # WebSocket port
-    volumes:
-      - ./config:/mosquitto/config
-      - ./data:/mosquitto/data
-      - ./logs:/mosquitto/log
-    user: "1883:1883"
-    networks:
-      - toolbox-network
 
-  uos-depthest-listener:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    container_name: uos-depthest-listener
+  uos-publish-json:
+    # build:
+    #   context: ..
+    #   dockerfile: Dockerfile
+    image: uos-publish-json:latest
+    container_name: uos-publish-json
     stdin_open: true  # equivalent to docker run -i
     tty: true         # equivalent to docker run -t
     volumes:
       # For persistent cache storage
-      - ./cache/transformers:/app/.cache/transformers
-      - ./cache/matplotlib:/app/.cache/matplotlib
+      # - ./cache/transformers:/app/.cache/transformers
+      # - ./cache/matplotlib:/app/.cache/matplotlib
       # If you need to mount configuration
-      - ./config:/app/config
+      - uos-publish-json_config:/app/config
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=DEBUG
-    restart: unless-stopped
+    restart: always
     networks:
-      - toolbox-network
+      - mqtt-broker_toolbox-network
 
 networks:
-  toolbox-network:
-    external: True
+    mqtt-broker_toolbox-network:
+      external: True
+
+volumes:
+  uos-publish-json_config:
+    # driver: local
