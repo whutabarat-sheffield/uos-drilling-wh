@@ -1,0 +1,33 @@
+{
+  "MessageId": "0b3eaca6-52f5-429a-8b6c-979ab95d0447",
+  "MessageType": "ua-data",
+  "PublisherId": "localhost",
+  "Messages": {
+    "DataSetWriterId": "setitecgabriele",
+    "SequenceNumber": 1750936594592,
+    "Timestamp": "2025-06-26T11:16:34Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.Identification.DefaultInstanceBrowseName": {
+        "Value": 114,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.Identification.Model": {
+        "Value": "Concentric Collet",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.Identification.SerialNumber": {
+        "Value": "E00401009F45BACA",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.LifetimeCounters.0.LifeTimeCycleCounter": {
+        "Value": 432,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.Identification.CustomerInformation": {
+        "Value": "ST00092901",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      }
+    }
+  }
+}

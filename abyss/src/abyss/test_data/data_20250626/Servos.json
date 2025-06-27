@@ -1,0 +1,29 @@
+{
+  "MessageId": "93b1f63d-c590-45c4-a738-f199f78ba4d7",
+  "MessageType": "ua-data",
+  "PublisherId": "localhost",
+  "Messages": {
+    "DataSetWriterId": "setitecgabriele",
+    "SequenceNumber": 1750936594592,
+    "Timestamp": "2025-06-26T11:16:34Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Servos.0.Identification.DefaultInstanceBrowseName": {
+        "Value": "M_EDU",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Servos.0.Identification.Model": {
+        "Value": "M_EDU",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Servos.0.Identification.ProductCode": {
+        "Value": "5000",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Servos.0.OperationCounters.OperationDuration": {
+        "Value": 33267,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      }
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "MessageId": "d22ace1f-90b6-4bfc-882b-8d2f1a1eca4a",
+  "MessageType": "ua-data",
+  "PublisherId": "localhost",
+  "Messages": {
+    "DataSetWriterId": "setitecgabriele",
+    "SequenceNumber": 1750936594592,
+    "Timestamp": "2025-06-26T11:16:34Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.DefaultInstanceBrowseName": {
+        "Value": "CABBAR",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.Model": {
+        "Value": "CB V2 - Standard",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.SerialNumber": {
+        "Value": "21120099",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.SoftwareRevision": {
+        "Value": "V 3.2.2.1",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.OperationCounters.OperationDuration": {
+        "Value": 23035,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Parameters.ProgramCode.MicropeckOscillation": {
+        "Value": 3,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Parameters.ProgramCode.MicropeckAmplitude": {
+        "Value": 10,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.ProductCode": {
+        "Value": "5641",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.CustomerInformation": {
+        "Value": "",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.HardwareRevision": {
+        "Value": "0",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Identification.InitialOperationDate": {
+        "Value": "2022-06-17T00:00:00Z",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Maintenance.Service.LastService": {
+        "Value": "1970-01-01T00:00:00Z",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Parameters.ProgramCode.PowerSupplyLimit": {
+        "Value": 3000,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Parameters.ProgramCode.LubricationPumpCoefficient": {
+        "Value": 1,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Controllers.0.Parameters.ProgramCode.ParameterSetDefaultSelection": {
+        "Value": true,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      }
+    }
+  }
+}
