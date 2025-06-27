@@ -113,4 +113,4 @@ ENV HF_HOME=/app/.cache/transformers
 # CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
 # Run the application.
 # CMD python listen-continuous.py 
-CMD ["python", "uos_publish_json.py", "test_data/data_20250326", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+CMD ["python", "uos_publish_json.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
