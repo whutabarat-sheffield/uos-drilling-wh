@@ -2,7 +2,7 @@ import paho.mqtt.client as mqtt
 import time
 import json
 import argparse
-import os
+import logging
 import yaml
 import random
 from pathlib import Path
@@ -48,18 +48,15 @@ def publish(client, topic, payload, timestamp0, timestamp1) -> None:
         payload (str): The message payload (JSON as string).
         timestamp0 (str): The original timestamp string to be replaced.
         timestamp1 (str): The new timestamp string to use in the payload.
-
-
-    # Initialise parser
     """
     if timestamp0 in payload:
         payload = payload.replace(timestamp0, timestamp1)
     else:
-        print(f"Warning: '{timestamp0}' not found in payload. Skipping replacement.")
+        logging.warning(f"'{timestamp0}' not found in payload. Skipping replacement.")
     client.publish(topic, payload)
     t = time.localtime()
     current_time = time.strftime("%H:%M:%S", t)
-    print(f"[{current_time}]: Publish data on {topic} '{timestamp1}'")
+    logging.info(f"[{current_time}]: Publish data on {topic} '{timestamp1}'")
 
 
 def main():
@@ -77,9 +74,16 @@ def main():
     parser.add_argument("--sleep-min", type=float, default=0.1, help="Minimum sleep interval between publishes (seconds)")
     parser.add_argument("--sleep-max", type=float, default=0.3, help="Maximum sleep interval between publishes (seconds)")
     parser.add_argument("-r","--repetitions", type=int, default=10, help="Number of repetitions for publishing data")
+    parser.add_argument("--log-level", type=str, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Set the logging level")
 
     # Read arguments
     args = parser.parse_args()
+    
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper()),
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
 
     # config = yaml.safe_load(open("mqtt_conf.yaml"))
@@ -114,13 +118,13 @@ def main():
         client.connect(config['mqtt']['broker']['host'], 
                     config['mqtt']['broker']['port'])
     except Exception as e:
-        print(f"Failed to connect to MQTT broker: {e}")
+        logging.error(f"Failed to connect to MQTT broker: {e}")
         sys.exit(1)
     # Handle termination signals
 
 
     def signal_handler(sig, frame):
-        print("\nTermination signal received. Exiting gracefully...")
+        logging.info("\nTermination signal received. Exiting gracefully...")
         client.disconnect()
         sys.exit(0)
 
@@ -129,7 +133,7 @@ def main():
 
     # Publish data continuously
     # while True:
-    for i in range(args.repetitions):
+    for _ in range(args.repetitions):
         # Select a random data folder to publish and read the data
         random.shuffle(DATA_FOLDERS)
         data_folder = DATA_FOLDERS[0]
@@ -146,11 +150,13 @@ def main():
             with open(data_folder / "Trace.json") as f:
                 d_trace = f.read()
                 trace_source_timestamps = find_in_dict(json.loads(d_trace), 'SourceTimestamp')
-                assert len(set(trace_source_timestamps)) == 1
+                if len(set(trace_source_timestamps)) != 1:
+                    raise ValueError("Trace SourceTimestamp values are not identical.")
             with open(data_folder / "Heads.json") as f:
                 d_heads = f.read()
                 heads_source_timestamps = find_in_dict(json.loads(d_heads), 'SourceTimestamp')
-                assert len(set(heads_source_timestamps)) == 1
+                if len(set(heads_source_timestamps)) != 1:
+                    raise ValueError("Heads SourceTimestamp values are not identical.")
 
             # Update the source timestamp        
             new_source_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
@@ -176,9 +182,11 @@ def main():
                 time.sleep(random.uniform(args.sleep_min, args.sleep_max))  # Sleep for a random time between min and max
         
         except FileNotFoundError as e:
-            print(f"File not found: {e}. Skipping this data folder.")
+            logging.error(f"File not found: {e}. Skipping this data folder.")
         except json.JSONDecodeError as e:
-            print(f"JSON decode error: {e}. Skipping this data folder.")
+            logging.error(f"JSON decode error: {e}. Skipping this data folder.")
+        except ValueError as e:
+            logging.error(f"Data validation error: {e}. Skipping this data folder.")
 
 if __name__ == "__main__":
     main()
