@@ -20,10 +20,10 @@ services:
       - LOG_LEVEL=DEBUG
     restart: always
     networks:
-      - toolbox_mqtt-broker_toolbox-network
+      - mqtt-broker_toolbox-network
 
 networks:
-    toolbox_mqtt-broker_toolbox-network:
+    mqtt-broker_toolbox-network:
       external: True
 
 volumes:
