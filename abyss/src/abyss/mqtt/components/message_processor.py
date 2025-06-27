@@ -70,7 +70,7 @@ class MessageProcessor:
         try:
             # Separate message types
             result_msg, trace_msg, heads_msg = self._separate_message_types(matches)
-            logging.info(f"Heads message is {heads_msg}")
+            logging.debug(f"Heads message is {heads_msg}")
             
             # Extract head_id directly from heads_msg if available
             extracted_head_id = self._extract_head_id_simple(heads_msg)
