@@ -214,7 +214,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         df['Step (nb)'] = df['Step (nb)'].astype('int32')
         df['Position (mm)'] = -df['Position (mm)']  # Invert position
 
-        logging.info(f"Trace DataFrame: {df.tail()}")
+        logging.debug(f"Trace DataFrame: {df.tail()}")
         return df
 
     result_df = None
