@@ -6,6 +6,8 @@ services:
   mqtt-broker:
     image: eclipse-mosquitto:latest
     container_name: mqtt-broker
+    stdin_open: true  # equivalent to docker run -i
+    tty: true         # equivalent to docker run -t
     restart: always
     ports:
       - "1883:1883"
