@@ -3,6 +3,8 @@
 # FROM python:${PYTHON_VERSION}-slim
 # FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
+# Use an official Python 3 image as the base image
+# FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
 # Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -74,11 +76,12 @@ RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --tr
 
 # Clean up and set up for running
 WORKDIR /app
-
+RUN mkdir -p ./config
 # RUN rm -rf /build
 
 # Now copy only your run scripts
 COPY abyss/src/abyss/run .
+COPY abyss/src/abyss/run/config ./config
 
 #debugging
 # RUN python -c "import sys; print(sys.path)"
@@ -112,4 +115,4 @@ ENV HF_HOME=/app/.cache/transformers
 # CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
 # Run the application.
 # CMD python listen-continuous.py 
-CMD ["uos_depthest_listener", "--config", "mqtt_conf_docker.yaml", "--log-level", "INFO"]
+CMD ["uos_depthest_listener", "--config", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
