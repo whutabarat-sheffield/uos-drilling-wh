@@ -52,6 +52,8 @@ class SimpleMessageCorrelator:
             # Add heads pattern only if configured
             if 'heads' in listener_config:
                 self._topic_patterns['heads'] = f"{listener_config['root']}/+/+/{listener_config['heads']}"
+                logging.debug("Heads topic configured, adding pattern")
+                logging.debug(f"Topic patterns: {self._topic_patterns['heads']}")
     
     def find_and_process_matches(self, buffers: Dict[str, List[TimestampedData]], 
                                 message_processor: Callable) -> bool:

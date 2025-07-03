@@ -250,12 +250,15 @@ class MessageProcessor:
         """
         try:
             if not heads_msg or not heads_msg.data:
+                logging.info("Heads message is None or empty")
                 return None
             
             # Handle both string and dict data
             if isinstance(heads_msg.data, str):
+                logging.debug("Heads message data is a string, attempting to parse JSON")
                 heads_data = json.loads(heads_msg.data)
             else:
+                logging.debug("Heads message data is already a dictionary")
                 heads_data = heads_msg.data
             
             # Use find_in_dict to extract head_id using the last part of the config path
@@ -266,7 +269,10 @@ class MessageProcessor:
             
             # Ensure we return a string or None
             if head_id is not None:
+                logging.info(f"Extracted head_id: {head_id}")
                 return str(head_id) if not isinstance(head_id, list) else str(head_id[0]) if head_id else None
+            
+            logging.info("Head ID not found in heads message")
             return None
             
         except (json.JSONDecodeError, KeyError, IndexError, TypeError):
