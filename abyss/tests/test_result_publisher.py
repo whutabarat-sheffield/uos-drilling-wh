@@ -2,8 +2,18 @@ import pytest
 from unittest.mock import Mock, MagicMock, call
 import json
 from datetime import datetime
-from abyss.mqtt.components.result_publisher import ResultPublisher, PublishResultType
-from abyss.mqtt.components.message_processor import ProcessingResult
+
+try:
+    from abyss.mqtt.components.result_publisher import ResultPublisher, PublishResultType
+    from abyss.mqtt.components.message_processor import ProcessingResult
+except ImportError:
+    # Fallback for development environments
+    import sys
+    from pathlib import Path
+    src_path = Path(__file__).parent.parent / "src"
+    sys.path.insert(0, str(src_path))
+    from abyss.mqtt.components.result_publisher import ResultPublisher, PublishResultType
+    from abyss.mqtt.components.message_processor import ProcessingResult
 
 
 class TestResultPublisher:
