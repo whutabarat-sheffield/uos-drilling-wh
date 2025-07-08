@@ -67,15 +67,12 @@ class TestMessageProcessorHeadsId:
     def test_extract_head_id_success(self, message_processor):
         """Test successful head_id extraction from heads message"""
         heads_data = {
-            'AssetManagement': {
-                'Assets': {
-                    'Heads': [
-                        {
-                            'Identification': {
-                                'SerialNumber': 'HEAD12345'
-                            }
-                        }
-                    ]
+            'Messages': {
+                'Payload': {
+                    'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.Identification.SerialNumber': {
+                        'Value': 'HEAD12345',
+                        'SourceTimestamp': '2024-05-15T07:04:19Z'
+                    }
                 }
             }
         }
@@ -86,13 +83,13 @@ class TestMessageProcessorHeadsId:
             _source='test/AssetManagement/Head'
         )
         
-        result = message_processor._extract_head_id_simple(heads_msg)
+        result = message_processor._extract_head_id(heads_msg)
         
         assert result == 'HEAD12345'  # Extracted from actual test data
     
     def test_extract_head_id_no_message(self, message_processor):
         """Test head_id extraction with no heads message"""
-        result = message_processor._extract_head_id_simple(None)
+        result = message_processor._extract_head_id(None)
         assert result is None
     
     def test_extract_head_id_invalid_json(self, message_processor):
@@ -103,22 +100,19 @@ class TestMessageProcessorHeadsId:
             _source='test/AssetManagement/Head'
         )
         
-        result = message_processor._extract_head_id_simple(heads_msg)
+        result = message_processor._extract_head_id(heads_msg)
         assert result is None
     
     def test_head_id_extraction_integration(self, message_processor):
         """Test that head_id extraction works in isolation"""
         # Test the head_id extraction method directly
         heads_data = {
-            'AssetManagement': {
-                'Assets': {
-                    'Heads': [
-                        {
-                            'Identification': {
-                                'SerialNumber': 'INTEGRATION_TEST_HEAD'
-                            }
-                        }
-                    ]
+            'Messages': {
+                'Payload': {
+                    'nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.Identification.SerialNumber': {
+                        'Value': 'INTEGRATION_TEST_HEAD',
+                        'SourceTimestamp': '2024-05-15T07:04:19Z'
+                    }
                 }
             }
         }
@@ -130,7 +124,7 @@ class TestMessageProcessorHeadsId:
         )
         
         # Extract head_id
-        head_id = message_processor._extract_head_id_simple(heads_msg)
+        head_id = message_processor._extract_head_id(heads_msg)
         
         # Should get the actual value from test data
         assert head_id == 'INTEGRATION_TEST_HEAD'
@@ -140,13 +134,13 @@ class TestMessageProcessorHeadsId:
         # Create test messages (no heads message)
         result_msg = TimestampedData(
             _timestamp=1234567890.0,
-            _data='{"test": "result_data"}',
+            _data='{"Messages": {"Payload": {"test": "result_data"}}}',
             _source='test/toolbox/tool/ResultManagement'
         )
         
         trace_msg = TimestampedData(
             _timestamp=1234567890.0,
-            _data='{"test": "trace_data"}',
+            _data='{"Messages": {"Payload": {"test": "trace_data"}}}',
             _source='test/toolbox/tool/ResultManagement/Trace'
         )
         
@@ -167,7 +161,7 @@ class TestMessageProcessorHeadsId:
         # Test with missing trace message
         result_msg = TimestampedData(
             _timestamp=1234567890.0,
-            _data='{"test": "result_data"}',
+            _data='{"Messages": {"Payload": {"test": "result_data"}}}',
             _source='test/toolbox/tool/ResultManagement'
         )
         
@@ -179,29 +173,33 @@ class TestMessageProcessorHeadsId:
         assert result.success is False
         assert result.head_id is None  # Should be None initially
         assert result.error_message is not None
-        assert "Missing required result or trace message" in str(result.error_message)
+        assert "Missing required trace message" in str(result.error_message)
     
     def test_head_id_preserved_across_processing_steps(self, message_processor):
         """Test that head_id is preserved across all processing steps"""
-        # Set up a head_id value manually
-        message_processor.head_id = "MANUAL_HEAD_ID"
-        
         # Mock insufficient data scenario
         message_processor.data_converter.convert_messages_to_df.return_value = None
         
+        # Create a heads message to provide head_id
+        heads_msg = TimestampedData(
+            _timestamp=1234567890.0,
+            _data='{"Messages": {"Payload": {"nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Heads.0.Identification.SerialNumber": {"Value": "MANUAL_HEAD_ID", "SourceTimestamp": "2024-05-15T07:04:19Z"}}}}',
+            _source='test/toolbox/tool/AssetManagement/Head'
+        )
+        
         result_msg = TimestampedData(
             _timestamp=1234567890.0,
-            _data='{"test": "result_data"}',
+            _data='{"Messages": {"Payload": {"test": "result_data"}}}',
             _source='test/toolbox/tool/ResultManagement'
         )
         
         trace_msg = TimestampedData(
             _timestamp=1234567890.0,
-            _data='{"test": "trace_data"}',
+            _data='{"Messages": {"Payload": {"test": "trace_data"}}}',
             _source='test/toolbox/tool/ResultManagement/Trace'
         )
         
-        matches = [result_msg, trace_msg]
+        matches = [result_msg, trace_msg, heads_msg]
         
         result = message_processor.process_matching_messages(matches)
         

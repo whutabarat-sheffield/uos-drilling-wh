@@ -159,14 +159,14 @@ class TestResultPublisher:
     
     def test_consolidated_method_success_type(self, result_publisher, sample_processing_result, mock_mqtt_client):
         """Test consolidated method with SUCCESS type"""
-        result = result_publisher._publish_result_consolidated(
+        result_publisher._publish_result_consolidated(
             PublishResultType.SUCCESS,
             sample_processing_result,
             "tb1", "t1", "2023-01-01T15:00:00Z",
             algo_version="0.2.4"
         )
         
-        assert result is True
+        # Method returns None, verify by checking MQTT calls
         assert mock_mqtt_client.publish.call_count == 2
         
         # Verify keypoints data
@@ -176,13 +176,13 @@ class TestResultPublisher:
     
     def test_consolidated_method_insufficient_data_type(self, result_publisher, sample_processing_result, mock_mqtt_client):
         """Test consolidated method with INSUFFICIENT_DATA type"""
-        result = result_publisher._publish_result_consolidated(
+        result_publisher._publish_result_consolidated(
             PublishResultType.INSUFFICIENT_DATA,
             sample_processing_result,
             "tb2", "t2", "2023-01-01T16:00:00Z"
         )
         
-        assert result is True
+        # Method returns None, verify by checking MQTT calls
         assert mock_mqtt_client.publish.call_count == 2
         
         # Verify keypoints data
@@ -192,14 +192,14 @@ class TestResultPublisher:
     
     def test_consolidated_method_error_type(self, result_publisher, sample_processing_result, mock_mqtt_client):
         """Test consolidated method with ERROR type"""
-        result = result_publisher._publish_result_consolidated(
+        result_publisher._publish_result_consolidated(
             PublishResultType.ERROR,
             sample_processing_result,
             "tb3", "t3", "2023-01-01T17:00:00Z",
             error_message="Test error"
         )
         
-        assert result is True
+        # Method returns None, verify by checking MQTT calls
         assert mock_mqtt_client.publish.call_count == 2
         
         # Verify keypoints data
@@ -217,7 +217,7 @@ class TestResultPublisher:
         mock_mqtt_client.publish.return_value = publish_result
         
         # Should raise MQTTPublishError due to publish failure
-        with pytest.raises(MQTTPublishError, match="Failed to publish success result"):
+        with pytest.raises(MQTTPublishError, match="MQTT publish failed for topic"):
             result_publisher._publish_successful_result(
                 sample_processing_result, "tb", "t", "2023-01-01T18:00:00Z", "0.2.4"
             )
@@ -389,16 +389,15 @@ class TestResultPublisherComparison:
         algo_version = "0.2.4"
         
         # Call both methods
-        result1 = publisher1._publish_successful_result(
+        publisher1._publish_successful_result(
             sample_processing_result, toolbox_id, tool_id, dt_string, algo_version
         )
-        result2 = publisher2._publish_result_consolidated(
+        publisher2._publish_result_consolidated(
             PublishResultType.SUCCESS, sample_processing_result,
             toolbox_id, tool_id, dt_string, algo_version=algo_version
         )
         
-        # Both should succeed
-        assert result1 == result2 == True
+        # Both methods return None, verify by checking MQTT calls
         
         # Both should make same number of calls
         assert client1.publish.call_count == client2.publish.call_count == 2
@@ -439,16 +438,15 @@ class TestResultPublisherComparison:
         dt_string = "2023-01-01T13:00:00Z"
         
         # Call both methods
-        result1 = publisher1._publish_insufficient_data_result(
+        publisher1._publish_insufficient_data_result(
             sample_processing_result, toolbox_id, tool_id, dt_string
         )
-        result2 = publisher2._publish_result_consolidated(
+        publisher2._publish_result_consolidated(
             PublishResultType.INSUFFICIENT_DATA, sample_processing_result,
             toolbox_id, tool_id, dt_string
         )
         
-        # Both should succeed
-        assert result1 == result2 == True
+        # Both methods return None, verify by checking MQTT calls
         assert client1.publish.call_count == client2.publish.call_count == 2
         
         # Compare payloads
@@ -480,16 +478,15 @@ class TestResultPublisherComparison:
         error_message = "Test error occurred"
         
         # Call both methods
-        result1 = publisher1._publish_error_result(
+        publisher1._publish_error_result(
             sample_processing_result, toolbox_id, tool_id, dt_string, error_message
         )
-        result2 = publisher2._publish_result_consolidated(
+        publisher2._publish_result_consolidated(
             PublishResultType.ERROR, sample_processing_result,
             toolbox_id, tool_id, dt_string, error_message=error_message
         )
         
-        # Both should succeed
-        assert result1 == result2 == True
+        # Both methods return None, verify by checking MQTT calls
         assert client1.publish.call_count == client2.publish.call_count == 2
         
         # Compare payloads

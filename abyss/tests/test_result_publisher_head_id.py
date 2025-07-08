@@ -67,11 +67,11 @@ class TestResultPublisherHeadId:
         algo_version = "1.0"
         
         # Publish the result
-        success = result_publisher.publish_processing_result(
+        result_publisher.publish_processing_result(
             processing_result_with_head_id, toolbox_id, tool_id, timestamp, algo_version
         )
         
-        assert success is True
+        # Method returns None, not True
         
         # Verify MQTT client was called twice (keypoints + depth estimation)
         assert result_publisher.mqtt_client.publish.call_count == 2
@@ -109,11 +109,11 @@ class TestResultPublisherHeadId:
         algo_version = "1.0"
         
         # Publish the result
-        success = result_publisher.publish_processing_result(
+        result_publisher.publish_processing_result(
             processing_result_without_head_id, toolbox_id, tool_id, timestamp, algo_version
         )
         
-        assert success is True
+        # Method returns None, not True
         
         # Get the published messages
         calls = result_publisher.mqtt_client.publish.call_args_list
@@ -145,11 +145,9 @@ class TestResultPublisherHeadId:
             mock_datetime.strftime = lambda dt, fmt: "2023-01-01T00:00:00Z"
             
             # Publish the result
-            success = result_publisher.publish_processing_result(
+            result_publisher.publish_processing_result(
                 processing_result_with_head_id, toolbox_id, tool_id, timestamp, algo_version
             )
-            
-            assert success is True
             
             # Get the published messages
             calls = result_publisher.mqtt_client.publish.call_args_list
@@ -214,11 +212,11 @@ class TestResultPublisherHeadId:
         algo_version = "1.0"
         
         # Publish the result
-        success = result_publisher.publish_processing_result(
+        result_publisher.publish_processing_result(
             processing_result, toolbox_id, tool_id, timestamp, algo_version
         )
         
-        assert success is True
+        # Method returns None, not True
         
         # Verify MQTT client was called twice (keypoints + depth estimation)
         assert result_publisher.mqtt_client.publish.call_count == 2
@@ -264,11 +262,11 @@ class TestResultPublisherHeadId:
         algo_version = "1.0"
         
         # Publish the result
-        success = result_publisher.publish_processing_result(
+        result_publisher.publish_processing_result(
             processing_result, toolbox_id, tool_id, timestamp, algo_version
         )
         
-        assert success is True
+        # Method returns None, not True
         
         # Verify MQTT client was called twice (keypoints + depth estimation)
         assert result_publisher.mqtt_client.publish.call_count == 2
@@ -316,11 +314,11 @@ class TestResultPublisherHeadId:
         algo_version = "1.0"
         
         # Publish the result
-        success = result_publisher.publish_processing_result(
+        result_publisher.publish_processing_result(
             processing_result, toolbox_id, tool_id, timestamp, algo_version
         )
         
-        assert success is True
+        # Method returns None, not True
         
         # Get the published messages
         calls = result_publisher.mqtt_client.publish.call_args_list
