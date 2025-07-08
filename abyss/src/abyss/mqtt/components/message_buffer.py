@@ -107,14 +107,15 @@ class MessageBuffer:
                     return False
                 elif self.duplicate_handling == 'replace':
                     # Replace the existing duplicate message
-                    self.buffers[matching_topic][duplicate_index] = data
-                    logging.info("Duplicate message replaced per configuration", extra={
-                        'duplicate_handling': self.duplicate_handling,
-                        'source': data.source,
-                        'timestamp': data.timestamp,
-                        'replaced_index': duplicate_index
-                    })
-                    return True
+                    if duplicate_index is not None:
+                        self.buffers[matching_topic][duplicate_index] = data
+                        logging.info("Duplicate message replaced per configuration", extra={
+                            'duplicate_handling': self.duplicate_handling,
+                            'source': data.source,
+                            'timestamp': data.timestamp,
+                            'replaced_index': duplicate_index
+                        })
+                        return True
                 elif self.duplicate_handling == 'error':
                     logging.error("Duplicate message detected and error raised per configuration", extra={
                         'duplicate_handling': self.duplicate_handling,
@@ -166,10 +167,13 @@ class MessageBuffer:
             Tuple of (is_duplicate, index_of_duplicate)
         """
         try:
+            # Get configurable time window for duplicate detection
+            time_window = self.config.get('mqtt', {}).get('listener', {}).get('duplicate_time_window', 1.0)
+            
             for index, existing in enumerate(existing_messages):
                 # Check if this is a potential duplicate based on source and timestamp
                 if (existing.source == new_message.source and 
-                    abs(existing.timestamp - new_message.timestamp) < 1.0):  # Within 1 second
+                    abs(existing.timestamp - new_message.timestamp) < time_window):
                     
                     # Check if data content is identical
                     if self._compare_message_data(existing.data, new_message.data):
@@ -183,12 +187,54 @@ class MessageBuffer:
             return False, None
     
     def _compare_message_data(self, data1: Any, data2: Any) -> bool:
-        """Compare two message data objects for equality."""
+        """Compare two message data objects for equality with improved accuracy."""
         try:
-            # Convert to strings for comparison to handle different data types
+            # Handle None cases
+            if data1 is None and data2 is None:
+                return True
+            if data1 is None or data2 is None:
+                return False
+            
+            # Direct equality check first (handles most cases efficiently)
+            if data1 == data2:
+                return True
+            
+            # For dictionaries, use more reliable comparison
+            if isinstance(data1, dict) and isinstance(data2, dict):
+                return self._compare_dicts(data1, data2)
+            
+            # For lists, compare element by element
+            if isinstance(data1, list) and isinstance(data2, list):
+                if len(data1) != len(data2):
+                    return False
+                return all(self._compare_message_data(item1, item2) 
+                          for item1, item2 in zip(data1, data2))
+            
+            # For numeric types, handle potential precision issues
+            if isinstance(data1, (int, float)) and isinstance(data2, (int, float)):
+                # Allow small differences for floating point comparison
+                return abs(float(data1) - float(data2)) < 1e-10
+            
+            # Fall back to string comparison for other types
             str1 = str(data1)
             str2 = str(data2)
             return str1 == str2
+            
+        except Exception as e:
+            logging.debug(f"Error comparing message data: {e}")
+            return False
+    
+    def _compare_dicts(self, dict1: dict, dict2: dict) -> bool:
+        """Compare two dictionaries recursively."""
+        try:
+            if set(dict1.keys()) != set(dict2.keys()):
+                return False
+            
+            for key in dict1:
+                if not self._compare_message_data(dict1[key], dict2[key]):
+                    return False
+            
+            return True
         except Exception:
             return False
     
