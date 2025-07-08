@@ -8,11 +8,12 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 import logging
 import json
 from datetime import datetime
-from typing import Dict, List, Callable, Optional, Any
+from typing import Dict, List, Callable, Optional, Any, Union
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
 
 from ...uos_depth_est import TimestampedData, find_in_dict
+from .config_manager import ConfigurationManager
 
 
 class MQTTClientManager:
@@ -26,16 +27,25 @@ class MQTTClientManager:
     - Manage subscriptions and topics
     """
     
-    def __init__(self, config: Dict[str, Any], message_handler: Optional[Callable] = None):
+    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], message_handler: Optional[Callable] = None):
         """
         Initialize MQTT Client Manager.
         
         Args:
-            config: Configuration dictionary containing MQTT settings
+            config: Configuration dictionary or ConfigurationManager instance
             message_handler: Optional callback for handling received messages
         """
-        self.config = config
-        self.broker = config['mqtt']['broker']
+        # Handle both ConfigurationManager and raw config dict for backward compatibility
+        if isinstance(config, ConfigurationManager):
+            self.config_manager = config
+            self.config = config.get_raw_config()
+            self.broker = config.get_mqtt_broker_config()
+        else:
+            # Legacy support for raw config dictionary
+            self.config_manager = None
+            self.config = config
+            self.broker = config['mqtt']['broker']
+            
         self.message_handler = message_handler
         self.clients = {}
         self.topics = []
@@ -80,7 +90,14 @@ class MQTTClientManager:
         """
         # Validate listener type
         valid_types = ['result', 'trace']
-        if 'heads' in self.config['mqtt']['listener']:
+        if self.config_manager:
+            # Use ConfigurationManager for typed access
+            listener_config = self.config_manager.get_mqtt_listener_config()
+        else:
+            # Legacy raw config access
+            listener_config = self.config['mqtt']['listener']
+            
+        if 'heads' in listener_config:
             valid_types.append('heads')
         
         if listener_type not in valid_types:
@@ -93,7 +110,7 @@ class MQTTClientManager:
                     'listener_type': listener_type,
                     'client_id': client_id
                 })
-                topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener'][listener_type]}"
+                topic = f"{listener_config['root']}/+/+/{listener_config[listener_type]}"
                 client.subscribe(topic)
                 self.topics.append(topic)
                 logging.info(f"Subscribed to {topic}")

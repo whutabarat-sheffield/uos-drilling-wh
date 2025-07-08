@@ -12,6 +12,12 @@ from typing import Dict, List, Any, Optional
 
 from ...uos_depth_est import TimestampedData, ConfigurationError
 from .config_manager import ConfigurationManager
+from typing import Union
+
+
+class DuplicateMessageError(Exception):
+    """Exception raised when a duplicate message is detected and error handling is configured."""
+    pass
 
 
 class MessageBuffer:
@@ -25,27 +31,40 @@ class MessageBuffer:
     - Provide buffer statistics and monitoring
     """
     
-    def __init__(self, config: Dict[str, Any], cleanup_interval: int = 60, 
+    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], cleanup_interval: int = 60, 
                  max_buffer_size: int = 10000, max_age_seconds: int = 300):
         """
         Initialize MessageBuffer.
         
         Args:
-            config: Configuration dictionary
+            config: Configuration dictionary or ConfigurationManager instance
             cleanup_interval: Interval between automatic cleanups (seconds)
             max_buffer_size: Maximum number of messages per buffer
             max_age_seconds: Maximum age of messages before cleanup (seconds)
         """
-        self.config = config
+        # Handle both ConfigurationManager and raw config dict for backward compatibility
+        if isinstance(config, ConfigurationManager):
+            self.config_manager = config
+            self.config = config.get_raw_config()
+            
+            # Use ConfigurationManager methods for typed access
+            self.duplicate_handling = config.get_duplicate_handling()
+            listener_config = config.get_mqtt_listener_config()
+            
+        else:
+            # Legacy support for raw config dictionary
+            self.config_manager = None
+            self.config = config
+            
+            # Extract listener config manually (legacy method)
+            listener_config = self.config['mqtt']['listener']
+            self.duplicate_handling = listener_config.get('duplicate_handling', 'ignore')
+        
         self.buffers: Dict[str, List[TimestampedData]] = defaultdict(list)
         self.cleanup_interval = cleanup_interval
         self.max_buffer_size = max_buffer_size
         self.max_age_seconds = max_age_seconds
         self.last_cleanup = datetime.now().timestamp()
-        
-        # Get duplicate handling strategy from config
-        listener_config = self.config['mqtt']['listener']
-        self.duplicate_handling = listener_config.get('duplicate_handling', 'ignore')
         
         # Pre-compute topic patterns for efficiency
         self._topic_patterns = {
@@ -122,7 +141,7 @@ class MessageBuffer:
                         'source': data.source,
                         'timestamp': data.timestamp
                     })
-                    raise ValueError(f"Duplicate message detected: {data.source} at {data.timestamp}")
+                    raise DuplicateMessageError(f"Duplicate message detected: {data.source} at {data.timestamp}")
             
             # Add message to buffer (only if not a duplicate or handling is not 'ignore')
             self.buffers[matching_topic].append(data)
@@ -146,6 +165,9 @@ class MessageBuffer:
                 'source': getattr(data, 'source', 'unknown') if data else 'no_data'
             })
             return False
+        except DuplicateMessageError:
+            # Re-raise duplicate message errors (don't catch them)
+            raise
         except ConfigurationError as e:
             logging.error("Configuration error in add_message", extra={
                 'error_message': str(e),
@@ -168,7 +190,12 @@ class MessageBuffer:
         """
         try:
             # Get configurable time window for duplicate detection
-            time_window = self.config.get('mqtt', {}).get('listener', {}).get('duplicate_time_window', 1.0)
+            if self.config_manager:
+                # Use ConfigurationManager for typed access
+                time_window = self.config_manager.get('mqtt.listener.duplicate_time_window', 1.0)
+            else:
+                # Legacy raw config access
+                time_window = self.config.get('mqtt', {}).get('listener', {}).get('duplicate_time_window', 1.0)
             
             for index, existing in enumerate(existing_messages):
                 # Check if this is a potential duplicate based on source and timestamp
@@ -280,7 +307,12 @@ class MessageBuffer:
         Returns:
             Matching topic pattern or None if no match
         """
-        listener_config = self.config['mqtt']['listener']
+        if self.config_manager:
+            # Use ConfigurationManager for typed access
+            listener_config = self.config_manager.get_mqtt_listener_config()
+        else:
+            # Legacy raw config access
+            listener_config = self.config['mqtt']['listener']
         
         if listener_config['trace'] in source:
             logging.debug("Trace message identified")

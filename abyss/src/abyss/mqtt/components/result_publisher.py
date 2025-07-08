@@ -51,9 +51,9 @@ class ResultPublisher:
         
         if isinstance(config, ConfigurationManager):
             self.config_manager = config
+            self.config = config.get_raw_config()
         else:
-            # Legacy support: create ConfigurationManager from dict
-            # This should be phased out once all components are updated
+            # Legacy support for raw config dictionary
             self.config_manager = None
             self.config = config
     

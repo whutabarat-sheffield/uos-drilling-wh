@@ -7,9 +7,10 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple, Any, Callable, Optional
+from typing import Dict, List, Set, Tuple, Any, Callable, Optional, Union
 
 from ...uos_depth_est import TimestampedData
+from .config_manager import ConfigurationManager
 
 
 class MessageCorrelator:
@@ -23,19 +24,28 @@ class MessageCorrelator:
     - Provide correlation statistics
     """
     
-    def __init__(self, config: Dict[str, Any], time_window: float = 30.0):
+    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], time_window: float = 30.0):
         """
         Initialize MessageCorrelator.
         
         Args:
-            config: Configuration dictionary
+            config: Configuration dictionary or ConfigurationManager instance
             time_window: Time window for message correlation (seconds)
         """
-        self.config = config
-        self.time_window = time_window
+        # Handle both ConfigurationManager and raw config dict for backward compatibility
+        if isinstance(config, ConfigurationManager):
+            self.config_manager = config
+            self.config = config.get_raw_config()
+            self.time_window = time_window if time_window != 30.0 else config.get_time_window()
+            listener_config = config.get_mqtt_listener_config()
+        else:
+            # Legacy support for raw config dictionary
+            self.config_manager = None
+            self.config = config
+            self.time_window = time_window
+            listener_config = self.config['mqtt']['listener']
         
         # Pre-compute topic patterns
-        listener_config = self.config['mqtt']['listener']
         self._topic_patterns = {
             'result': f"{listener_config['root']}/+/+/{listener_config['result']}",
             'trace': f"{listener_config['root']}/+/+/{listener_config['trace']}"

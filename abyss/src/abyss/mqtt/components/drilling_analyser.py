@@ -64,7 +64,7 @@ class DrillingDataAnalyser:
             
             # Message buffering
             self.message_buffer = MessageBuffer(
-                config=config,
+                config=self.config_manager,  # Pass ConfigurationManager instead of raw config
                 cleanup_interval=self.config_manager.get_cleanup_interval(),
                 max_buffer_size=self.config_manager.get_max_buffer_size(),
                 max_age_seconds=300  # 5 minutes
@@ -77,7 +77,7 @@ class DrillingDataAnalyser:
             )
             
             # Data conversion
-            self.data_converter = DataFrameConverter(config=config)
+            self.data_converter = DataFrameConverter(config=self.config_manager)
             
             # Depth inference
             self.depth_inference = DepthInference()
@@ -86,13 +86,13 @@ class DrillingDataAnalyser:
             self.message_processor = MessageProcessor(
                 depth_inference=self.depth_inference,
                 data_converter=self.data_converter,
-                config=config,
+                config=self.config_manager,
                 algo_version=self.ALGO_VERSION
             )
             
             # MQTT client management
             self.client_manager = MQTTClientManager(
-                config=config,
+                config=self.config_manager,
                 message_handler=self.message_buffer.add_message
             )
             

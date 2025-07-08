@@ -7,11 +7,13 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 import json
+import re
 from typing import Dict, Any, Optional, Union
 import pandas as pd
 
 from ...uos_depth_est import TimestampedData, MessageProcessingError
 from ...uos_depth_est_utils import convert_mqtt_to_df
+from .config_manager import ConfigurationManager
 
 
 class DataFrameConverter:
@@ -25,14 +27,21 @@ class DataFrameConverter:
     - Handle conversion errors gracefully
     """
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager]):
         """
         Initialize DataFrameConverter.
         
         Args:
-            config: Configuration dictionary
+            config: Configuration dictionary or ConfigurationManager instance
         """
-        self.config = config
+        # Handle both ConfigurationManager and raw config dict for backward compatibility
+        if isinstance(config, ConfigurationManager):
+            self.config_manager = config
+            self.config = config.get_raw_config()
+        else:
+            # Legacy support for raw config dictionary
+            self.config_manager = None
+            self.config = config
     
     def convert_messages_to_df(self, result_msg: TimestampedData, 
                              trace_msg: TimestampedData,

@@ -8,13 +8,14 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 import logging
 import json
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from dataclasses import dataclass
 import pandas as pd
 
 # Import the TimestampedData from the main module
 from ...uos_depth_est import TimestampedData, MessageProcessingError
 from ...uos_depth_est_utils import reduce_dict
+from .config_manager import ConfigurationManager
 
 
 @dataclass
@@ -40,23 +41,31 @@ class MessageProcessor:
     - Handle insufficient data scenarios
     """
     
-    def __init__(self, depth_inference, data_converter, config: Dict[str, Any], algo_version: str = "1.0"):
+    def __init__(self, depth_inference, data_converter, config: Union[Dict[str, Any], ConfigurationManager], algo_version: str = "1.0"):
         """
         Initialize MessageProcessor.
         
         Args:
             depth_inference: Depth inference model instance
             data_converter: Data converter instance
-            config: Configuration dictionary
+            config: Configuration dictionary or ConfigurationManager instance
             algo_version: Algorithm version string
         """
         self.depth_inference = depth_inference
         self.data_converter = data_converter
-        self.config = config
         self.algo_version = algo_version
         self.machine_id = None
         self.result_id = None
         self.head_id = None
+        
+        # Handle both ConfigurationManager and raw config dict for backward compatibility
+        if isinstance(config, ConfigurationManager):
+            self.config_manager = config
+            self.config = config.get_raw_config()
+        else:
+            # Legacy support for raw config dictionary
+            self.config_manager = None
+            self.config = config
     
     def process_matching_messages(self, matches: List[TimestampedData]) -> ProcessingResult:
         """
@@ -158,9 +167,16 @@ class MessageProcessor:
     
     def _separate_message_types(self, matches: List[TimestampedData]) -> tuple:
         """Separate messages by type (result, trace, heads)."""
-        result_msg = next((m for m in matches if self.config['mqtt']['listener']['result'] in m.source), None)
-        trace_msg = next((m for m in matches if self.config['mqtt']['listener']['trace'] in m.source), None)
-        heads_msg = next((m for m in matches if self.config['mqtt']['listener']['heads'] in m.source), None)
+        if self.config_manager:
+            # Use ConfigurationManager for typed access
+            listener_config = self.config_manager.get_mqtt_listener_config()
+        else:
+            # Legacy raw config access
+            listener_config = self.config['mqtt']['listener']
+            
+        result_msg = next((m for m in matches if listener_config['result'] in m.source), None)
+        trace_msg = next((m for m in matches if listener_config['trace'] in m.source), None)
+        heads_msg = next((m for m in matches if listener_config['heads'] in m.source), None)
         
         return result_msg, trace_msg, heads_msg
     
@@ -300,7 +316,12 @@ class MessageProcessor:
             payload_data = heads_data["Messages"]["Payload"]
             
             # Use full config path with reduce_dict
-            head_id_path = self.config['mqtt']['data_ids']['head_id']
+            if self.config_manager:
+                # Use ConfigurationManager for typed access
+                head_id_path = self.config_manager.get('mqtt.data_ids.head_id')
+            else:
+                # Legacy raw config access
+                head_id_path = self.config['mqtt']['data_ids']['head_id']
             logging.debug(f"Extracting head_id using path: {head_id_path}")
             
             head_id = reduce_dict(payload_data, head_id_path)
