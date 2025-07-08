@@ -403,6 +403,40 @@ class MQTTDrillingDataAnalyser:
             trace_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['trace']}"
             heads_topic = f"{self.config['mqtt']['listener']['root']}/+/+/{self.config['mqtt']['listener']['heads']}"
             
+            # Log details about messages being removed as processed
+            if processed_messages:
+                logging.info("Marking messages as processed and removing from buffers", extra={
+                    'processed_count': len(processed_messages),
+                    'removal_method': 'immediate_removal'
+                })
+                
+                for msg in processed_messages:
+                    # Extract tool key for identification
+                    tool_key = "unknown"
+                    try:
+                        parts = msg.source.split('/')
+                        if len(parts) >= 3:
+                            tool_key = f"{parts[1]}/{parts[2]}"
+                    except Exception:
+                        pass
+                    
+                    # Determine message type
+                    message_type = "unknown"
+                    if "ResultManagement" in msg.source:
+                        message_type = "result"
+                    elif "Trace" in msg.source:
+                        message_type = "trace"
+                    elif "AssetManagement" in msg.source:
+                        message_type = "heads"
+                    
+                    logging.debug("Processing and removing message", extra={
+                        'message_type': message_type,
+                        'source_topic': msg.source,
+                        'tool_key': tool_key,
+                        'timestamp': msg.timestamp,
+                        'processing_status': 'successfully_processed'
+                    })
+            
             # Remove processed messages immediately
             self.buffers[result_topic] = [msg for msg in self.buffers[result_topic] if msg not in processed_messages]
             self.buffers[trace_topic] = [msg for msg in self.buffers[trace_topic] if msg not in processed_messages]

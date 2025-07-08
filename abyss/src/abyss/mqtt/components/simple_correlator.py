@@ -108,22 +108,89 @@ class SimpleMessageCorrelator:
     
     def _get_unprocessed_messages(self, buffers: Dict[str, List[TimestampedData]]) -> Tuple[List, List, List]:
         """Get unprocessed messages from buffers by type."""
+        # Count duplicates for logging
+        result_total = len(buffers.get(self._topic_patterns['result'], []))
         result_messages = [
             msg for msg in buffers.get(self._topic_patterns['result'], []) 
             if not getattr(msg, 'processed', False)
         ]
+        result_duplicates = result_total - len(result_messages)
+        
+        trace_total = len(buffers.get(self._topic_patterns['trace'], []))
         trace_messages = [
             msg for msg in buffers.get(self._topic_patterns['trace'], []) 
             if not getattr(msg, 'processed', False)
         ]
+        trace_duplicates = trace_total - len(trace_messages)
+        
         heads_messages = []
+        heads_duplicates = 0
         if 'heads' in self._topic_patterns:
+            heads_total = len(buffers.get(self._topic_patterns['heads'], []))
             heads_messages = [
                 msg for msg in buffers.get(self._topic_patterns['heads'], []) 
                 if not getattr(msg, 'processed', False)
             ]
+            heads_duplicates = heads_total - len(heads_messages)
+        
+        # Log duplicate detection details
+        if result_duplicates > 0 or trace_duplicates > 0 or heads_duplicates > 0:
+            self._log_duplicate_messages(buffers, result_duplicates, trace_duplicates, heads_duplicates)
         
         return result_messages, trace_messages, heads_messages
+    
+    def _log_duplicate_messages(self, buffers: Dict[str, List[TimestampedData]], 
+                               result_duplicates: int, trace_duplicates: int, heads_duplicates: int):
+        """Log details about duplicate messages being ignored."""
+        logging.info("Duplicate messages detected and ignored", extra={
+            'result_duplicates': result_duplicates,
+            'trace_duplicates': trace_duplicates,
+            'heads_duplicates': heads_duplicates,
+            'total_duplicates': result_duplicates + trace_duplicates + heads_duplicates
+        })
+        
+        # Log specific details about each duplicate message type
+        if result_duplicates > 0:
+            processed_results = [
+                msg for msg in buffers.get(self._topic_patterns['result'], []) 
+                if getattr(msg, 'processed', False)
+            ]
+            for msg in processed_results:
+                logging.info("Duplicate RESULT message ignored", extra={
+                    'message_type': 'result',
+                    'source_topic': msg.source,
+                    'timestamp': msg.timestamp,
+                    'tool_key': self._extract_tool_key(msg.source),
+                    'data_preview': str(msg.data)[:200] + '...' if len(str(msg.data)) > 200 else str(msg.data)
+                })
+        
+        if trace_duplicates > 0:
+            processed_traces = [
+                msg for msg in buffers.get(self._topic_patterns['trace'], []) 
+                if getattr(msg, 'processed', False)
+            ]
+            for msg in processed_traces:
+                logging.info("Duplicate TRACE message ignored", extra={
+                    'message_type': 'trace',
+                    'source_topic': msg.source,
+                    'timestamp': msg.timestamp,
+                    'tool_key': self._extract_tool_key(msg.source),
+                    'data_preview': str(msg.data)[:200] + '...' if len(str(msg.data)) > 200 else str(msg.data)
+                })
+        
+        if heads_duplicates > 0:
+            processed_heads = [
+                msg for msg in buffers.get(self._topic_patterns['heads'], []) 
+                if getattr(msg, 'processed', False)
+            ]
+            for msg in processed_heads:
+                logging.info("Duplicate HEADS message ignored", extra={
+                    'message_type': 'heads',
+                    'source_topic': msg.source,
+                    'timestamp': msg.timestamp,
+                    'tool_key': self._extract_tool_key(msg.source),
+                    'data_preview': str(msg.data)[:200] + '...' if len(str(msg.data)) > 200 else str(msg.data)
+                })
     
     def _find_key_based_matches(self, result_messages: List[TimestampedData],
                                trace_messages: List[TimestampedData],

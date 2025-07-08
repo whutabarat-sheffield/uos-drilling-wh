@@ -65,6 +65,9 @@ class DataFrameConverter:
             if not result_msg.data or not trace_msg.data:
                 raise MessageProcessingError("Message data cannot be empty")
             
+            # Validate array lengths before conversion
+            self._validate_array_lengths(result_msg.data, trace_msg.data)
+            
             # Base conversion using existing utility function
             df = convert_mqtt_to_df(
                 json.dumps(result_msg.data), 
@@ -326,6 +329,95 @@ class DataFrameConverter:
             key = f"field_{key}"
         
         return key
+    
+    def _validate_array_lengths(self, result_data: Any, trace_data: Any) -> None:
+        """
+        Validate that result and trace message arrays have consistent lengths.
+        
+        Args:
+            result_data: Result message data
+            trace_data: Trace message data
+            
+        Raises:
+            MessageProcessingError: If array lengths are inconsistent
+        """
+        try:
+            # Parse JSON data if needed
+            if isinstance(result_data, str):
+                result_data = json.loads(result_data)
+            if isinstance(trace_data, str):
+                trace_data = json.loads(trace_data)
+            
+            # Extract payload data
+            result_payload = result_data.get("Messages", {}).get("Payload", {})
+            trace_payload = trace_data.get("Messages", {}).get("Payload", {})
+            
+            # Find step arrays in both messages
+            result_steps = self._extract_array_from_payload(result_payload, "StepNumber")
+            trace_steps = self._extract_array_from_payload(trace_payload, "StepNumber")
+            
+            # Extract trace arrays
+            position_array = self._extract_array_from_payload(trace_payload, "PositionTrace")
+            torque_array = self._extract_array_from_payload(trace_payload, "IntensityTorqueTrace")
+            thrust_array = self._extract_array_from_payload(trace_payload, "IntensityThrustTrace")
+            
+            # Check array lengths
+            arrays_info = {
+                'result_steps': len(result_steps) if result_steps else 0,
+                'trace_steps': len(trace_steps) if trace_steps else 0,
+                'position': len(position_array) if position_array else 0,
+                'torque': len(torque_array) if torque_array else 0,
+                'thrust': len(thrust_array) if thrust_array else 0
+            }
+            
+            # Log array lengths for debugging
+            logging.debug("Array lengths validation", extra=arrays_info)
+            
+            # Check if trace arrays have consistent lengths
+            trace_arrays = [arr for arr in [trace_steps, position_array, torque_array, thrust_array] if arr]
+            if trace_arrays:
+                first_length = len(trace_arrays[0])
+                for i, arr in enumerate(trace_arrays[1:], 1):
+                    if len(arr) != first_length:
+                        logging.warning(f"Inconsistent trace array lengths: first={first_length}, array_{i}={len(arr)}")
+            
+            # Check if we have reasonable data amounts
+            if trace_steps and len(trace_steps) == 0:
+                raise MessageProcessingError("No trace step data found")
+            if result_steps and len(result_steps) == 0:
+                raise MessageProcessingError("No result step data found")
+            
+            # Warn about large array length differences
+            if trace_steps and position_array:
+                if abs(len(trace_steps) - len(position_array)) > 10:
+                    logging.warning(f"Large difference in array lengths: steps={len(trace_steps)}, position={len(position_array)}")
+            
+        except json.JSONDecodeError as e:
+            raise MessageProcessingError(f"Invalid JSON in message data: {e}")
+        except Exception as e:
+            logging.warning(f"Array length validation warning: {e}")
+            # Don't fail conversion for array length issues, just warn
+    
+    def _extract_array_from_payload(self, payload: Dict[str, Any], search_term: str) -> Optional[list]:
+        """
+        Extract array data from payload by searching for keys containing the search term.
+        
+        Args:
+            payload: Payload dictionary to search in
+            search_term: Term to search for in keys
+            
+        Returns:
+            List of values if found, None otherwise
+        """
+        try:
+            for key, value_obj in payload.items():
+                if search_term in key and isinstance(value_obj, dict):
+                    if 'Value' in value_obj and isinstance(value_obj['Value'], list):
+                        return value_obj['Value']
+            return None
+        except Exception as e:
+            logging.debug(f"Error extracting array for {search_term}: {e}")
+            return None
     
     def get_conversion_stats(self) -> Dict[str, Any]:
         """

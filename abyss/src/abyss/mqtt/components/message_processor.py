@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
+import pandas as pd
 
 # Import the TimestampedData from the main module
 from ...uos_depth_est import TimestampedData, MessageProcessingError
@@ -80,11 +81,13 @@ class MessageProcessor:
             # Extract head_id directly from heads_msg if available
             self.head_id = self._extract_head_id(heads_msg)
             
-            if not result_msg or not trace_msg:
+            # Enhanced message validation
+            validation_error = self._validate_messages(result_msg, trace_msg)
+            if validation_error:
                 return ProcessingResult(
                     success=False,
                     head_id=self.head_id,
-                    error_message="Missing required result or trace message"
+                    error_message=validation_error
                 )
             
             # Extract tool information
@@ -93,18 +96,34 @@ class MessageProcessor:
             self._log_processing_info(result_msg, trace_msg, heads_msg, toolbox_id, tool_id)
             
             # Convert messages to DataFrame
-            df = self.data_converter.convert_messages_to_df(result_msg, trace_msg, heads_msg)
-            
-            if df is None or df.empty:
+            try:
+                df = self.data_converter.convert_messages_to_df(result_msg, trace_msg, heads_msg)
+            except Exception as e:
                 return ProcessingResult(
                     success=False,
                     head_id=self.head_id,
-                    error_message="Failed to convert messages to DataFrame"
+                    error_message=f"DataFrame conversion failed: {str(e)}"
                 )
             
-            # Extract machine and result IDs
-            self.machine_id = str(df.iloc[0]['HOLE_ID'])
-            self.result_id = str(df.iloc[0]['local'])
+            # Enhanced DataFrame validation
+            validation_error = self._validate_dataframe(df)
+            if validation_error:
+                return ProcessingResult(
+                    success=False,
+                    head_id=self.head_id,
+                    error_message=validation_error
+                )
+            
+            # Extract machine and result IDs with defensive programming
+            try:
+                self.machine_id = str(df.iloc[0]['HOLE_ID'])
+                self.result_id = str(df.iloc[0]['local'])
+            except (KeyError, IndexError) as e:
+                return ProcessingResult(
+                    success=False,
+                    head_id=self.head_id,
+                    error_message=f"Failed to extract IDs from DataFrame: {str(e)}"
+                )
             
             logging.info(f"Machine ID: {self.machine_id}")
             logging.info(f"Result ID: {self.result_id}")
@@ -146,12 +165,21 @@ class MessageProcessor:
         return result_msg, trace_msg, heads_msg
     
     def _extract_tool_info(self, result_msg: TimestampedData) -> tuple:
-        """Extract toolbox and tool IDs from message source."""
+        """Extract toolbox and tool IDs from message source with enhanced validation."""
+        if not result_msg or not result_msg.source:
+            raise MessageProcessingError("Message source is empty or None")
+        
         parts = result_msg.source.split('/')
         if len(parts) < 3:
-            raise MessageProcessingError("Invalid message source format")
+            raise MessageProcessingError(f"Invalid message source format: '{result_msg.source}'. Expected format: 'prefix/toolbox_id/tool_id/...'")
         
-        return parts[1], parts[2]  # toolbox_id, tool_id
+        toolbox_id = parts[1].strip()
+        tool_id = parts[2].strip()
+        
+        if not toolbox_id or not tool_id:
+            raise MessageProcessingError(f"Empty toolbox_id or tool_id in source: '{result_msg.source}'")
+        
+        return toolbox_id, tool_id
     
     def _log_processing_info(self, result_msg, trace_msg, heads_msg, toolbox_id, tool_id):
         """Log processing information."""
@@ -328,3 +356,115 @@ class MessageProcessor:
         except Exception as e:
             logging.error(f"Failed to normalize head_id {head_id}: {e}")
             return None
+    
+    def _validate_messages(self, result_msg: Optional[TimestampedData], trace_msg: Optional[TimestampedData]) -> Optional[str]:
+        """
+        Validate message structure and content before processing.
+        
+        Args:
+            result_msg: Result message to validate
+            trace_msg: Trace message to validate
+            
+        Returns:
+            Error message if validation fails, None if valid
+        """
+        # Check message presence
+        if not result_msg:
+            return "Missing required result message"
+        if not trace_msg:
+            return "Missing required trace message"
+        
+        # Check message content
+        if not result_msg.data:
+            return "Result message has no data content"
+        if not trace_msg.data:
+            return "Trace message has no data content"
+        
+        # Validate JSON structure for result message
+        try:
+            if isinstance(result_msg.data, str):
+                result_data = json.loads(result_msg.data)
+            else:
+                result_data = result_msg.data
+            
+            if not isinstance(result_data, dict):
+                return "Result message data is not a valid dictionary"
+            
+            # Check for required structure
+            if "Messages" not in result_data or "Payload" not in result_data["Messages"]:
+                return "Result message missing required Messages.Payload structure"
+                
+        except json.JSONDecodeError as e:
+            return f"Invalid JSON in result message: {e}"
+        except Exception as e:
+            return f"Error validating result message structure: {e}"
+        
+        # Validate JSON structure for trace message
+        try:
+            if isinstance(trace_msg.data, str):
+                trace_data = json.loads(trace_msg.data)
+            else:
+                trace_data = trace_msg.data
+            
+            if not isinstance(trace_data, dict):
+                return "Trace message data is not a valid dictionary"
+            
+            # Check for required structure
+            if "Messages" not in trace_data or "Payload" not in trace_data["Messages"]:
+                return "Trace message missing required Messages.Payload structure"
+                
+        except json.JSONDecodeError as e:
+            return f"Invalid JSON in trace message: {e}"
+        except Exception as e:
+            return f"Error validating trace message structure: {e}"
+        
+        # Check timestamp consistency
+        time_diff = abs(result_msg.timestamp - trace_msg.timestamp)
+        max_time_diff = 30.0  # 30 seconds tolerance
+        if time_diff > max_time_diff:
+            logging.warning(f"Large time difference between result and trace messages: {time_diff} seconds")
+        
+        return None
+    
+    def _validate_dataframe(self, df: Optional[pd.DataFrame]) -> Optional[str]:
+        """
+        Validate DataFrame structure and content.
+        
+        Args:
+            df: DataFrame to validate
+            
+        Returns:
+            Error message if validation fails, None if valid
+        """
+        if df is None:
+            return "DataFrame is None"
+        
+        if df.empty:
+            return "DataFrame is empty"
+        
+        # Check for required columns
+        required_columns = ['HOLE_ID', 'local']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            return f"DataFrame missing required columns: {missing_columns}"
+        
+        # Check for data in required columns
+        try:
+            if df.iloc[0]['HOLE_ID'] is None or pd.isna(df.iloc[0]['HOLE_ID']):
+                return "HOLE_ID is None or NaN"
+            if df.iloc[0]['local'] is None or pd.isna(df.iloc[0]['local']):
+                return "local (result_id) is None or NaN"
+        except IndexError:
+            return "DataFrame has no rows"
+        
+        # Validate step data consistency if available
+        if 'Step (nb)' in df.columns:
+            unique_steps = df['Step (nb)'].unique()
+            if len(unique_steps) < 1:
+                return "No valid step data found"
+            
+            # Check for reasonable step values
+            if any(step < 0 for step in unique_steps if pd.notna(step)):
+                logging.warning("Found negative step values in DataFrame")
+        
+        return None
