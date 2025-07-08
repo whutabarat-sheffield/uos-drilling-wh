@@ -85,13 +85,39 @@ uos_depthest_listener --config=mqtt_conf_local.yaml --log-level=INFO
 The docker build will setup a workspace under `/app` directory, with configuration files available in `/app/config/`. 
 
 ### Steps for direct installation using sources
-Clone the repository
 
-Change into abyss/
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git
+   cd uos-drilling-wh
+   ```
 
-Type 'pip install .'
+2. **Option A: Install directly from source**
+   ```bash
+   cd abyss/
+   pip install .
+   ```
 
-Go into abyss/src/tests and run it
+3. **Option B: Build wheel and install**
+   ```bash
+   # Build wheel using the provided build script
+   python build_wheel.py --clean --validate
+   
+   # Install the built wheel
+   pip install dist/abyss-*.whl
+   ```
+
+4. **Option C: Use Makefile (recommended)**
+   ```bash
+   # Build and install in one step
+   make install
+   
+   # Or build wheel only
+   make build
+   
+   # Show available targets
+   make help
+   ```
 
 ### Steps for direct installation using wheels
 1. Download all of the files in the `release` section apart from the source code files. 
@@ -419,3 +445,57 @@ Structured logging format with detailed information:
 - Typed configuration access with `ConfigurationManager`
 - Backward compatibility with raw configuration dictionaries
 - Better validation and error handling
+
+## Build Automation
+
+The repository includes comprehensive build automation tools for creating wheel distributions:
+
+### Build Scripts
+
+1. **Python Build Script** (`build_wheel.py`):
+   ```bash
+   # Basic build
+   python build_wheel.py
+   
+   # Build with clean and validation
+   python build_wheel.py --clean --validate --verbose
+   
+   # Custom output directory
+   python build_wheel.py --output-dir=wheels/
+   ```
+
+2. **Shell Script Wrapper** (`build_wheel.sh`):
+   ```bash
+   # Simple build
+   ./build_wheel.sh
+   
+   # With options
+   ./build_wheel.sh --clean --validate --verbose
+   ```
+
+3. **Makefile Targets**:
+   ```bash
+   make help           # Show available targets
+   make build          # Build wheel with clean and validation
+   make build-simple   # Quick build without clean/validation
+   make install        # Build and install wheel locally
+   make clean          # Clean build artifacts
+   make wheel-info     # Show information about built wheels
+   ```
+
+### Build Features
+
+- **Automatic dependency management**: Installs required build tools
+- **Validation**: Tests wheel integrity and installation
+- **Cleanup**: Removes build artifacts and temporary files
+- **Cross-platform**: Works on Linux, macOS, and Windows
+- **Verbose logging**: Detailed build process information
+- **Error handling**: Comprehensive error detection and reporting
+
+### GitHub Actions Integration
+
+The build scripts are integrated with GitHub Actions workflows for:
+- Automated wheel building on push/PR
+- Multi-platform wheel creation (Linux, macOS, Windows)
+- Wheel validation and testing
+- Release automation
