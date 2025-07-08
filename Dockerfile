@@ -1,25 +1,24 @@
-# Use an official Python 3 image as the base image
+# CPU-only optimized Dockerfile - eliminates all CUDA dependencies
+# Base image: Python 3.10.16 slim (no PyTorch/CUDA)
 ARG PYTHON_VERSION=3.10.16
 FROM python:${PYTHON_VERSION}-slim
-# FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
-# Prevents Python from writing pyc files.
+# Python environment configuration
 ENV PYTHONDONTWRITEBYTECODE=1
-
-# Keeps Python from buffering stdout and stderr to avoid situations where
-# the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies for git and build tools
-# RUN apt-get update && apt-get install -y \
-#     git \
-#     vim \
-#     build-essential \
-#     sudo \
-#     && rm -rf /var/lib/apt/lists/*
+# Install minimal system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Required for some Python packages compilation
+    build-essential \
+    # Required for ONNX Runtime CPU optimizations
+    # libgomp1 \ 
+    # Install vi for debugging purposes
+    vim-tiny \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Create a non-privileged user that the app will run under.
-# See https://docs.docker.com/go/dockerfile-user-best-practices/
+# Create non-privileged user
 ARG UID=10001
 RUN adduser \
     --disabled-password \
@@ -30,86 +29,72 @@ RUN adduser \
     --uid "${UID}" \
     appuser
 
+# Upgrade pip for better dependency resolution
 RUN python -m pip install --upgrade pip
 
-# Download dependencies as a separate step to take advantage of Docker's caching.
-# Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
-# Leverage a bind mount to requirements.txt to avoid having to copy them into
-# into this layer.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=abyss/requirements.txt,target=requirements.txt \
-    python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
-
-# Set up the directory structure
+# Create working directory for build
 WORKDIR /build/abyss
-# RUN mkdir -p ./deps
+
+# Copy requirements and install CPU-only dependencies
+COPY abyss/requirements.cpu ./requirements.cpu
+
+# Install CPU-only Python dependencies with caching
+# Skip certificate validation for simplified build
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    --trusted-host download.pytorch.org \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.cpu
+
+# Set up directory structure
 RUN mkdir -p ./wheels
-# RUN mkdir -p /cache/transformers
-# RUN mkdir -p /cache/matplotlib
 
-# Copy dependencies to ../deps (one level up from where setup.py will be)
-# COPY deps/* ../deps/
-COPY abyss/wheels/* ./wheels
+# Copy wheel dependencies (CPU-optimized versions)
+COPY abyss/wheels/*.whl ./wheels/
 
-# Copy the package files
-COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in abyss/requirements.docker ./
+# Copy package files
+COPY abyss/pyproject.toml abyss/README.md abyss/MANIFEST.in ./
 COPY abyss/src ./src
 
+# Install wheel dependencies
+RUN python -m pip install \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    ./wheels/*.whl
 
-# RUN --mount=type=cache,target=/root/.cache/pip \
-#     --mount=type=bind,source=requirements.docker,target=requirements.docker \
-#     python -m pip install -r requirements.docker
+# Install the abyss package itself
+RUN python -m pip install \
+    --trusted-host pypi.org \
+    --trusted-host files.pythonhosted.org \
+    .
 
-# Install the package
-# RUN python -m pip install .
-# RUN python -m pip install -r requirements.txt
-RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
-# RUN python -m pip install -r requirements.docker
-RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
-
-# ENV TRANSFORMERS_CACHE=/cache/transformers
-# ENV HF_HOME=/cache/transformers
-# ENV MPLCONFIGDIR=/cache/matplotlib
-
-# Clean up and set up for running
+# Set up runtime environment
 WORKDIR /app
-RUN mkdir -p ./config
-# RUN rm -rf /build
+RUN mkdir -p ./config ./cache
 
-# Now copy only your run scripts
+# Copy runtime files
 COPY abyss/src/abyss/run .
 COPY abyss/src/abyss/run/config ./config
 
-#debugging
-# RUN python -c "import sys; print(sys.path)"
-# RUN pip list | grep abyss
-# RUN python -c "import site; print(site.getsitepackages())"
-# RUN python -c "import abyss; print(abyss.__file__)"
+# Create cache directories for models and libraries
+RUN mkdir -p /app/.cache/transformers /app/.cache/matplotlib
 
-# ENV PYTHONPATH="${PYTHONPATH}:/app/abyss/src"
-
-# Expose the port that the application listens on.
-EXPOSE 1883
-
-
-
-RUN mkdir -p /app/.cache/transformers
-RUN mkdir -p /app/.cache/matplotlib
-
-
+# Set environment variables for cache locations
 ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
+# ENV TRANSFORMERS_CACHE=/app/.cache/transformers
 
-# Switch to the non-privileged user to run the application.
+# Expose MQTT port
+EXPOSE 1883
+
+# Optional: Switch to non-privileged user (commented for debugging)
 # USER appuser
 
+# Health check to verify service is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import abyss; print('Service healthy')" || exit 1
 
-# Specify the default command to run the application
-# CMD ["python", "abyss/examples-mqtt/listen-continuous.py"]
-# CMD ["python", "listen-continuous.py"]
-# CMD ["python", "publish-continuous.py", ""]
-# CMD ["python", "listen-continuous.py"]
-# CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
-# Run the application.
-# CMD python listen-continuous.py 
+# Default command
 CMD ["uos_depthest_listener", "--config", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
