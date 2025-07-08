@@ -189,6 +189,10 @@ class ConfigurationManager:
         """Get maximum buffer size."""
         return self.get('mqtt.listener.max_buffer_size', 10000)
     
+    def get_duplicate_handling(self) -> str:
+        """Get duplicate handling strategy."""
+        return self.get('mqtt.listener.duplicate_handling', 'ignore')
+    
     def has_authentication(self) -> bool:
         """Check if MQTT authentication is configured."""
         broker_config = self.get_mqtt_broker_config()
@@ -301,6 +305,7 @@ class ConfigurationManager:
                 'time_window': self.get_time_window(),
                 'cleanup_interval': self.get_cleanup_interval(),
                 'max_buffer_size': self.get_max_buffer_size(),
+                'duplicate_handling': self.get_duplicate_handling(),
                 'topic_patterns': list(self.get_topic_patterns().keys())
             }
             

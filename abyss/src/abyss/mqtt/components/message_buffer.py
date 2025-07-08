@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 
 from ...uos_depth_est import TimestampedData, ConfigurationError
+from .config_manager import ConfigurationManager
 
 
 class MessageBuffer:
@@ -42,8 +43,11 @@ class MessageBuffer:
         self.max_age_seconds = max_age_seconds
         self.last_cleanup = datetime.now().timestamp()
         
-        # Pre-compute topic patterns for efficiency
+        # Get duplicate handling strategy from config
         listener_config = self.config['mqtt']['listener']
+        self.duplicate_handling = listener_config.get('duplicate_handling', 'ignore')
+        
+        # Pre-compute topic patterns for efficiency
         self._topic_patterns = {
             'trace': f"{listener_config['root']}/+/+/{listener_config['trace']}",
             'result': f"{listener_config['root']}/+/+/{listener_config['result']}"
@@ -91,16 +95,43 @@ class MessageBuffer:
             
             # Check for duplicates before adding
             existing_messages = self.buffers[matching_topic]
-            duplicate_found = self._check_for_duplicate(data, existing_messages)
+            duplicate_found, duplicate_index = self._check_for_duplicate(data, existing_messages)
             
-            # Add message to buffer
+            if duplicate_found:
+                if self.duplicate_handling == 'ignore':
+                    logging.info("Duplicate message ignored per configuration", extra={
+                        'duplicate_handling': self.duplicate_handling,
+                        'source': data.source,
+                        'timestamp': data.timestamp
+                    })
+                    return False
+                elif self.duplicate_handling == 'replace':
+                    # Replace the existing duplicate message
+                    self.buffers[matching_topic][duplicate_index] = data
+                    logging.info("Duplicate message replaced per configuration", extra={
+                        'duplicate_handling': self.duplicate_handling,
+                        'source': data.source,
+                        'timestamp': data.timestamp,
+                        'replaced_index': duplicate_index
+                    })
+                    return True
+                elif self.duplicate_handling == 'error':
+                    logging.error("Duplicate message detected and error raised per configuration", extra={
+                        'duplicate_handling': self.duplicate_handling,
+                        'source': data.source,
+                        'timestamp': data.timestamp
+                    })
+                    raise ValueError(f"Duplicate message detected: {data.source} at {data.timestamp}")
+            
+            # Add message to buffer (only if not a duplicate or handling is not 'ignore')
             self.buffers[matching_topic].append(data)
             
             buffer_size_after = len(self.buffers[matching_topic])
             logging.info("Message added to buffer", extra={
                 'buffer_size_after': buffer_size_after,
                 'all_buffer_sizes': {k: len(v) for k, v in self.buffers.items()},
-                'duplicate_detected': duplicate_found
+                'duplicate_detected': duplicate_found,
+                'duplicate_handling': self.duplicate_handling
             })
             
             # Trigger cleanup if needed
@@ -128,10 +159,14 @@ class MessageBuffer:
             })
             return False
     
-    def _check_for_duplicate(self, new_message: TimestampedData, existing_messages: List[TimestampedData]) -> bool:
-        """Check if the new message is a duplicate of any existing message."""
+    def _check_for_duplicate(self, new_message: TimestampedData, existing_messages: List[TimestampedData]) -> tuple[bool, Optional[int]]:
+        """Check if the new message is a duplicate of any existing message.
+        
+        Returns:
+            Tuple of (is_duplicate, index_of_duplicate)
+        """
         try:
-            for existing in existing_messages:
+            for index, existing in enumerate(existing_messages):
                 # Check if this is a potential duplicate based on source and timestamp
                 if (existing.source == new_message.source and 
                     abs(existing.timestamp - new_message.timestamp) < 1.0):  # Within 1 second
@@ -139,13 +174,13 @@ class MessageBuffer:
                     # Check if data content is identical
                     if self._compare_message_data(existing.data, new_message.data):
                         self._log_duplicate_detection(new_message, existing)
-                        return True
+                        return True, index
             
-            return False
+            return False, None
             
         except Exception as e:
             logging.debug(f"Error checking for duplicates: {e}")
-            return False
+            return False, None
     
     def _compare_message_data(self, data1: Any, data2: Any) -> bool:
         """Compare two message data objects for equality."""
@@ -185,7 +220,8 @@ class MessageBuffer:
             'existing_timestamp': existing_message.timestamp,
             'timestamp_diff': abs(new_message.timestamp - existing_message.timestamp),
             'data_preview': str(new_message.data)[:200] + '...' if len(str(new_message.data)) > 200 else str(new_message.data),
-            'duplicate_source': 'message_buffer'
+            'duplicate_source': 'message_buffer',
+            'duplicate_handling': self.duplicate_handling
         })
     
     def _get_matching_topic(self, source: str) -> Optional[str]:

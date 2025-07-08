@@ -12,6 +12,7 @@ import sys
 import os
 import yaml
 import argparse
+from importlib.metadata import version
 
 # Add the source directory to the path
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -76,7 +77,8 @@ def main():
             sys.exit(1)
     
     try:
-        logging.info("Starting MQTT Drilling Data Analyzer with refactored components")
+        pkg_version = version('abyss')
+        logging.info("Starting MQTT Drilling Data Analyzer v%s", pkg_version)
         logging.info("Configuration file: %s", config_path)
         
         analyzer = DrillingDataAnalyser(config_path=config_path)
