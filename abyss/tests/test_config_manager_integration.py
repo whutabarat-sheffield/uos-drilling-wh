@@ -59,11 +59,9 @@ mqtt:
         result_publisher = ResultPublisher(mock_mqtt_client, config_manager)
         
         # Test publishing
-        result = result_publisher.publish_processing_result(
+        result_publisher.publish_processing_result(
             sample_processing_result, "toolbox1", "tool1", 1672574400.0, "0.2.4"
         )
-        
-        assert result is True
         assert mock_mqtt_client.publish.call_count == 2
         
         # Verify topics are built correctly using ConfigurationManager
@@ -104,11 +102,9 @@ mqtt:
         result_publisher = ResultPublisher(mock_mqtt_client, config_dict)
         
         # Test publishing
-        result = result_publisher.publish_processing_result(
+        result_publisher.publish_processing_result(
             sample_processing_result, "toolbox2", "tool2", 1672574400.0, "0.2.4"
         )
-        
-        assert result is True
         assert mock_mqtt_client.publish.call_count == 2
         
         # Verify topics are built correctly using legacy method

@@ -70,6 +70,9 @@ class ResultPublisher:
             timestamp: Message timestamp
             algo_version: Algorithm version
             
+        Returns:
+            None
+            
         Raises:
             MQTTPublishError: If publishing to MQTT broker fails
             AbyssProcessingError: If result processing fails
@@ -214,6 +217,9 @@ class ResultPublisher:
                 
         except ValueError:
             # Re-raise ValueError for unknown result types
+            raise
+        except MQTTPublishError:
+            # Re-raise MQTTPublishError from _publish_message
             raise
         except Exception as e:
             result_type_str = result_type.value if hasattr(result_type, 'value') else str(result_type)

@@ -6,7 +6,6 @@ MQTTDrillingDataAnalyser class to improve maintainability and testability.
 """
 
 from .message_buffer import MessageBuffer
-from .correlator import MessageCorrelator
 from .simple_correlator import SimpleMessageCorrelator
 from .message_processor import MessageProcessor
 from .client_manager import MQTTClientManager
@@ -36,7 +35,6 @@ from .exceptions import (
 
 __all__ = [
     'MessageBuffer',
-    'MessageCorrelator',
     'SimpleMessageCorrelator',
     'MessageProcessor',
     'MQTTClientManager',

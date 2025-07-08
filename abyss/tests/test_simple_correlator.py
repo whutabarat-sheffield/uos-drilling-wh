@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import Mock
 from abyss.mqtt.components.simple_correlator import SimpleMessageCorrelator
-from abyss.mqtt.components.correlator import MessageCorrelator
 from abyss.uos_depth_est import TimestampedData
 import time
 
@@ -27,11 +26,6 @@ class TestSimpleCorrelator:
     def simple_correlator(self, mock_config):
         """Create simple correlator"""
         return SimpleMessageCorrelator(mock_config, time_window=5.0)
-    
-    @pytest.fixture
-    def complex_correlator(self, mock_config):
-        """Create complex correlator for comparison"""
-        return MessageCorrelator(mock_config, time_window=5.0)
     
     def test_simple_correlator_basic_matching(self, simple_correlator):
         """Test basic message matching with simple correlator"""
@@ -240,62 +234,3 @@ class TestCorrelatorComparison:
             }
         }
     
-    def test_both_correlators_same_result(self, mock_config):
-        """Test that both correlators produce the same results for basic cases"""
-        simple_correlator = SimpleMessageCorrelator(mock_config, time_window=5.0)
-        complex_correlator = MessageCorrelator(mock_config, time_window=5.0)
-        
-        timestamp = time.time()
-        
-        # Create identical test messages
-        result_msg1 = TimestampedData(
-            _timestamp=timestamp,
-            _data='{"test": "result"}',
-            _source='OPCPUBSUB/toolbox1/tool1/ResultManagement'
-        )
-        result_msg2 = TimestampedData(
-            _timestamp=timestamp,
-            _data='{"test": "result"}',
-            _source='OPCPUBSUB/toolbox1/tool1/ResultManagement'
-        )
-        
-        trace_msg1 = TimestampedData(
-            _timestamp=timestamp + 1.0,
-            _data='{"test": "trace"}',
-            _source='OPCPUBSUB/toolbox1/tool1/ResultManagement/Trace'
-        )
-        trace_msg2 = TimestampedData(
-            _timestamp=timestamp + 1.0,
-            _data='{"test": "trace"}',
-            _source='OPCPUBSUB/toolbox1/tool1/ResultManagement/Trace'
-        )
-        
-        # Create identical buffers
-        buffers_simple = {
-            'OPCPUBSUB/+/+/ResultManagement': [result_msg1],
-            'OPCPUBSUB/+/+/ResultManagement/Trace': [trace_msg1]
-        }
-        
-        buffers_complex = {
-            'OPCPUBSUB/+/+/ResultManagement': [result_msg2],
-            'OPCPUBSUB/+/+/ResultManagement/Trace': [trace_msg2]
-        }
-        
-        # Mock processors
-        simple_matches = []
-        complex_matches = []
-        
-        def simple_processor(messages):
-            simple_matches.append(len(messages))
-            
-        def complex_processor(messages):
-            complex_matches.append(len(messages))
-        
-        # Test both correlators
-        simple_found = simple_correlator.find_and_process_matches(buffers_simple, simple_processor)
-        complex_found = complex_correlator.find_and_process_matches(buffers_complex, complex_processor)
-        
-        # Both should find matches
-        assert simple_found == complex_found == True
-        assert len(simple_matches) == len(complex_matches) == 1
-        assert simple_matches[0] == complex_matches[0] == 2  # Both found result+trace

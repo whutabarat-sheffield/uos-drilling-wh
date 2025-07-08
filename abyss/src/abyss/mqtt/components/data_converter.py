@@ -185,8 +185,11 @@ class DataFrameConverter:
                 })
                 return extracted
             
-            # Extract head_id using simple search
-            head_id = self._find_in_dict(heads_data, 'head_id')
+            # Extract head_id using configuration path first, then fallback to simple search
+            head_id = self._extract_head_id_from_config(heads_data)
+            if head_id is None:
+                head_id = self._find_in_dict(heads_data, 'head_id')
+            
             if head_id is not None:
                 extracted['head_id'] = head_id
                 logging.debug("Extracted head_id", extra={
@@ -428,6 +431,91 @@ class DataFrameConverter:
             logging.debug(f"Error extracting array for {search_term}: {e}")
             return None
     
+    def _extract_head_id_from_config(self, heads_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Extract head_id using the configured path from data_ids.
+        
+        Args:
+            heads_data: Raw heads message data
+            
+        Returns:
+            Head ID if found, None otherwise
+        """
+        try:
+            # Check if we have a configured path for head_id
+            if (self.config and 
+                'mqtt' in self.config and 
+                'data_ids' in self.config['mqtt'] and 
+                'head_id' in self.config['mqtt']['data_ids']):
+                
+                head_id_path = self.config['mqtt']['data_ids']['head_id']
+                return self._extract_value_by_path(heads_data, head_id_path)
+            
+            return None
+            
+        except Exception as e:
+            logging.debug("Error extracting head_id from config", extra={
+                'error_message': str(e)
+            })
+            return None
+    
+    def _extract_value_by_path(self, data: Any, path: str) -> Optional[str]:
+        """
+        Extract a value from nested dictionary using dot notation path.
+        
+        Args:
+            data: Data structure to search in
+            path: Dot-separated path (e.g., "AssetManagement.Assets.Heads.0.Identification.SerialNumber")
+            
+        Returns:
+            String value if found, None otherwise
+        """
+        try:
+            if not path or not isinstance(data, dict):
+                return None
+            
+            # Split the path into components
+            path_parts = path.split('.')
+            current = data
+            
+            for part in path_parts:
+                if not isinstance(current, (dict, list)):
+                    return None
+                
+                # Handle array indices
+                if part.isdigit():
+                    index = int(part)
+                    if isinstance(current, list):
+                        if 0 <= index < len(current):
+                            current = current[index]
+                        else:
+                            return None
+                    else:
+                        return None
+                else:
+                    # Handle dictionary keys
+                    if isinstance(current, dict) and part in current:
+                        current = current[part]
+                    else:
+                        return None
+            
+            # Convert result to string
+            return str(current) if current is not None else None
+            
+        except (KeyError, IndexError, ValueError, TypeError) as e:
+            logging.debug("Error extracting value by path", extra={
+                'path': path,
+                'error_message': str(e)
+            })
+            return None
+        except Exception as e:
+            logging.debug("Unexpected error extracting value by path", extra={
+                'path': path,
+                'error_type': type(e).__name__,
+                'error_message': str(e)
+            })
+            return None
+
     def get_conversion_stats(self) -> Dict[str, Any]:
         """
         Get conversion statistics for monitoring.
