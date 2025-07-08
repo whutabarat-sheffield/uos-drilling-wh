@@ -76,6 +76,9 @@ class ConfigurationManager:
     def _validate_configuration(self):
         """Validate configuration structure and required fields."""
         try:
+            if not isinstance(self.config, dict):
+                raise ConfigurationError("Configuration must be a dictionary")
+                
             required_sections = ['mqtt']
             missing_sections = []
             
@@ -102,6 +105,8 @@ class ConfigurationManager:
     
     def _validate_mqtt_config(self):
         """Validate MQTT-specific configuration."""
+        if self.config is None:
+            raise ConfigurationError("Configuration is not loaded")
         mqtt_config = self.config.get('mqtt', {})
         
         # Validate broker configuration

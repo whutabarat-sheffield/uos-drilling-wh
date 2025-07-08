@@ -45,7 +45,7 @@ mqtt:
   # TODO: Update these paths based on the actual data structure
   listener:
     # Behaviour in case of duplicate messages
-    duplicate_handling: "ignore"  # Options: "ignore", "replace", "error"
+    duplicate_handling: "replace"  # Options: "ignore", "replace", "error"
     # Topic Structure
     # --------------
     # TODO: Update the root, toolboxid, and toolid based on the actual topic structure

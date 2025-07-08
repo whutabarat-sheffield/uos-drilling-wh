@@ -15,7 +15,7 @@ services:
       - LOG_LEVEL=INFO
       - MPLCONFIGDIR=/app/.cache/matplotlib
       - HF_HOME=/app/.cache/transformers
-      - TRANSFORMERS_CACHE=/app/.cache/transformers
+      #- TRANSFORMERS_CACHE=/app/.cache/transformers
     
     # Volume mounts for persistence and configuration
     volumes:
