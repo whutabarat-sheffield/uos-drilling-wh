@@ -12,7 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Required for some Python packages compilation
     build-essential \
     # Required for ONNX Runtime CPU optimizations
-    libgomp1 \
+    # libgomp1 \ 
+    # Install vi for debugging purposes
+    vim-tiny \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
