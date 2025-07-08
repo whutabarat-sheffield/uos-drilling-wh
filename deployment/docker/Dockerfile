@@ -1,9 +1,6 @@
 # Use an official Python 3 image as the base image
-# ARG PYTHON_VERSION=3.10.16
-# FROM python:${PYTHON_VERSION}-slim
-# FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime
-# Use an official Python 3 image as the base image
+ARG PYTHON_VERSION=3.10.16
+FROM python:${PYTHON_VERSION}-slim
 # FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
 # Prevents Python from writing pyc files.
@@ -41,7 +38,7 @@ RUN python -m pip install --upgrade pip
 # into this layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=abyss/requirements.txt,target=requirements.txt \
-    python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+    python -m pip install --cert deployment/certs/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Set up the directory structure
 WORKDIR /build/abyss
@@ -66,9 +63,9 @@ COPY abyss/src ./src
 # Install the package
 # RUN python -m pip install .
 # RUN python -m pip install -r requirements.txt
-RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
+RUN python -m pip install --cert deployment/certs/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
 # RUN python -m pip install -r requirements.docker
-RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
+RUN python -m pip install --cert deployment/certs/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
 
 # ENV TRANSFORMERS_CACHE=/cache/transformers
 # ENV HF_HOME=/cache/transformers

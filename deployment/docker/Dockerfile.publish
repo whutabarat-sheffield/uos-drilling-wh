@@ -38,12 +38,12 @@ RUN python -m pip install --upgrade pip
 # into this layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=abyss/requirements.txt,target=requirements.txt \
-    python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+    python -m pip install --cert deployment/certs/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Set up the directory structure
 WORKDIR /build/abyss
 # RUN mkdir -p ./deps
-RUN mkdir -p ./wheels
+# RUN mkdir -p ./wheels
 # RUN mkdir -p /cache/transformers
 # RUN mkdir -p /cache/matplotlib
 
@@ -63,9 +63,9 @@ COPY abyss/src ./src
 # Install the package
 # RUN python -m pip install .
 # RUN python -m pip install -r requirements.txt
-RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
+# RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
 # RUN python -m pip install -r requirements.docker
-RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
+# RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
 
 # ENV TRANSFORMERS_CACHE=/cache/transformers
 # ENV HF_HOME=/cache/transformers
@@ -79,6 +79,7 @@ RUN mkdir -p ./config
 # Now copy only your run scripts
 COPY abyss/src/abyss/run .
 COPY abyss/src/abyss/run/config ./config
+COPY abyss/src/abyss/test_data ./test_data
 
 #debugging
 # RUN python -c "import sys; print(sys.path)"
@@ -112,4 +113,4 @@ ENV HF_HOME=/app/.cache/transformers
 # CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
 # Run the application.
 # CMD python listen-continuous.py 
-CMD ["uos_depthest_listener", "--config", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+CMD ["python", "uos_publish_json.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]

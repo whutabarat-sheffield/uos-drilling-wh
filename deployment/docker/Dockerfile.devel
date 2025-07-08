@@ -20,10 +20,10 @@ RUN adduser \
     appuser
 
 # Copy certificates first (needed for pip)
-COPY certs/ ./certs
+COPY deployment/certs/ ./certs
 
 # Upgrade pip
-RUN python -m pip install --cert /cert/airbus-ca.pem \
+RUN python -m pip install --cert ./certs/airbus-ca.pem \
     --trusted-host pypi.org --trusted-host files.pythonhosted.org \ 
     --upgrade pip
 
@@ -38,13 +38,13 @@ COPY abyss/src ./src
 # Install dependencies (single layer for all installations)
 # Using trusted hosts and certificate for corporate environments
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --cert /cert/airbus-ca.pem \
+    python -m pip install --cert ./certs/airbus-ca.pem \
     --trusted-host pypi.org --trusted-host files.pythonhosted.org \
     -r requirements.txt && \
-    python -m pip install --cert /cert/airbus-ca.pem \
+    python -m pip install --cert ./certs/airbus-ca.pem \
     --trusted-host pypi.org --trusted-host files.pythonhosted.org \
     ./wheels/*.whl && \
-    python -m pip install --cert /cert/airbus-ca.pem \
+    python -m pip install --cert ./certs/airbus-ca.pem \
     --trusted-host pypi.org --trusted-host files.pythonhosted.org .
 
 # Set up application directory
