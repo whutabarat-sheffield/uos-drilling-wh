@@ -20,6 +20,8 @@ from pathlib import Path
 import paho.mqtt.client as mqtt
 import yaml
 
+from abyss.uos_depth_est_utils import setup_logging
+
 
 def find_in_dict(data: dict, target_key: str) -> list:
     """
@@ -215,10 +217,7 @@ def main():
     args = parser.parse_args()
     
     # Configure logging
-    logging.basicConfig(
-        level=getattr(logging, args.log_level.upper()),
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+    setup_logging(getattr(logging, args.log_level.upper()))
 
     # Load configuration
     try:

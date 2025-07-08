@@ -752,10 +752,8 @@ class MQTTDrillingDataAnalyser:
 # Example usage
 if __name__ == "__main__":
     # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    from abyss.uos_depth_est_utils import setup_logging
+    setup_logging(logging.INFO)
     
     # Create and run the analyser
     analyser = MQTTDrillingDataAnalyser()

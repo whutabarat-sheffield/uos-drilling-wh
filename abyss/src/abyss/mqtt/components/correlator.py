@@ -161,13 +161,8 @@ class MessageCorrelator:
     def _log_duplicate_messages(self, buffers: Dict[str, List[TimestampedData]], 
                                result_duplicates: int, trace_duplicates: int, heads_duplicates: int):
         """Log details about duplicate messages being ignored."""
-        logging.info("Duplicate messages detected and ignored (time-bucket correlator)", extra={
-            'correlator_type': 'time_bucket',
-            'result_duplicates': result_duplicates,
-            'trace_duplicates': trace_duplicates,
-            'heads_duplicates': heads_duplicates,
-            'total_duplicates': result_duplicates + trace_duplicates + heads_duplicates
-        })
+        total_duplicates = result_duplicates + trace_duplicates + heads_duplicates
+        logging.info(f"Duplicate messages detected and ignored (time-bucket correlator) [result_duplicates={result_duplicates}, trace_duplicates={trace_duplicates}, heads_duplicates={heads_duplicates}, total_duplicates={total_duplicates}]")
         
         # Log specific details about each duplicate message type
         if result_duplicates > 0:
@@ -176,14 +171,8 @@ class MessageCorrelator:
                 if getattr(msg, 'processed', False)
             ]
             for msg in processed_results:
-                logging.info("Duplicate RESULT message ignored (time-bucket)", extra={
-                    'message_type': 'result',
-                    'correlator_type': 'time_bucket',
-                    'source_topic': msg.source,
-                    'timestamp': msg.timestamp,
-                    'tool_key': self._extract_tool_key(msg.source),
-                    'data_preview': str(msg.data)[:200] + '...' if len(str(msg.data)) > 200 else str(msg.data)
-                })
+                tool_key = self._extract_tool_key(msg.source)
+                logging.info(f"Duplicate RESULT message ignored (time-bucket) [message_type=result, source_topic={msg.source}, tool_key={tool_key}]")
         
         if trace_duplicates > 0:
             processed_traces = [
@@ -191,14 +180,8 @@ class MessageCorrelator:
                 if getattr(msg, 'processed', False)
             ]
             for msg in processed_traces:
-                logging.info("Duplicate TRACE message ignored (time-bucket)", extra={
-                    'message_type': 'trace',
-                    'correlator_type': 'time_bucket',
-                    'source_topic': msg.source,
-                    'timestamp': msg.timestamp,
-                    'tool_key': self._extract_tool_key(msg.source),
-                    'data_preview': str(msg.data)[:200] + '...' if len(str(msg.data)) > 200 else str(msg.data)
-                })
+                tool_key = self._extract_tool_key(msg.source)
+                logging.info(f"Duplicate TRACE message ignored (time-bucket) [message_type=trace, source_topic={msg.source}, tool_key={tool_key}]")
         
         if heads_duplicates > 0:
             processed_heads = [
@@ -206,14 +189,8 @@ class MessageCorrelator:
                 if getattr(msg, 'processed', False)
             ]
             for msg in processed_heads:
-                logging.info("Duplicate HEADS message ignored (time-bucket)", extra={
-                    'message_type': 'heads',
-                    'correlator_type': 'time_bucket',
-                    'source_topic': msg.source,
-                    'timestamp': msg.timestamp,
-                    'tool_key': self._extract_tool_key(msg.source),
-                    'data_preview': str(msg.data)[:200] + '...' if len(str(msg.data)) > 200 else str(msg.data)
-                })
+                tool_key = self._extract_tool_key(msg.source)
+                logging.info(f"Duplicate HEADS message ignored (time-bucket) [message_type=heads, source_topic={msg.source}, tool_key={tool_key}]")
     
     def _group_messages_by_time_bucket(self, result_messages: List[TimestampedData],
                                      trace_messages: List[TimestampedData],
