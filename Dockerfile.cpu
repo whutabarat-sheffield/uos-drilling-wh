@@ -84,7 +84,7 @@ RUN mkdir -p /app/.cache/transformers /app/.cache/matplotlib
 # Set environment variables for cache locations
 ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
-ENV TRANSFORMERS_CACHE=/app/.cache/transformers
+# ENV TRANSFORMERS_CACHE=/app/.cache/transformers
 
 # Expose MQTT port
 EXPOSE 1883
