@@ -68,14 +68,17 @@ class MessageProcessor:
             ProcessingResult with processing outcome and results
         """
         try:
+            # Reset state at start of processing cycle
+            self.head_id = None
+            self.machine_id = None
+            self.result_id = None
+            
             # Separate message types
             result_msg, trace_msg, heads_msg = self._separate_message_types(matches)
             logging.debug(f"Heads message is {heads_msg}")
             
             # Extract head_id directly from heads_msg if available
-            extracted_head_id = self._extract_head_id_simple(heads_msg)
-            if extracted_head_id is not None:
-                self.head_id = extracted_head_id
+            self.head_id = self._extract_head_id(heads_msg)
             
             if not result_msg or not trace_msg:
                 return ProcessingResult(
@@ -238,42 +241,90 @@ class MessageProcessor:
                 error_message=f"Depth estimation failed: {str(e)}"
             )
     
-    def _extract_head_id_simple(self, heads_msg: Optional[TimestampedData]) -> Optional[str]:
+    def _extract_head_id(self, heads_msg: Optional[TimestampedData]) -> Optional[str]:
         """
-        Extract head_id from heads message using find_in_dict.
+        Extract head_id from heads message using reduce_dict with full config path.
         
         Args:
             heads_msg: Optional heads message data
             
         Returns:
-            Extracted head_id or None if not available
+            Extracted head_id as string or None if not available
         """
+        if not heads_msg or not heads_msg.data:
+            logging.info("Heads message is None or empty")
+            return None
+        
         try:
-            if not heads_msg or not heads_msg.data:
-                logging.info("Heads message is None or empty")
-                return None
-            
-            # Handle both string and dict data
+            # Parse JSON data if it's a string
             if isinstance(heads_msg.data, str):
-                logging.debug("Heads message data is a string, attempting to parse JSON")
+                logging.debug("Parsing heads message JSON data")
                 heads_data = json.loads(heads_msg.data)
             else:
-                logging.debug("Heads message data is already a dictionary")
+                logging.debug("Using heads message dictionary data")
                 heads_data = heads_msg.data
             
-            # Use find_in_dict to extract head_id using the last part of the config path
+            # Extract payload data
+            if "Messages" not in heads_data or "Payload" not in heads_data["Messages"]:
+                logging.warning("Heads message missing required Messages.Payload structure")
+                return None
+            
+            payload_data = heads_data["Messages"]["Payload"]
+            
+            # Use full config path with reduce_dict
             head_id_path = self.config['mqtt']['data_ids']['head_id']
-            # Extract the final key from the path: 'AssetManagement.Assets.Heads.0.Identification.SerialNumber' -> 'SerialNumber'
-            heads_data = heads_data["Messages"]["Payload"]
-            head_id = reduce_dict(heads_data, head_id_path)
+            logging.debug(f"Extracting head_id using path: {head_id_path}")
             
-            # Ensure we return a string or None
-            if head_id is not None:
-                logging.info(f"Extracted head_id: {head_id}")
-                return str(head_id) if not isinstance(head_id, list) else str(head_id[0]) if head_id else None
+            head_id = reduce_dict(payload_data, head_id_path)
             
+            # Validate and normalize the result
+            return self._validate_and_normalize_head_id(head_id)
+            
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse heads message JSON: {e}")
+            return None
+        except KeyError as e:
+            logging.error(f"Missing required key in heads message: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error extracting head_id: {e}")
+            return None
+    
+    def _validate_and_normalize_head_id(self, head_id: Any) -> Optional[str]:
+        """
+        Validate and normalize head_id to ensure consistent string output.
+        
+        Args:
+            head_id: Raw head_id value from message
+            
+        Returns:
+            Normalized head_id as string or None if invalid
+        """
+        if head_id is None:
             logging.info("Head ID not found in heads message")
             return None
+        
+        # Handle list values - take first non-empty element
+        if isinstance(head_id, list):
+            if not head_id:
+                logging.warning("Head ID list is empty")
+                return None
+            head_id = head_id[0]
+        
+        # Convert to string and validate
+        try:
+            head_id_str = str(head_id).strip()
+            if not head_id_str:
+                logging.warning("Head ID is empty after normalization")
+                return None
             
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+            # Basic validation - ensure it's reasonable length and format
+            if len(head_id_str) > 100:
+                logging.warning(f"Head ID unusually long ({len(head_id_str)} chars): {head_id_str[:50]}...")
+            
+            logging.info(f"Extracted and validated head_id: {head_id_str}")
+            return head_id_str
+            
+        except Exception as e:
+            logging.error(f"Failed to normalize head_id {head_id}: {e}")
             return None
