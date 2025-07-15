@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(awk:*)",
+      "Bash(python3:*)",
+      "Bash(mkdir:*)",
+      "Bash(python -m pytest tests/mqtt/components/test_config_manager.py -v)",
+      "Bash(source:*)",
+      "Bash(conda activate:*)",
+      "Bash(python -m pytest tests/mqtt/components/test_config_manager.py::TestConfigurationManager::test_initialization_success -v)",
+      "Bash(python -m pytest tests/mqtt/components/test_message_buffer.py -v)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest tests/test_message_processor_heads_id.py -v)",
+      "Bash(python -m pytest tests/test_head_id_extraction.py tests/test_config_manager_integration.py -v)",
+      "Bash(python -m pytest tests/test_result_publisher_head_id.py::TestResultPublisherHeadId::test_successful_result_includes_head_id -v)",
+      "Bash(python -m pytest tests/test_result_publisher_head_id.py -v)",
+      "Bash(python -m pytest tests/test_config_manager_integration.py tests/test_exception_based_error_handling.py -v)",
+      "Bash(python -m pytest tests/test_result_publisher.py -v)",
+      "Bash(python -m pytest tests/test_result_publisher.py::TestResultPublisher::test_mqtt_publish_failure -v -s)",
+      "Bash(python -m pytest tests/test_result_publisher.py::TestResultPublisher::test_mqtt_publish_failure -v)",
+      "Bash(python -m pytest tests/test_config_manager_integration.py tests/test_result_publisher_head_id.py -v)"
+    ],
+    "deny": []
+  }
+}
