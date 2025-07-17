@@ -102,6 +102,11 @@ RUN mkdir -p /app/.cache/matplotlib
 ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
 
+# Performance tuning for stress testing
+ENV PYTHONUNBUFFERED=1
+ENV MQTT_MAX_INFLIGHT_MESSAGES=100
+ENV MQTT_MAX_QUEUED_MESSAGES=1000
+
 # Switch to the non-privileged user to run the application.
 # USER appuser
 
@@ -114,4 +119,7 @@ ENV HF_HOME=/app/.cache/transformers
 # CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
 # Run the application.
 # CMD python listen-continuous.py 
-CMD ["python", "uos_publish_json.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+
+# Default to normal publishing mode
+# To run stress test, override with: --stress-test --rate 1000 --duration 60
+CMD ["python", "uos_publish_wrapper.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]

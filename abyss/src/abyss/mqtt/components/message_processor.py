@@ -142,9 +142,7 @@ class MessageProcessor:
                     error_message=f"Failed to extract IDs from DataFrame: {str(e)}"
                 )
             
-            logging.debug(f"Machine ID: {self.machine_id}")
-            logging.debug(f"Result ID: {self.result_id}")
-            logging.debug(f"Head ID: {self.head_id}")
+            logging.debug(f"Machine ID: {self.machine_id}, Result ID: {self.result_id}, Head ID: {self.head_id}")
             
             # Debug file output if enabled
             self._write_debug_files(result_msg, trace_msg, heads_msg, toolbox_id, tool_id, df)
@@ -262,7 +260,7 @@ class MessageProcessor:
             keypoints = self.depth_inference.infer3_common(df)
             depth_estimation = [keypoints[i+1] - keypoints[i] for i in range(len(keypoints)-1)]
             
-            logging.debug("Depth estimation completed", extra={
+            logging.info("Depth estimation completed", extra={
                 'keypoints': keypoints,
                 'depth_estimation': depth_estimation,
                 'machine_id': self.machine_id,

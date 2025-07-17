@@ -25,7 +25,9 @@
       "Bash(mv:*)",
       "Bash(ls:*)",
       "Bash(tree:*)",
-      "Bash(python -m pytest abyss/tests/mqtt/components/test_message_buffer_thread_safety.py -v)"
+      "Bash(python -m pytest abyss/tests/mqtt/components/test_message_buffer_thread_safety.py -v)",
+      "Bash(chmod:*)",
+      "WebFetch(domain:docs.portainer.io)"
     ],
     "deny": []
   }

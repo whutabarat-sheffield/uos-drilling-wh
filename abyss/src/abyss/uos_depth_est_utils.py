@@ -143,7 +143,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         hole_id = reduce_dict(data, conf['mqtt']['data_ids']['machine_id'])# TODO rethink whether this is correct
         # logging.debug(f"Hole ID: {hole_id}")
         hole_id = [str(hole_id)] * len(step_vals)
-        logging.info(f"Hole ID: {hole_id}")
+        logging.debug(f"Hole ID extended to match Step values: {hole_id}")
         local = reduce_dict(data, conf['mqtt']['data_ids']['result_id'])# TODO rethink whether this is correct
         local = [str(local)] * len(step_vals)
         logging.debug(f"Local count: {local}")
