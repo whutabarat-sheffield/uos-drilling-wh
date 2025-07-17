@@ -17,8 +17,13 @@ import torch
 # from torch.utils.data import Dataset, DataLoader
 
 from transformers import set_seed
-from tqdm import tqdm
+import logging
+from tqdm import tqdm as _tqdm
 
+def tqdm(*args, **kwargs):
+    if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+        kwargs['disable'] = True
+    return _tqdm(*args, **kwargs)
 # import time
 
 set_seed(42)
