@@ -69,7 +69,7 @@ class TestResultPublisher:
         toolbox_id = "toolbox1"
         tool_id = "tool1"
         dt_string = "2023-01-01T12:00:00Z"
-        algo_version = "0.2.4"
+        algo_version = "0.2.6"
         
         # Call method - should not raise any exception
         result_publisher._publish_successful_result(
@@ -86,7 +86,7 @@ class TestResultPublisher:
         
         assert keyp_topic == "OPCPUBSUB/toolbox1/tool1/Estimation/Keypoints"
         assert keyp_payload['Value'] == [1.0, 2.0, 3.0]
-        assert keyp_payload['AlgoVersion'] == "0.2.4"
+        assert keyp_payload['AlgoVersion'] == "0.2.6"
         assert keyp_payload['MachineId'] == "TEST_MACHINE"
         assert keyp_payload['ResultId'] == "TEST_RESULT"
         assert keyp_payload['HeadId'] == "TEST_HEAD"
@@ -99,7 +99,7 @@ class TestResultPublisher:
         
         assert dest_topic == "OPCPUBSUB/toolbox1/tool1/Estimation/DepthEstimation"
         assert dest_payload['Value'] == [10.0, 20.0, 30.0]
-        assert dest_payload['AlgoVersion'] == "0.2.4"
+        assert dest_payload['AlgoVersion'] == "0.2.6"
         assert dest_payload['MachineId'] == "TEST_MACHINE"
         assert dest_payload['ResultId'] == "TEST_RESULT"
         assert dest_payload['HeadId'] == "TEST_HEAD"
@@ -183,7 +183,7 @@ class TestResultPublisher:
         # Verify keypoints data
         keyp_payload = json.loads(mock_mqtt_client.publish.call_args_list[0][0][1])
         assert keyp_payload['Value'] == [1.0, 2.0, 3.0]
-        assert keyp_payload['AlgoVersion'] == "0.2.4"
+        assert keyp_payload['AlgoVersion'] == "0.2.6"
     
     def test_consolidated_method_insufficient_data_type(self, result_publisher, sample_processing_result, mock_mqtt_client):
         """Test consolidated method with INSUFFICIENT_DATA type"""
@@ -230,7 +230,7 @@ class TestResultPublisher:
         # Should raise MQTTPublishError due to publish failure
         with pytest.raises(MQTTPublishError, match="MQTT publish failed for topic"):
             result_publisher._publish_successful_result(
-                sample_processing_result, "tb", "t", "2023-01-01T18:00:00Z", "0.2.4"
+                sample_processing_result, "tb", "t", "2023-01-01T18:00:00Z", "0.2.6"
             )
     
     def test_unknown_result_type_error(self, result_publisher, sample_processing_result):
@@ -250,7 +250,7 @@ class TestResultPublisher:
 
         
         result_publisher.publish_processing_result(
-            sample_processing_result, "tb", "t", timestamp, "0.2.4"
+            sample_processing_result, "tb", "t", timestamp, "0.2.6"
         )
         assert mock_mqtt_client.publish.call_count == 2
         
@@ -277,7 +277,7 @@ class TestResultPublisher:
 
         
         result_publisher.publish_processing_result(
-            failed_result, "tb", "t", timestamp, "0.2.4"
+            failed_result, "tb", "t", timestamp, "0.2.6"
         )
         assert mock_mqtt_client.publish.call_count == 2
         
@@ -305,7 +305,7 @@ class TestResultPublisher:
 
         
         result_publisher.publish_processing_result(
-            insufficient_result, "tb", "t", timestamp, "0.2.4"
+            insufficient_result, "tb", "t", timestamp, "0.2.6"
         )
         assert mock_mqtt_client.publish.call_count == 2
         
@@ -400,7 +400,7 @@ class TestResultPublisherComparison:
         toolbox_id = "tb1"
         tool_id = "t1"
         dt_string = "2023-01-01T12:00:00Z"
-        algo_version = "0.2.4"
+        algo_version = "0.2.6"
         
         # Call both methods
         publisher1._publish_successful_result(
@@ -560,7 +560,7 @@ class TestNegativeDepthHandling:
         # Publish result
         with caplog.at_level(logging.WARNING):
             result_publisher.publish_processing_result(
-                result_with_negative_depth, "tb", "t", 1672574400.0, "0.2.4"
+                result_with_negative_depth, "tb", "t", 1672574400.0, "0.2.6"
             )
         
         # Verify no MQTT publish occurred
@@ -591,7 +591,7 @@ class TestNegativeDepthHandling:
         # Publish result
         with caplog.at_level(logging.WARNING):
             result_publisher.publish_processing_result(
-                result_with_negatives, "tb", "t", 1672574400.0, "0.2.4"
+                result_with_negatives, "tb", "t", 1672574400.0, "0.2.6"
             )
         
         # Verify no MQTT publish occurred
@@ -617,7 +617,7 @@ class TestNegativeDepthHandling:
         
         # Publish result
         result_publisher.publish_processing_result(
-            positive_result, "tb", "t", 1672574400.0, "0.2.4"
+            positive_result, "tb", "t", 1672574400.0, "0.2.6"
         )
         
         # Verify MQTT publish occurred normally
@@ -642,7 +642,7 @@ class TestNegativeDepthHandling:
         with caplog.at_level(logging.WARNING):
             for i in range(5):
                 result_publisher.publish_processing_result(
-                    negative_result, "tb", f"t{i}", 1672574400.0 + i, "0.2.4"
+                    negative_result, "tb", f"t{i}", 1672574400.0 + i, "0.2.6"
                 )
         
         # Verify no MQTT publishes occurred
@@ -708,7 +708,7 @@ class TestNegativeDepthHandling:
         try:
             # Publish a negative result
             result_publisher.publish_processing_result(
-                negative_result, "tb", "t1", current_mock_time[0], "0.2.4"
+                negative_result, "tb", "t1", current_mock_time[0], "0.2.6"
             )
             
             # Advance time beyond the window (5 minutes = 300 seconds)
@@ -716,7 +716,7 @@ class TestNegativeDepthHandling:
             
             # Trigger window cleanup by publishing another negative result
             result_publisher.publish_processing_result(
-                negative_result, "tb", "t2", current_mock_time[0], "0.2.4"
+                negative_result, "tb", "t2", current_mock_time[0], "0.2.6"
             )
             
             # Check stats - should only show 1 recent occurrence

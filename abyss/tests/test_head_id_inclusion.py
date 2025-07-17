@@ -58,7 +58,7 @@ class TestHeadIdInclusion:
     def test_head_id_in_successful_result(self, result_publisher, sample_processing_result, mock_mqtt_client):
         """Test head_id is included in successful result messages"""
         result_publisher._publish_successful_result(
-            sample_processing_result, "tb1", "t1", "2023-01-01T12:00:00Z", "0.2.4"
+            sample_processing_result, "tb1", "t1", "2023-01-01T12:00:00Z", "0.2.6"
         )
         
         self.verify_head_id_in_payload(mock_mqtt_client)
@@ -83,7 +83,7 @@ class TestHeadIdInclusion:
         """Test head_id is included in consolidated method - SUCCESS type"""
         result_publisher._publish_result_consolidated(
             PublishResultType.SUCCESS, sample_processing_result,
-            "tb4", "t4", "2023-01-01T15:00:00Z", algo_version="0.2.4"
+            "tb4", "t4", "2023-01-01T15:00:00Z", algo_version="0.2.6"
         )
         
         self.verify_head_id_in_payload(mock_mqtt_client)
@@ -111,7 +111,7 @@ class TestHeadIdInclusion:
         timestamp = 1672574400.0
         
         result_publisher.publish_processing_result(
-            sample_processing_result, "tb7", "t7", timestamp, "0.2.4"
+            sample_processing_result, "tb7", "t7", timestamp, "0.2.6"
         )
         
         self.verify_head_id_in_payload(mock_mqtt_client)
@@ -131,7 +131,7 @@ class TestHeadIdInclusion:
         timestamp = 1672574400.0
         
         result_publisher.publish_processing_result(
-            failed_result, "tb8", "t8", timestamp, "0.2.4"
+            failed_result, "tb8", "t8", timestamp, "0.2.6"
         )
         
         self.verify_head_id_in_payload(mock_mqtt_client, "ERROR_HEAD_ID_456")
@@ -151,7 +151,7 @@ class TestHeadIdInclusion:
         timestamp = 1672574400.0
         
         result_publisher.publish_processing_result(
-            insufficient_result, "tb9", "t9", timestamp, "0.2.4"
+            insufficient_result, "tb9", "t9", timestamp, "0.2.6"
         )
         
         self.verify_head_id_in_payload(mock_mqtt_client, "INSUFFICIENT_HEAD_ID_789")
@@ -190,7 +190,7 @@ class TestHeadIdInclusion:
         """Comprehensive test: verify head_id is in all messages from processing result methods"""
         # Test all three individual methods
         result_publisher._publish_successful_result(
-            sample_processing_result, "tb_s", "t_s", "2023-01-01T12:00:00Z", "0.2.4"
+            sample_processing_result, "tb_s", "t_s", "2023-01-01T12:00:00Z", "0.2.6"
         )
         
         result_publisher._publish_insufficient_data_result(
