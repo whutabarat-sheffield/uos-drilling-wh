@@ -18,6 +18,27 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Check dependencies
+check_dependencies() {
+    local deps=("curl" "jq" "docker")
+    local missing=()
+    
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing+=("$dep")
+        fi
+    done
+    
+    if [ ${#missing[@]} -ne 0 ]; then
+        echo -e "${RED}Error: Missing required dependencies: ${missing[*]}${NC}"
+        echo "Please install them first:"
+        echo "  Ubuntu/Debian: sudo apt-get install ${missing[*]}"
+        echo "  RHEL/CentOS: sudo yum install ${missing[*]}"
+        echo "  macOS: brew install ${missing[*]}"
+        exit 1
+    fi
+}
+
 # Load configuration
 CONFIG_FILE="${SCRIPT_DIR}/.stack-update-config.env"
 if [ -f "$CONFIG_FILE" ]; then
@@ -94,7 +115,7 @@ authenticate_portainer() {
     if [ -f "$JWT_FILE" ]; then
         JWT_TOKEN=$(cat "$JWT_FILE")
         # Test if token is still valid
-        local response=$(curl -s -o /dev/null -w "%{http_code}" \
+        local response=$(curl -k -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${JWT_TOKEN}" \
             "${PORTAINER_URL}/api/users/me")
         
@@ -105,16 +126,81 @@ authenticate_portainer() {
     fi
     
     # Get new token
-    local auth_response=$(curl -s -X POST \
+    log "DEBUG" "Attempting to authenticate with URL: ${PORTAINER_URL}/api/auth"
+    
+    local auth_response=$(curl -k -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
         -d "{\"username\":\"${PORTAINER_USER}\",\"password\":\"${PORTAINER_PASS}\"}" \
-        "${PORTAINER_URL}/api/auth")
+        "${PORTAINER_URL}/api/auth" 2>&1)
     
-    JWT_TOKEN=$(echo "$auth_response" | jq -r '.jwt // empty')
+    # Extract HTTP status code
+    local http_code=$(echo "$auth_response" | tail -n1)
+    local response_body=$(echo "$auth_response" | sed '$d')
+    
+    log "DEBUG" "HTTP Status Code: $http_code"
+    
+    # Check for common connection errors
+    if echo "$response_body" | grep -q "Client sent an HTTP request to an HTTPS server"; then
+        log "ERROR" "Protocol mismatch: Portainer is using HTTPS but URL is HTTP"
+        log "INFO" "Try changing PORTAINER_URL to use https:// instead of http://"
+        log "INFO" "Common Portainer URLs:"
+        log "INFO" "  - http://localhost:9000 (non-SSL)"
+        log "INFO" "  - https://localhost:9443 (SSL-enabled)"
+        return 1
+    fi
+    
+    if echo "$response_body" | grep -q "Connection refused"; then
+        log "ERROR" "Cannot connect to Portainer at ${PORTAINER_URL}"
+        log "INFO" "Please check:"
+        log "INFO" "  - Portainer is running"
+        log "INFO" "  - URL and port are correct"
+        log "INFO" "  - Firewall is not blocking the connection"
+        return 1
+    fi
+    
+    if [ "$http_code" = "000" ]; then
+        log "ERROR" "Failed to connect to Portainer at ${PORTAINER_URL}"
+        log "INFO" "This usually means:"
+        log "INFO" "  - Wrong URL or port"
+        log "INFO" "  - Portainer is not running"
+        log "INFO" "  - Network/firewall issue"
+        return 1
+    fi
+    
+    if [ "$http_code" = "404" ]; then
+        log "ERROR" "Portainer API endpoint not found (404)"
+        log "INFO" "This might be an older version of Portainer"
+        log "INFO" "Check if the API is available at: ${PORTAINER_URL}/api/"
+        return 1
+    fi
+    
+    if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+        log "ERROR" "Authentication failed (HTTP $http_code)"
+        log "INFO" "Please check your username and password"
+        return 1
+    fi
+    
+    JWT_TOKEN=$(echo "$response_body" | jq -r '.jwt // empty' 2>/dev/null || echo "")
     
     if [ -z "$JWT_TOKEN" ]; then
         log "ERROR" "Failed to authenticate with Portainer"
-        echo "$auth_response"
+        log "DEBUG" "Full response: $response_body"
+        
+        # Try to parse error message
+        local error_msg=$(echo "$response_body" | jq -r '.message // .details // .error // empty' 2>/dev/null)
+        if [ -n "$error_msg" ]; then
+            log "ERROR" "Portainer API error: $error_msg"
+        else
+            log "ERROR" "Unable to parse authentication response"
+            log "INFO" "Response body (first 200 chars): ${response_body:0:200}"
+        fi
+        
+        # Additional debugging info
+        log "INFO" "Debug information:"
+        log "INFO" "  - URL: ${PORTAINER_URL}/api/auth"
+        log "INFO" "  - User: ${PORTAINER_USER}"
+        log "INFO" "  - Password length: ${#PORTAINER_PASS} characters"
+        
         return 1
     fi
     
@@ -126,7 +212,7 @@ authenticate_portainer() {
 
 # Get list of stacks from Portainer
 get_portainer_stacks() {
-    local response=$(curl -s -H "Authorization: Bearer ${JWT_TOKEN}" \
+    local response=$(curl -k -s -H "Authorization: Bearer ${JWT_TOKEN}" \
         "${PORTAINER_URL}/api/stacks")
     
     if [ $? -ne 0 ]; then
@@ -173,11 +259,13 @@ check_git_changes() {
 # Check if local image needs rebuild
 check_image_needs_rebuild() {
     local image=$1
-    local build_script=${LOCAL_IMAGES[$image]}
     
-    if [ -z "$build_script" ]; then
+    # Check if image is in LOCAL_IMAGES array
+    if [[ ! -v LOCAL_IMAGES[$image] ]]; then
         return 1 # Not a local image
     fi
+    
+    local build_script=${LOCAL_IMAGES[$image]}
     
     # Check if image exists
     if ! docker image inspect "$image" > /dev/null 2>&1; then
@@ -200,12 +288,14 @@ check_image_needs_rebuild() {
 # Rebuild local Docker image
 rebuild_local_image() {
     local image=$1
-    local build_script=${LOCAL_IMAGES[$image]}
     
-    if [ -z "$build_script" ]; then
+    # Check if image is in LOCAL_IMAGES array
+    if [[ ! -v LOCAL_IMAGES[$image] ]]; then
         log "ERROR" "No build script found for image: $image"
         return 1
     fi
+    
+    local build_script=${LOCAL_IMAGES[$image]}
     
     log "INFO" "Rebuilding Docker image: $image"
     
@@ -238,7 +328,8 @@ update_stack() {
     # Get stack details
     local stack=$(get_stack_by_name "$stack_name")
     if [ -z "$stack" ]; then
-        log "ERROR" "Stack not found in Portainer: $stack_name"
+        log "WARN" "Stack not found in Portainer: $stack_name"
+        log "INFO" "To create this stack, use Portainer UI or deploy it first"
         return 1
     fi
     
@@ -254,7 +345,7 @@ update_stack() {
     fi
     
     # Update stack
-    local update_response=$(curl -s -X PUT \
+    local update_response=$(curl -k -s -X PUT \
         -H "Authorization: Bearer ${JWT_TOKEN}" \
         -H "Content-Type: application/json" \
         -d "{
@@ -328,16 +419,27 @@ check_stack_health() {
     sleep 10 # Give services time to start
     
     # Check container status
-    local containers=$(docker ps --filter "label=com.docker.compose.project=$stack_name" --format "{{.Status}}")
+    local containers=$(docker ps -a --filter "label=com.docker.compose.project=$stack_name" --format "table {{.Names}}\t{{.Status}}\t{{.State}}")
     
     if [ -z "$containers" ]; then
         log "ERROR" "No containers found for stack: $stack_name"
         return 1
     fi
     
+    log "DEBUG" "Container status for $stack_name:"
+    echo "$containers" | while read line; do
+        log "DEBUG" "  $line"
+    done
+    
     # Check if any container is not running
-    if echo "$containers" | grep -v "Up" > /dev/null; then
+    local unhealthy=$(docker ps -a --filter "label=com.docker.compose.project=$stack_name" --format "{{.State}}" | grep -v "running" || true)
+    
+    if [ -n "$unhealthy" ]; then
         log "ERROR" "Some containers in stack $stack_name are not healthy"
+        # Show which containers are not running
+        docker ps -a --filter "label=com.docker.compose.project=$stack_name" --format "table {{.Names}}\t{{.Status}}" | grep -v "Up" | while read line; do
+            log "ERROR" "  $line"
+        done
         return 1
     fi
     
@@ -366,6 +468,8 @@ process_updates() {
         local compose_file=${STACKS[$stack_name]}
         local images=$(grep -E "^\s*image:" "$compose_file" | sed 's/.*image:\s*//' | tr -d '"' | tr -d "'")
         
+        log "DEBUG" "Found images for $stack_name: $images"
+        
         for image in $images; do
             if check_image_needs_rebuild "$image"; then
                 needs_update=true
@@ -391,14 +495,18 @@ process_updates() {
                 continue
             fi
             
-            # Health check
-            if ! check_stack_health "$stack_name"; then
-                log "ERROR" "Health check failed for stack $stack_name"
-                send_notification "Stack $stack_name failed health check after update" "ERROR"
-                # In a real implementation, we would rollback here
-                failed_updates+=("$stack_name")
+            # Health check (skip in dry-run mode since nothing was actually updated)
+            if [ "$DRY_RUN" = "true" ]; then
+                log "INFO" "[DRY RUN] Would check health after actual update"
             else
-                send_notification "Stack $stack_name updated successfully" "SUCCESS"
+                if ! check_stack_health "$stack_name"; then
+                    log "ERROR" "Health check failed for stack $stack_name"
+                    send_notification "Stack $stack_name failed health check after update" "ERROR"
+                    # In a real implementation, we would rollback here
+                    failed_updates+=("$stack_name")
+                else
+                    send_notification "Stack $stack_name updated successfully" "SUCCESS"
+                fi
             fi
         else
             log "INFO" "No updates needed for stack: $stack_name"
@@ -422,9 +530,67 @@ process_updates() {
     return 0
 }
 
+# Test Portainer connection
+test_connection() {
+    log "INFO" "Testing Portainer connection..."
+    
+    # Test basic connectivity
+    log "INFO" "Testing URL: ${PORTAINER_URL}"
+    local test_response=$(curl -k -s -o /dev/null -w "%{http_code}" "${PORTAINER_URL}" 2>&1)
+    
+    if [ "$test_response" = "000" ]; then
+        log "ERROR" "Cannot reach Portainer at ${PORTAINER_URL}"
+        return 1
+    fi
+    
+    log "INFO" "Portainer is reachable (HTTP $test_response)"
+    
+    # Test API endpoint
+    local api_response=$(curl -k -s -o /dev/null -w "%{http_code}" "${PORTAINER_URL}/api" 2>&1)
+    log "INFO" "API endpoint check: HTTP $api_response"
+    
+    # Try to get version info (doesn't require auth)
+    local version_info=$(curl -k -s "${PORTAINER_URL}/api/status" 2>&1)
+    if echo "$version_info" | jq -e '.Version' > /dev/null 2>&1; then
+        local version=$(echo "$version_info" | jq -r '.Version')
+        log "INFO" "Portainer version: $version"
+    fi
+    
+    return 0
+}
+
+# List stacks in Portainer
+list_stacks() {
+    log "INFO" "Listing stacks in Portainer..."
+    
+    local stacks=$(get_portainer_stacks)
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    
+    echo -e "\n${GREEN}Stacks found in Portainer:${NC}"
+    echo "$stacks" | jq -r '.[] | "  - \(.Name) (ID: \(.Id), Endpoint: \(.EndpointId))"'
+    
+    echo -e "\n${YELLOW}Configured stacks in script:${NC}"
+    for stack_name in "${!STACKS[@]}"; do
+        local stack=$(echo "$stacks" | jq -r ".[] | select(.Name == \"$stack_name\")")
+        if [ -n "$stack" ]; then
+            echo -e "  ${GREEN}✓${NC} $stack_name - Found in Portainer"
+        else
+            echo -e "  ${RED}✗${NC} $stack_name - NOT found in Portainer"
+        fi
+    done
+    echo ""
+    
+    return 0
+}
+
 # Main function
 main() {
     log "INFO" "Starting Portainer Stack Updater"
+    
+    # Check dependencies first
+    check_dependencies
     
     # Check prerequisites
     check_lock
@@ -446,12 +612,27 @@ main() {
                 AUTO_CONFIRM=true
                 shift
                 ;;
+            --test)
+                test_connection
+                exit $?
+                ;;
+            --list)
+                # Authenticate first
+                if ! authenticate_portainer; then
+                    log "ERROR" "Failed to authenticate with Portainer"
+                    exit 1
+                fi
+                list_stacks
+                exit $?
+                ;;
             --help)
                 echo "Usage: $0 [options]"
                 echo "Options:"
                 echo "  --dry-run       Show what would be done without making changes"
                 echo "  --force         Force update even if no changes detected"
                 echo "  --auto-confirm  Don't prompt for confirmation"
+                echo "  --test          Test Portainer connection only"
+                echo "  --list          List all stacks in Portainer"
                 echo "  --help          Show this help message"
                 exit 0
                 ;;

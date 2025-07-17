@@ -60,12 +60,13 @@ COPY abyss/src ./src
 #     --mount=type=bind,source=requirements.docker,target=requirements.docker \
 #     python -m pip install -r requirements.docker
 
-# Install the package
-# RUN python -m pip install .
-# RUN python -m pip install -r requirements.txt
-# RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
-# RUN python -m pip install -r requirements.docker
-# RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
+# Install wheel dependencies if any
+RUN if [ -f ./wheels/*.whl ]; then \
+    python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl; \
+    fi
+
+# Install the abyss package
+RUN python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org .
 
 # ENV TRANSFORMERS_CACHE=/cache/transformers
 # ENV HF_HOME=/cache/transformers

@@ -29,17 +29,33 @@ This script automatically detects and applies updates to Portainer stacks when:
 
 ## Installation
 
-1. Copy the configuration template:
+1. Install required dependencies:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get update && sudo apt-get install -y jq curl
+   
+   # RHEL/CentOS
+   sudo yum install -y jq curl
+   
+   # macOS
+   brew install jq curl
+   ```
+
+2. Copy the configuration template:
    ```bash
    cp .stack-update-config.env.example .stack-update-config.env
    ```
 
-2. Edit `.stack-update-config.env` with your Portainer credentials:
+3. Edit `.stack-update-config.env` with your Portainer credentials:
    ```bash
    nano .stack-update-config.env
    ```
+   
+   **Important**: Check your Portainer URL:
+   - For non-SSL: `http://localhost:9000`
+   - For SSL-enabled: `https://localhost:9443`
 
-3. Ensure the script is executable:
+4. Ensure the script is executable:
    ```bash
    chmod +x portainer-stack-updater.sh
    ```

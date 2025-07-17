@@ -9,6 +9,7 @@ import logging
 import time
 import threading
 from typing import List, Optional, Dict, Any
+from importlib.metadata import version
 
 from .config_manager import ConfigurationManager
 from .client_manager import MQTTClientManager
@@ -43,7 +44,10 @@ class DrillingDataAnalyser:
         self.processing_thread = None
         
         # Algorithm version and IDs
-        self.ALGO_VERSION = "0.2.4"
+        try:
+            self.ALGO_VERSION = version('abyss')
+        except Exception:
+            self.ALGO_VERSION = "0.2.5"  # Fallback version
         self.MACHINE_ID = "MACHINE_ID"
         self.RESULT_ID = "RESULT_ID"
         
