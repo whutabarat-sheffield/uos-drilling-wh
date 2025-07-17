@@ -7,6 +7,8 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 import json
+import time
+from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union
 from enum import Enum
@@ -56,6 +58,11 @@ class ResultPublisher:
             # Legacy support for raw config dictionary
             self.config_manager = None
             self.config = config
+        
+        # Error tracking for warnings
+        self._publish_failures = defaultdict(int)  # topic -> failure count
+        self._last_warning_time = {}  # warning_type -> timestamp
+        self._publish_times = []  # Track recent publish times for performance
     
     def publish_processing_result(self, processing_result: ProcessingResult,
                                 toolbox_id: str, tool_id: str, 
@@ -158,7 +165,7 @@ class ResultPublisher:
                     'Value': processing_result.depth_estimation,
                     'AlgoVersion': algo_version
                 }
-                log_level = logging.INFO
+                log_level = logging.DEBUG
                 log_message = "Successfully published depth estimation results"
                 log_extra = {
                     'toolbox_id': toolbox_id,
@@ -208,9 +215,16 @@ class ResultPublisher:
             else:
                 raise ValueError(f"Unknown result type: {result_type}")
             
+            # Track timing for performance monitoring
+            start_time = time.time()
+            
             # Publish results - will raise exceptions on failure
             self._publish_message(keyp_topic, keyp_data)
             self._publish_message(dest_topic, dest_data)
+            
+            # Track performance
+            publish_time = time.time() - start_time
+            self._track_publish_performance(publish_time)
             
             # Log successful publishing
             logging.log(log_level, log_message, extra=log_extra)
@@ -306,6 +320,7 @@ class ResultPublisher:
                     'result_code': result.rc,
                     'payload_size': len(payload)
                 })
+                self._track_publish_failure(topic)
                 raise MQTTPublishError(
                     f"MQTT publish failed for topic '{topic}' with result code {result.rc}"
                 )
@@ -380,3 +395,63 @@ class ResultPublisher:
             'config_loaded': self.config is not None,
             'publisher_ready': True
         }
+    
+    def _track_publish_failure(self, topic: str):
+        """Track publish failures and warn if rate is too high."""
+        self._publish_failures[topic] += 1
+        
+        # Check if we should warn about repeated failures
+        if self._publish_failures[topic] >= 3:
+            self._log_rate_limited_warning(f'publish_failure_{topic}', 300,
+                "Repeated MQTT publish failures", {
+                    'topic': topic,
+                    'failure_count': self._publish_failures[topic],
+                    'possible_cause': 'Network issues, broker problems, or client disconnection'
+                })
+    
+    def _track_publish_performance(self, publish_time: float):
+        """Track publish performance and warn if too slow."""
+        # Keep last 100 publish times
+        self._publish_times.append(publish_time)
+        if len(self._publish_times) > 100:
+            self._publish_times = self._publish_times[-100:]
+        
+        # Check if publishing is too slow
+        if publish_time > 1.0:  # More than 1 second
+            self._log_rate_limited_warning('slow_publish', 60,
+                "Slow MQTT publish operation detected", {
+                    'publish_time_seconds': publish_time,
+                    'threshold_seconds': 1.0,
+                    'possible_cause': 'Network latency, broker overload, or large message size'
+                })
+        
+        # Check average performance periodically
+        current_time = time.time()
+        last_check = self._last_warning_time.get('performance_check', 0)
+        
+        if current_time - last_check >= 300 and len(self._publish_times) >= 20:
+            self._last_warning_time['performance_check'] = current_time
+            avg_time = sum(self._publish_times) / len(self._publish_times)
+            
+            if avg_time > 0.5:  # Average more than 500ms
+                self._log_rate_limited_warning('high_avg_publish_time', 600,
+                    "High average MQTT publish time", {
+                        'avg_publish_time_seconds': avg_time,
+                        'sample_size': len(self._publish_times),
+                        'threshold_seconds': 0.5,
+                        'possible_cause': 'Consistent network issues or broker performance problems'
+                    })
+    
+    def _log_rate_limited_warning(self, warning_type: str, min_interval: int, 
+                                 message: str, extra: Dict[str, Any]):
+        """Log warning with rate limiting to avoid spam."""
+        current_time = time.time()
+        last_warning = self._last_warning_time.get(warning_type, 0)
+        
+        if current_time - last_warning >= min_interval:
+            logging.warning(message, extra=extra)
+            self._last_warning_time[warning_type] = current_time
+            
+            # Reset failure counter after warning
+            if 'topic' in extra and warning_type.startswith('publish_failure_'):
+                self._publish_failures[extra['topic']] = 0

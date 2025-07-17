@@ -47,6 +47,11 @@ class DrillingDataAnalyser:
         self.MACHINE_ID = "MACHINE_ID"
         self.RESULT_ID = "RESULT_ID"
         
+        # Error tracking for warnings
+        self._processing_errors = []
+        self._max_error_history = 100
+        self._error_warning_threshold = 10  # Warn if 10 errors in 60 seconds
+        
         # Initialize components
         self._initialize_components()
         
@@ -157,6 +162,10 @@ class DrillingDataAnalyser:
                     'error_type': type(e).__name__,
                     'error_message': str(e)
                 }, exc_info=True)
+                
+                # Track errors for warning detection
+                self._track_processing_error(e)
+                
                 time.sleep(1)  # Longer sleep on error to prevent rapid error loops
         
         logging.info("Continuous processing thread stopped")
@@ -196,7 +205,7 @@ class DrillingDataAnalyser:
                             algo_version=self.ALGO_VERSION
                         )
                         
-                        logging.info("Results published successfully", extra={
+                        logging.debug("Results published successfully", extra={
                             'toolbox_id': toolbox_id,
                             'tool_id': tool_id,
                             'has_keypoints': processing_result.keypoints is not None,
@@ -268,6 +277,14 @@ class DrillingDataAnalyser:
             self.processing_thread.daemon = True
             self.processing_thread.start()
             
+            # Verify thread started successfully
+            time.sleep(0.1)
+            if not self.processing_thread.is_alive():
+                logging.warning("Processing thread failed to start", extra={
+                    'thread_status': 'not_alive',
+                    'processing_active': self.processing_active
+                })
+            
             # Log startup summary
             config_summary = self.config_manager.get_config_summary()
             buffer_stats = self.message_buffer.get_buffer_stats()
@@ -309,7 +326,7 @@ class DrillingDataAnalyser:
                 self.message_buffer.get_all_buffers()
             )
             
-            logging.info("System status", extra={
+            logging.debug("System status", extra={
                 'processing_active': self.processing_active,
                 'processing_thread_alive': self.processing_thread.is_alive() if self.processing_thread else False,
                 'buffer_stats': buffer_stats,
@@ -351,10 +368,10 @@ class DrillingDataAnalyser:
                     client = self.client_manager.get_client(client_type)
                     if client:
                         try:
-                            logging.info(f"Stopping {client_type} client loop")
+                            logging.debug(f"Stopping {client_type} client loop")
                             client.loop_stop()
                             
-                            logging.info(f"Disconnecting {client_type} client")
+                            logging.debug(f"Disconnecting {client_type} client")
                             client.disconnect()
                             
                         except Exception as e:
@@ -416,3 +433,24 @@ class DrillingDataAnalyser:
         """Context manager exit."""
         self.shutdown()
         return False
+    
+    def _track_processing_error(self, error: Exception):
+        """Track processing errors and warn if rate is too high."""
+        current_time = time.time()
+        self._processing_errors.append(current_time)
+        
+        # Keep only recent errors
+        if len(self._processing_errors) > self._max_error_history:
+            self._processing_errors = self._processing_errors[-self._max_error_history:]
+        
+        # Check errors in last 60 seconds
+        recent_errors = [t for t in self._processing_errors if current_time - t < 60]
+        
+        if len(recent_errors) >= self._error_warning_threshold:
+            logging.warning("High rate of processing errors detected", extra={
+                'errors_in_last_minute': len(recent_errors),
+                'threshold': self._error_warning_threshold,
+                'latest_error_type': type(error).__name__,
+                'latest_error_message': str(error),
+                'possible_cause': 'System may be overloaded or experiencing connectivity issues'
+            })

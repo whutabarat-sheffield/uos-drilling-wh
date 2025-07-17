@@ -6,13 +6,14 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 """
 
 import logging
-from collections import defaultdict
+import threading
+from collections import defaultdict, deque
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
+import time as time_module
 
 from ...uos_depth_est import TimestampedData, ConfigurationError
 from .config_manager import ConfigurationManager
-from typing import Union
 
 
 class DuplicateMessageError(Exception):
@@ -61,10 +62,23 @@ class MessageBuffer:
             self.duplicate_handling = listener_config.get('duplicate_handling', 'ignore')
         
         self.buffers: Dict[str, List[TimestampedData]] = defaultdict(list)
+        self._buffer_lock = threading.RLock()  # Use RLock to prevent deadlocks
         self.cleanup_interval = cleanup_interval
         self.max_buffer_size = max_buffer_size
         self.max_age_seconds = max_age_seconds
         self.last_cleanup = datetime.now().timestamp()
+        
+        # Performance metrics
+        self._metrics = {
+            'messages_received': 0,
+            'messages_dropped': 0,
+            'messages_processed': 0,
+            'duplicate_messages': 0,
+            'cleanup_cycles': 0,
+            'last_warning_time': {},  # Track last warning time by type to avoid spam
+            'processing_times': deque(maxlen=1000)  # Keep last 1000 processing times
+        }
+        self._metrics_lock = threading.Lock()
         
         # Pre-compute topic patterns for efficiency
         self._topic_patterns = {
@@ -86,7 +100,11 @@ class MessageBuffer:
         Returns:
             True if message was added successfully, False otherwise
         """
+        start_time = time_module.time()
         try:
+            # Track received messages
+            with self._metrics_lock:
+                self._metrics['messages_received'] += 1
             # Validation
             if not data or not data.source:
                 logging.warning("Message validation failed", extra={
@@ -105,49 +123,84 @@ class MessageBuffer:
 
             # Log buffer operation
             buffer_size_before = len(self.buffers[matching_topic])
-            logging.info("Adding message to buffer", extra={
+            logging.debug("Adding message to buffer", extra={
                 'topic_pattern': matching_topic,
                 'source': data.source,
                 'buffer_size_before': buffer_size_before,
                 'timestamp': data.timestamp
             })
             
-            # Check for duplicates before adding
-            existing_messages = self.buffers[matching_topic]
-            duplicate_found, duplicate_index = self._check_for_duplicate(data, existing_messages)
-            
-            if duplicate_found:
-                if self.duplicate_handling == 'ignore':
-                    logging.info("Duplicate message ignored per configuration", extra={
-                        'duplicate_handling': self.duplicate_handling,
-                        'source': data.source,
-                        'timestamp': data.timestamp
-                    })
-                    return False
-                elif self.duplicate_handling == 'replace':
-                    # Replace the existing duplicate message
-                    if duplicate_index is not None:
-                        self.buffers[matching_topic][duplicate_index] = data
-                        logging.info("Duplicate message replaced per configuration", extra={
+            # Thread-safe buffer operations
+            with self._buffer_lock:
+                # Check for duplicates before adding
+                existing_messages = self.buffers[matching_topic]
+                duplicate_found, duplicate_index = self._check_for_duplicate(data, existing_messages)
+                
+                if duplicate_found:
+                    # Track duplicate in metrics
+                    with self._metrics_lock:
+                        self._metrics['duplicate_messages'] += 1
+                        
+                    if self.duplicate_handling == 'ignore':
+                        logging.debug("Duplicate message ignored per configuration", extra={
                             'duplicate_handling': self.duplicate_handling,
                             'source': data.source,
-                            'timestamp': data.timestamp,
-                            'replaced_index': duplicate_index
+                            'timestamp': data.timestamp
                         })
-                        return True
-                elif self.duplicate_handling == 'error':
-                    logging.error("Duplicate message detected and error raised per configuration", extra={
-                        'duplicate_handling': self.duplicate_handling,
-                        'source': data.source,
-                        'timestamp': data.timestamp
+                        return False
+                    elif self.duplicate_handling == 'replace':
+                        # Replace the existing duplicate message
+                        if duplicate_index is not None:
+                            self.buffers[matching_topic][duplicate_index] = data
+                            logging.debug("Duplicate message replaced per configuration", extra={
+                                'duplicate_handling': self.duplicate_handling,
+                                'source': data.source,
+                                'timestamp': data.timestamp,
+                                'replaced_index': duplicate_index
+                            })
+                            return True
+                    elif self.duplicate_handling == 'error':
+                        logging.error("Duplicate message detected and error raised per configuration", extra={
+                            'duplicate_handling': self.duplicate_handling,
+                            'source': data.source,
+                            'timestamp': data.timestamp
+                        })
+                        raise DuplicateMessageError(f"Duplicate message detected: {data.source} at {data.timestamp}")
+                
+                # Add message to buffer (only if not a duplicate or handling is not 'ignore')
+                self.buffers[matching_topic].append(data)
+                
+                buffer_size_after = len(self.buffers[matching_topic])
+                
+                # Check buffer capacity with progressive warnings
+                buffer_usage_percent = (buffer_size_after / self.max_buffer_size) * 100
+                
+                # Progressive warnings with rate limiting
+                if buffer_usage_percent >= 90:
+                    self._log_rate_limited_warning('buffer_critical', 30, 
+                        "CRITICAL: Buffer at critical capacity - data loss imminent", {
+                        'topic': matching_topic,
+                        'buffer_usage_percent': buffer_usage_percent,
+                        'buffer_size': buffer_size_after,
+                        'max_size': self.max_buffer_size
                     })
-                    raise DuplicateMessageError(f"Duplicate message detected: {data.source} at {data.timestamp}")
-            
-            # Add message to buffer (only if not a duplicate or handling is not 'ignore')
-            self.buffers[matching_topic].append(data)
-            
-            buffer_size_after = len(self.buffers[matching_topic])
-            logging.info("Message added to buffer", extra={
+                elif buffer_usage_percent >= 80:
+                    self._log_rate_limited_warning('buffer_high', 60,
+                        "Buffer at high capacity - system under stress", {
+                        'topic': matching_topic,
+                        'buffer_usage_percent': buffer_usage_percent,
+                        'buffer_size': buffer_size_after,
+                        'max_size': self.max_buffer_size
+                    })
+                elif buffer_usage_percent >= 60:
+                    self._log_rate_limited_warning('buffer_moderate', 300,
+                        "Buffer usage elevated - monitor system load", {
+                        'topic': matching_topic,
+                        'buffer_size': buffer_size_after,
+                        'max_size': self.max_buffer_size,
+                        'usage_percent': buffer_usage_percent
+                    })
+            logging.debug("Message added to buffer", extra={
                 'buffer_size_after': buffer_size_after,
                 'all_buffer_sizes': {k: len(v) for k, v in self.buffers.items()},
                 'duplicate_detected': duplicate_found,
@@ -157,6 +210,12 @@ class MessageBuffer:
             # Trigger cleanup if needed
             self._check_cleanup_triggers()
             
+            # Track processing time and successful addition
+            processing_time = time_module.time() - start_time
+            with self._metrics_lock:
+                self._metrics['messages_processed'] += 1
+                self._metrics['processing_times'].append(processing_time)
+            
             return True
             
         except ValueError as e:
@@ -164,6 +223,10 @@ class MessageBuffer:
                 'error_message': str(e),
                 'source': getattr(data, 'source', 'unknown') if data else 'no_data'
             })
+            # Track dropped message
+            with self._metrics_lock:
+                self._metrics['messages_dropped'] += 1
+            self._check_drop_rate_warning()
             return False
         except DuplicateMessageError:
             # Re-raise duplicate message errors (don't catch them)
@@ -173,6 +236,10 @@ class MessageBuffer:
                 'error_message': str(e),
                 'config_section': 'mqtt.listener'
             })
+            # Track dropped message
+            with self._metrics_lock:
+                self._metrics['messages_dropped'] += 1
+            self._check_drop_rate_warning()
             return False
         except Exception as e:
             logging.error("Unexpected error in add_message", extra={
@@ -180,6 +247,10 @@ class MessageBuffer:
                 'error_message': str(e),
                 'source': getattr(data, 'source', 'unknown') if data else 'no_data'
             })
+            # Track dropped message
+            with self._metrics_lock:
+                self._metrics['messages_dropped'] += 1
+            self._check_drop_rate_warning()
             return False
     
     def _check_for_duplicate(self, new_message: TimestampedData, existing_messages: List[TimestampedData]) -> tuple[bool, Optional[int]]:
@@ -285,7 +356,7 @@ class MessageBuffer:
         elif "AssetManagement" in new_message.source:
             message_type = "heads"
         
-        logging.info("Duplicate message detected at buffer level", extra={
+        logging.debug("Duplicate message detected at buffer level", extra={
             'message_type': message_type,
             'source_topic': new_message.source,
             'tool_key': tool_key,
@@ -328,16 +399,21 @@ class MessageBuffer:
     
     def _check_cleanup_triggers(self):
         """Check if cleanup should be triggered based on size or time."""
+        cleanup_needed = False
+        
         # Check for buffer size overflow
-        for topic, buffer in self.buffers.items():
-            if len(buffer) >= self.max_buffer_size:
-                logging.info("Buffer size cleanup triggered", extra={
-                    'topic': topic,
-                    'buffer_size': len(buffer),
-                    'max_size': self.max_buffer_size
-                })
-                self.cleanup_old_messages()
-                break
+        with self._buffer_lock:
+            for topic, buffer in self.buffers.items():
+                if len(buffer) >= self.max_buffer_size:
+                    self._log_rate_limited_warning('buffer_overflow', 30,
+                        "Buffer at maximum capacity - cleanup triggered", {
+                        'topic': topic,
+                        'buffer_size': len(buffer),
+                        'max_size': self.max_buffer_size,
+                        'action': 'Removing oldest messages'
+                    })
+                    cleanup_needed = True
+                    break
         
         # Check for time-based cleanup
         current_time = datetime.now().timestamp()
@@ -346,8 +422,15 @@ class MessageBuffer:
                 'elapsed_seconds': current_time - self.last_cleanup,
                 'cleanup_interval': self.cleanup_interval
             })
+            cleanup_needed = True
+        
+        # Perform cleanup if needed
+        if cleanup_needed:
             self.cleanup_old_messages()
             self.last_cleanup = current_time
+            
+        # Check for old messages (warning only, doesn't trigger cleanup)
+        self._check_message_age_warnings()
     
     def cleanup_old_messages(self):
         """
@@ -356,44 +439,68 @@ class MessageBuffer:
         try:
             current_time = datetime.now().timestamp()
             total_removed = 0
+            cleanup_warnings = []
             
-            for topic in list(self.buffers.keys()):
-                if topic not in self.buffers:
-                    continue
+            # Track cleanup cycle
+            with self._metrics_lock:
+                self._metrics['cleanup_cycles'] += 1
+            
+            with self._buffer_lock:
+                for topic in list(self.buffers.keys()):
+                    if topic not in self.buffers:
+                        continue
+                        
+                    original_length = len(self.buffers[topic])
+                    if original_length == 0:
+                        continue
                     
-                original_length = len(self.buffers[topic])
-                if original_length == 0:
-                    continue
-                
-                # Remove old messages beyond time window
-                self.buffers[topic] = [
-                    msg for msg in self.buffers[topic] 
-                    if current_time - msg.timestamp <= self.max_age_seconds
-                ]
-                age_removed = original_length - len(self.buffers[topic])
-                
-                # If still over size limit, keep only newest messages
-                size_removed = 0
-                if len(self.buffers[topic]) > self.max_buffer_size:
-                    self.buffers[topic].sort(key=lambda msg: msg.timestamp, reverse=True)
-                    size_removed = len(self.buffers[topic]) - self.max_buffer_size
-                    self.buffers[topic] = self.buffers[topic][:self.max_buffer_size]
-                
-                total_topic_removed = age_removed + size_removed
-                total_removed += total_topic_removed
-                
-                if total_topic_removed > 0:
-                    logging.info("Buffer cleanup completed", extra={
-                        'topic': topic,
-                        'original_size': original_length,
-                        'final_size': len(self.buffers[topic]),
-                        'age_removed': age_removed,
-                        'size_removed': size_removed,
-                        'total_removed': total_topic_removed
-                    })
+                    # Remove old messages beyond time window
+                    self.buffers[topic] = [
+                        msg for msg in self.buffers[topic] 
+                        if current_time - msg.timestamp <= self.max_age_seconds
+                    ]
+                    age_removed = original_length - len(self.buffers[topic])
+                    
+                    # If still over size limit, keep only newest messages
+                    size_removed = 0
+                    if len(self.buffers[topic]) > self.max_buffer_size:
+                        self.buffers[topic].sort(key=lambda msg: msg.timestamp, reverse=True)
+                        size_removed = len(self.buffers[topic]) - self.max_buffer_size
+                        self.buffers[topic] = self.buffers[topic][:self.max_buffer_size]
+                    
+                    total_topic_removed = age_removed + size_removed
+                    total_removed += total_topic_removed
+                    
+                    # Check if we're removing too many messages (indicates falling behind)
+                    removal_percent = (total_topic_removed / original_length) * 100 if original_length > 0 else 0
+                    if removal_percent > 50:
+                        cleanup_warnings.append({
+                            'topic': topic,
+                            'removal_percent': removal_percent,
+                            'messages_removed': total_topic_removed
+                        })
+                    
+                    if total_topic_removed > 0:
+                        logging.debug("Buffer cleanup completed", extra={
+                            'topic': topic,
+                            'original_size': original_length,
+                            'final_size': len(self.buffers[topic]),
+                            'age_removed': age_removed,
+                            'size_removed': size_removed,
+                            'total_removed': total_topic_removed
+                        })
+            
+            # Log warnings for excessive cleanup
+            for warning in cleanup_warnings:
+                logging.warning("Excessive buffer cleanup indicates system falling behind", extra={
+                    'topic': warning['topic'],
+                    'removal_percent': warning['removal_percent'],
+                    'messages_removed': warning['messages_removed'],
+                    'possible_cause': 'Processing slower than message arrival rate'
+                })
             
             if total_removed > 0:
-                logging.info("Global cleanup summary", extra={
+                logging.debug("Global cleanup summary", extra={
                     'total_messages_removed': total_removed,
                     'buffer_sizes': {k: len(v) for k, v in self.buffers.items()}
                 })
@@ -412,25 +519,26 @@ class MessageBuffer:
             Dictionary containing buffer statistics
         """
         current_time = datetime.now().timestamp()
-        stats = {
-            'total_buffers': len(self.buffers),
-            'total_messages': sum(len(buffer) for buffer in self.buffers.values()),
-            'buffer_sizes': {topic: len(buffer) for topic, buffer in self.buffers.items()},
-            'oldest_message_age': None,
-            'newest_message_age': None,
-            'last_cleanup_seconds_ago': current_time - self.last_cleanup
-        }
-        
-        # Find oldest and newest messages
-        all_timestamps = []
-        for buffer in self.buffers.values():
-            all_timestamps.extend([msg.timestamp for msg in buffer])
-        
-        if all_timestamps:
-            oldest_timestamp = min(all_timestamps)
-            newest_timestamp = max(all_timestamps)
-            stats['oldest_message_age'] = current_time - oldest_timestamp
-            stats['newest_message_age'] = current_time - newest_timestamp
+        with self._buffer_lock:
+            stats = {
+                'total_buffers': len(self.buffers),
+                'total_messages': sum(len(buffer) for buffer in self.buffers.values()),
+                'buffer_sizes': {topic: len(buffer) for topic, buffer in self.buffers.items()},
+                'oldest_message_age': None,
+                'newest_message_age': None,
+                'last_cleanup_seconds_ago': current_time - self.last_cleanup
+            }
+            
+            # Find oldest and newest messages
+            all_timestamps = []
+            for buffer in self.buffers.values():
+                all_timestamps.extend([msg.timestamp for msg in buffer])
+            
+            if all_timestamps:
+                oldest_timestamp = min(all_timestamps)
+                newest_timestamp = max(all_timestamps)
+                stats['oldest_message_age'] = current_time - oldest_timestamp
+                stats['newest_message_age'] = current_time - newest_timestamp
         
         return stats
     
@@ -444,7 +552,8 @@ class MessageBuffer:
         Returns:
             List of messages for the topic
         """
-        return self.buffers.get(topic_pattern, []).copy()
+        with self._buffer_lock:
+            return self.buffers.get(topic_pattern, []).copy()
     
     def get_all_buffers(self) -> Dict[str, List[TimestampedData]]:
         """
@@ -453,7 +562,8 @@ class MessageBuffer:
         Returns:
             Dictionary mapping topic patterns to message lists
         """
-        return {topic: buffer.copy() for topic, buffer in self.buffers.items()}
+        with self._buffer_lock:
+            return {topic: buffer.copy() for topic, buffer in self.buffers.items()}
     
     def clear_buffer(self, topic_pattern: Optional[str] = None):
         """
@@ -462,17 +572,93 @@ class MessageBuffer:
         Args:
             topic_pattern: Specific topic to clear, or None to clear all
         """
-        if topic_pattern:
-            if topic_pattern in self.buffers:
-                cleared_count = len(self.buffers[topic_pattern])
-                self.buffers[topic_pattern].clear()
-                logging.info(f"Cleared buffer for {topic_pattern}", extra={
-                    'topic': topic_pattern,
-                    'messages_cleared': cleared_count
+        with self._buffer_lock:
+            if topic_pattern:
+                if topic_pattern in self.buffers:
+                    cleared_count = len(self.buffers[topic_pattern])
+                    self.buffers[topic_pattern].clear()
+                    logging.info(f"Cleared buffer for {topic_pattern}", extra={
+                        'topic': topic_pattern,
+                        'messages_cleared': cleared_count
+                    })
+            else:
+                total_cleared = sum(len(buffer) for buffer in self.buffers.values())
+                self.buffers.clear()
+                logging.info("Cleared all buffers", extra={
+                    'total_messages_cleared': total_cleared
                 })
-        else:
-            total_cleared = sum(len(buffer) for buffer in self.buffers.values())
-            self.buffers.clear()
-            logging.info("Cleared all buffers", extra={
-                'total_messages_cleared': total_cleared
-            })
+    
+    def _log_rate_limited_warning(self, warning_type: str, min_interval_seconds: int, 
+                                 message: str, extra: Dict[str, Any]):
+        """
+        Log warning with rate limiting to avoid spam.
+        
+        Args:
+            warning_type: Type of warning for tracking
+            min_interval_seconds: Minimum seconds between warnings of this type
+            message: Warning message
+            extra: Extra logging context
+        """
+        current_time = time_module.time()
+        with self._metrics_lock:
+            last_warning = self._metrics['last_warning_time'].get(warning_type, 0)
+            if current_time - last_warning >= min_interval_seconds:
+                logging.warning(message, extra=extra)
+                self._metrics['last_warning_time'][warning_type] = current_time
+    
+    def _check_drop_rate_warning(self):
+        """Check and warn if message drop rate is too high."""
+        with self._metrics_lock:
+            total = self._metrics['messages_received'] + self._metrics['messages_dropped']
+            if total > 100:  # Only check after reasonable sample size
+                drop_rate = self._metrics['messages_dropped'] / total
+                if drop_rate > 0.05:  # 5% drop rate
+                    self._log_rate_limited_warning('high_drop_rate', 60,
+                        "High message drop rate detected", {
+                            'drop_rate_percent': drop_rate * 100,
+                            'messages_dropped': self._metrics['messages_dropped'],
+                            'messages_received': self._metrics['messages_received']
+                        })
+    
+    def _check_message_age_warnings(self):
+        """Check for old messages in buffers and warn if needed."""
+        current_time = datetime.now().timestamp()
+        with self._buffer_lock:
+            for topic, buffer in self.buffers.items():
+                if not buffer:
+                    continue
+                    
+                # Check oldest message age
+                oldest_msg = min(buffer, key=lambda m: m.timestamp)
+                age_seconds = current_time - oldest_msg.timestamp
+                
+                if age_seconds > 240:  # 4 minutes
+                    self._log_rate_limited_warning(f'old_messages_{topic}', 120,
+                        "Old messages detected in buffer - processing may be falling behind", {
+                            'topic': topic,
+                            'oldest_message_age_seconds': age_seconds,
+                            'buffer_size': len(buffer),
+                            'oldest_timestamp': datetime.fromtimestamp(oldest_msg.timestamp).isoformat()
+                        })
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Get current performance metrics.
+        
+        Returns:
+            Dictionary containing performance metrics
+        """
+        with self._metrics_lock:
+            metrics = self._metrics.copy()
+            # Calculate rates
+            total = metrics['messages_received'] + metrics['messages_dropped']
+            metrics['drop_rate'] = metrics['messages_dropped'] / total if total > 0 else 0
+            metrics['duplicate_rate'] = metrics['duplicate_messages'] / total if total > 0 else 0
+            
+            # Calculate average processing time
+            if metrics['processing_times']:
+                metrics['avg_processing_time_ms'] = sum(metrics['processing_times']) / len(metrics['processing_times']) * 1000
+            else:
+                metrics['avg_processing_time_ms'] = 0
+                
+            return metrics

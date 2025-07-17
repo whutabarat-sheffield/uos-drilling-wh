@@ -60,7 +60,7 @@ mqtt:
     # Message type suffixes
     result: "ResultManagement"        # Suffix for result messages
     trace: "ResultManagement/Trace"   # Suffix for trace messages
-    heads: "AssetManagement/Head"
+    heads: "AssetManagement/Heads"
 
   # Data Field Mappings
   # -----------------

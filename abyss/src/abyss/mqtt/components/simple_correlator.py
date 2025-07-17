@@ -6,6 +6,8 @@ Simplified approach replacing complex time-bucket grouping with direct key match
 """
 
 import logging
+import time
+from collections import defaultdict
 from typing import Dict, List, Set, Tuple, Any, Callable, Optional, Union
 
 from ...uos_depth_est import TimestampedData
@@ -54,6 +56,11 @@ class SimpleMessageCorrelator:
                 self._topic_patterns['heads'] = f"{listener_config['root']}/+/+/{listener_config['heads']}"
                 logging.debug("Heads topic configured, adding pattern")
                 logging.debug(f"Topic patterns: {self._topic_patterns['heads']}")
+        
+        # Track correlation failures for warning detection
+        self._correlation_failures = defaultdict(int)  # tool_key -> failure count
+        self._last_warning_time = {}  # warning_type -> timestamp
+        self._unprocessed_threshold = 100  # Warn when unprocessed messages exceed this
     
     def find_and_process_matches(self, buffers: Dict[str, List[TimestampedData]], 
                                 message_processor: Callable) -> bool:
@@ -91,10 +98,13 @@ class SimpleMessageCorrelator:
             # Mark processed messages
             self._mark_messages_as_processed(processed_messages)
             
-            logging.info("Correlation process completed", extra={
+            logging.debug("Correlation process completed", extra={
                 'matches_found': matches_found,
                 'messages_processed': len(processed_messages)
             })
+            
+            # Check for correlation issues and warn if needed
+            self._check_correlation_health(buffers, matches_found, len(processed_messages))
             
             return matches_found
             
@@ -143,7 +153,7 @@ class SimpleMessageCorrelator:
                                result_duplicates: int, trace_duplicates: int, heads_duplicates: int):
         """Log details about duplicate messages being ignored."""
         total_duplicates = result_duplicates + trace_duplicates + heads_duplicates
-        logging.info(f"Duplicate messages detected and ignored [result_duplicates={result_duplicates}, trace_duplicates={trace_duplicates}, heads_duplicates={heads_duplicates}, total_duplicates={total_duplicates}]")
+        logging.debug(f"Duplicate messages detected and ignored [result_duplicates={result_duplicates}, trace_duplicates={trace_duplicates}, heads_duplicates={heads_duplicates}, total_duplicates={total_duplicates}]")
         
         # Log specific details about each duplicate message type
         if result_duplicates > 0:
@@ -153,7 +163,7 @@ class SimpleMessageCorrelator:
             ]
             for msg in processed_results:
                 tool_key = self._extract_tool_key(msg.source)
-                logging.info(f"Duplicate RESULT message ignored [message_type=result, source_topic={msg.source}, tool_key={tool_key}]")
+                logging.debug(f"Duplicate RESULT message ignored [message_type=result, source_topic={msg.source}, tool_key={tool_key}]")
         
         if trace_duplicates > 0:
             processed_traces = [
@@ -162,7 +172,7 @@ class SimpleMessageCorrelator:
             ]
             for msg in processed_traces:
                 tool_key = self._extract_tool_key(msg.source)
-                logging.info(f"Duplicate TRACE message ignored [message_type=trace, source_topic={msg.source}, tool_key={tool_key}]")
+                logging.debug(f"Duplicate TRACE message ignored [message_type=trace, source_topic={msg.source}, tool_key={tool_key}]")
         
         if heads_duplicates > 0:
             processed_heads = [
@@ -171,7 +181,7 @@ class SimpleMessageCorrelator:
             ]
             for msg in processed_heads:
                 tool_key = self._extract_tool_key(msg.source)
-                logging.info(f"Duplicate HEADS message ignored [message_type=heads, source_topic={msg.source}, tool_key={tool_key}]")
+                logging.debug(f"Duplicate HEADS message ignored [message_type=heads, source_topic={msg.source}, tool_key={tool_key}]")
     
     def _find_key_based_matches(self, result_messages: List[TimestampedData],
                                trace_messages: List[TimestampedData],
@@ -249,13 +259,17 @@ class SimpleMessageCorrelator:
                         match_group.append(heads_msg)
                     
                     try:
-                        logging.info("Found matching message pair", extra={
+                        logging.debug("Found matching message pair", extra={
                             'tool_key': tool_key,
                             'result_timestamp': result_msg.timestamp,
                             'trace_timestamp': trace_msg.timestamp,
                             'time_difference': abs(result_msg.timestamp - trace_msg.timestamp),
                             'has_heads_message': heads_msg is not None
                         })
+                        
+                        # Reset failure count for successful correlation
+                        if tool_key in self._correlation_failures:
+                            self._correlation_failures[tool_key] = 0
                         
                         # Process the match
                         message_processor(match_group)
@@ -275,6 +289,11 @@ class SimpleMessageCorrelator:
                         })
                     
                     break  # Only match each result message once
+        
+        # Track correlation failures for this tool
+        if not matches_found and tool_key:
+            self._correlation_failures[tool_key] += 1
+            self._check_tool_correlation_failures(tool_key)
         
         return matches_found
     
@@ -330,3 +349,57 @@ class SimpleMessageCorrelator:
             'time_window': self.time_window,
             'correlation_approach': 'simple_key_based'
         }
+    
+    def _check_correlation_health(self, buffers: Dict[str, List[TimestampedData]], 
+                                 matches_found: bool, messages_processed: int):
+        """Check correlation health and warn about issues."""
+        # Check for high unprocessed message count
+        total_unprocessed = 0
+        unprocessed_by_type = {}
+        
+        for pattern, topic in self._topic_patterns.items():
+            buffer = buffers.get(topic, [])
+            unprocessed = len([msg for msg in buffer if not getattr(msg, 'processed', False)])
+            unprocessed_by_type[pattern] = unprocessed
+            total_unprocessed += unprocessed
+        
+        # Warn if unprocessed messages are accumulating
+        if total_unprocessed > self._unprocessed_threshold:
+            self._log_rate_limited_warning('high_unprocessed', 60,
+                "High number of unprocessed messages - correlation may be falling behind", {
+                    'total_unprocessed': total_unprocessed,
+                    'unprocessed_by_type': unprocessed_by_type,
+                    'threshold': self._unprocessed_threshold,
+                    'possible_causes': 'Message arrival rate exceeds processing rate or timing mismatches'
+                })
+        
+        # Warn if no matches found but messages exist
+        if not matches_found and total_unprocessed > 10:
+            self._log_rate_limited_warning('no_matches', 120,
+                "No message matches found despite pending messages", {
+                    'unprocessed_messages': total_unprocessed,
+                    'time_window': self.time_window,
+                    'possible_cause': 'Messages may be arriving outside correlation time window'
+                })
+    
+    def _check_tool_correlation_failures(self, tool_key: str):
+        """Check and warn about repeated correlation failures for a specific tool."""
+        failure_count = self._correlation_failures[tool_key]
+        
+        if failure_count >= 5:  # Warn after 5 consecutive failures
+            self._log_rate_limited_warning(f'tool_failure_{tool_key}', 300,
+                "Repeated correlation failures for tool", {
+                    'tool_key': tool_key,
+                    'consecutive_failures': failure_count,
+                    'possible_cause': 'Tool may be sending incomplete message sets or timing issues'
+                })
+    
+    def _log_rate_limited_warning(self, warning_type: str, min_interval: int, 
+                                 message: str, extra: Dict[str, Any]):
+        """Log warning with rate limiting to avoid spam."""
+        current_time = time.time()
+        last_warning = self._last_warning_time.get(warning_type, 0)
+        
+        if current_time - last_warning >= min_interval:
+            logging.warning(message, extra=extra)
+            self._last_warning_time[warning_type] = current_time

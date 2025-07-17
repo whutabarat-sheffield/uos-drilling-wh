@@ -7,6 +7,8 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 import json
+import time
+from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Callable, Optional, Any, Union
 import paho.mqtt.client as mqtt
@@ -49,6 +51,12 @@ class MQTTClientManager:
         self.message_handler = message_handler
         self.clients = {}
         self.topics = []
+        
+        # Error tracking for warnings
+        self._connection_failures = defaultdict(int)  # client_type -> failure count
+        self._message_errors = defaultdict(int)  # error_type -> count
+        self._last_warning_time = {}  # warning_type -> timestamp
+        self._error_window = 300  # 5 minutes
         
     def create_mqtt_client(self, client_id: str) -> mqtt.Client:
         """
@@ -113,13 +121,21 @@ class MQTTClientManager:
                 topic = f"{listener_config['root']}/+/+/{listener_config[listener_type]}"
                 client.subscribe(topic)
                 self.topics.append(topic)
-                logging.info(f"Subscribed to {topic}")
+                logging.debug(f"Subscribed to {topic}")
+                
+                # Reset connection failure count on successful connection
+                if listener_type in self._connection_failures:
+                    self._connection_failures[listener_type] = 0
             else:
                 logging.error("Failed to connect", extra={
                     'reason_code': str(reason_code),
                     'listener_type': listener_type,
                     'client_id': client_id
                 })
+                
+                # Track connection failures
+                self._connection_failures[listener_type] += 1
+                self._check_connection_failures(listener_type)
 
         def on_message(client, userdata, msg):
             try:
@@ -137,6 +153,7 @@ class MQTTClientManager:
                         'topic': msg.topic,
                         'listener_type': listener_type
                     })
+                    self._track_message_error('missing_timestamp')
                     return
                     
                 logging.debug("Source Timestamp: %s", st[0])
@@ -172,12 +189,14 @@ class MQTTClientManager:
                     'error_message': str(e),
                     'listener_type': listener_type
                 })
+                self._track_message_error('json_decode_error')
             except ValueError as e:
                 logging.error("Timestamp parsing error", extra={
                     'topic': msg.topic,
                     'error_message': str(e),
                     'listener_type': listener_type
                 })
+                self._track_message_error('timestamp_parse_error')
             except Exception as e:
                 logging.error("Message processing error", extra={
                     'topic': msg.topic,
@@ -264,7 +283,7 @@ class MQTTClientManager:
         """Disconnect all registered clients from the MQTT broker."""
         for listener_type, client in self.clients.items():
             try:
-                logging.info(f"Disconnecting {listener_type} client")
+                logging.debug(f"Disconnecting {listener_type} client")
                 client.loop_stop()
                 client.disconnect()
             except Exception as e:
@@ -298,3 +317,52 @@ class MQTTClientManager:
             handler: Callable that accepts TimestampedData
         """
         self.message_handler = handler
+    
+    def _check_connection_failures(self, client_type: str):
+        """Check and warn about repeated connection failures."""
+        failure_count = self._connection_failures[client_type]
+        
+        if failure_count >= 3:  # Warn after 3 consecutive failures
+            self._log_rate_limited_warning(f'connection_failure_{client_type}', 300,
+                "Repeated connection failures for MQTT client", {
+                    'client_type': client_type,
+                    'consecutive_failures': failure_count,
+                    'broker_host': self.broker['host'],
+                    'broker_port': self.broker['port'],
+                    'possible_cause': 'Network issues, broker unavailable, or authentication problems'
+                })
+    
+    def _track_message_error(self, error_type: str):
+        """Track message errors and warn if rate is too high."""
+        self._message_errors[error_type] += 1
+        
+        # Check error rates periodically
+        current_time = time.time()
+        last_check = self._last_warning_time.get('message_error_check', 0)
+        
+        if current_time - last_check >= 60:  # Check every minute
+            self._last_warning_time['message_error_check'] = current_time
+            
+            # Check each error type
+            for err_type, count in self._message_errors.items():
+                if count > 50:  # More than 50 errors in the window
+                    self._log_rate_limited_warning(f'message_error_{err_type}', 300,
+                        "High rate of message processing errors", {
+                            'error_type': err_type,
+                            'error_count': count,
+                            'time_window_minutes': self._error_window / 60,
+                            'possible_cause': 'Malformed messages, schema changes, or timestamp format issues'
+                        })
+            
+            # Reset counters after warning check
+            self._message_errors.clear()
+    
+    def _log_rate_limited_warning(self, warning_type: str, min_interval: int, 
+                                 message: str, extra: Dict[str, Any]):
+        """Log warning with rate limiting to avoid spam."""
+        current_time = time.time()
+        last_warning = self._last_warning_time.get(warning_type, 0)
+        
+        if current_time - last_warning >= min_interval:
+            logging.warning(message, extra=extra)
+            self._last_warning_time[warning_type] = current_time
