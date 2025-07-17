@@ -83,7 +83,7 @@ def reduce_dict(data_dict, search_key):
     """
     # Using reduce function to filter dictionary values based on search_key
     # from https://www.geeksforgeeks.org/python-substring-key-match-in-dictionary/
-    logging.info(f"Reducing dictionary for {search_key}")
+    logging.debug(f"Reducing dictionary for {search_key}")
     logging.debug(f"Dict: {data_dict}\n\nSearch_key: {search_key}")
 
     if not isinstance(data_dict, dict):
@@ -101,7 +101,7 @@ def reduce_dict(data_dict, search_key):
         # initial value for the accumulator (an empty list)
         []
     )
-    logging.info(f"Found {len(values)} matching entries for '{search_key}'")
+    logging.debug(f"Found {len(values)} matching entries for '{search_key}'")
     logging.debug(f"Reduced values: {values}")
     return values[0]['Value']
 
@@ -129,16 +129,16 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         fore = ['Messages', 'Payload']
         
         data = data[fore[0]][fore[1]]   
-        logging.info(conf['mqtt']['data_ids']['torque_empty_vals'])
+        logging.debug(conf['mqtt']['data_ids']['torque_empty_vals'])
 
         torque_empty_vals = reduce_dict(data, conf['mqtt']['data_ids']['torque_empty_vals'])
-        logging.info(f"Torque empty values: {torque_empty_vals}")
+        logging.debug(f"Torque empty values: {torque_empty_vals}")
         thrust_empty_vals = reduce_dict(data, conf['mqtt']['data_ids']['thrust_empty_vals'])
-        logging.info(f"Thrust empty values: {thrust_empty_vals}")
+        logging.debug(f"Thrust empty values: {thrust_empty_vals}")
         step_vals = reduce_dict(data, conf['mqtt']['data_ids']['step_vals'])
         if not isinstance(step_vals, list):
             step_vals = [step_vals]
-        logging.info(f"Step values: {step_vals}")
+        logging.debug(f"Step values: {step_vals}")
         # hole_id = reduce_dict(data, conf['mqtt']['data_ids']['machine_id']) + '_' + reduce_dict(data, conf['mqtt']['data_ids']['result_id'])
         hole_id = reduce_dict(data, conf['mqtt']['data_ids']['machine_id'])# TODO rethink whether this is correct
         # logging.debug(f"Hole ID: {hole_id}")
@@ -146,10 +146,10 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
         logging.info(f"Hole ID: {hole_id}")
         local = reduce_dict(data, conf['mqtt']['data_ids']['result_id'])# TODO rethink whether this is correct
         local = [str(local)] * len(step_vals)
-        logging.info(f"Local count: {local}")
+        logging.debug(f"Local count: {local}")
 
         # Create a DataFrame
-        logging.info("Creating DataFrame")
+        logging.debug("Creating DataFrame")
         try:
             df = pd.DataFrame({
                 'Step (nb)': step_vals,
@@ -178,7 +178,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
                 'PREDRILLED': [1]
             })
         df['local'] = df['local'].astype('int32')
-        logging.info(f"DataFrame: {df}")
+        logging.debug(f"DataFrame: {df}")
         return df
 
     def parse_trace(data, conf):
@@ -226,7 +226,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
     logging.debug(f"Configuration: {conf}\n\n")
 
     if result_msg:
-        logging.info("Processing RESULT message")
+        logging.debug("Processing RESULT message")
         logging.debug(f"Result message: {result_msg}")
         # Decode the JSON message
         try:
@@ -243,7 +243,7 @@ def convert_mqtt_to_df(result_msg=None, trace_msg=None, conf=None):
 
     if trace_msg:
         trace_data = json.loads(trace_msg)
-        logging.info("Processing TRACE message")
+        logging.debug("Processing TRACE message")
         try:
             trace_df = parse_trace(trace_data, conf)
         except Exception as e:
