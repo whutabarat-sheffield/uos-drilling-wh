@@ -50,6 +50,19 @@ This directory contains comprehensive documentation for the UOS Drilling System 
 
 ## Recent Updates
 
+### **HIGH_THROUGHPUT_ARCHITECTURE.md** (2025-07-17)
+- Comprehensive plan for handling 1000+ messages/second
+- 5 architecture options: RabbitMQ, Async Streams, K8s Jobs, Kafka, Hybrid
+- Detailed implementation roadmap and code examples
+- Migration strategy from 100 msg/s to 100,000+ msg/s
+- Performance metrics and monitoring strategy
+
+### **HIGH_THROUGHPUT_SUMMARY.md** (2025-07-17)
+- Quick reference guide for high-throughput architecture
+- At-a-glance performance comparisons
+- Implementation phase overview
+- Quick start commands and key metrics
+
 ### **MQTT_IMPROVEMENTS_SUMMARY.md** (2025-07-16)
 - Comprehensive improvements to MQTT components
 - Thread safety enhancements for MessageBuffer
