@@ -75,7 +75,13 @@ class StressTestPublisher:
         clients = []
         
         for i in range(num_clients):
-            client = mqtt.Client(f"stress_test_publisher_{i}")
+            # Handle different paho-mqtt versions
+            try:
+                # Try new API (paho-mqtt >= 2.0)
+                client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, f"stress_test_publisher_{i}")
+            except (AttributeError, TypeError):
+                # Fall back to old API (paho-mqtt < 2.0)
+                client = mqtt.Client(f"stress_test_publisher_{i}")
             
             # Optimize client settings for high throughput
             client.max_inflight_messages_set(100)  # Increase from default 20
@@ -368,7 +374,7 @@ class StressTestPublisher:
             
             # Wait for workers to finish
             if self.executor:
-                self.executor.shutdown(wait=True, timeout=5)
+                self.executor.shutdown(wait=True)
             
             # Disconnect clients
             for client in self.clients:
