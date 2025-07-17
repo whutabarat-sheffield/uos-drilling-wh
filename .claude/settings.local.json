@@ -21,7 +21,11 @@
       "Bash(python -m pytest tests/test_result_publisher.py -v)",
       "Bash(python -m pytest tests/test_result_publisher.py::TestResultPublisher::test_mqtt_publish_failure -v -s)",
       "Bash(python -m pytest tests/test_result_publisher.py::TestResultPublisher::test_mqtt_publish_failure -v)",
-      "Bash(python -m pytest tests/test_config_manager_integration.py tests/test_result_publisher_head_id.py -v)"
+      "Bash(python -m pytest tests/test_config_manager_integration.py tests/test_result_publisher_head_id.py -v)",
+      "Bash(mv:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(python -m pytest abyss/tests/mqtt/components/test_message_buffer_thread_safety.py -v)"
     ],
     "deny": []
   }

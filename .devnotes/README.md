@@ -2,62 +2,98 @@
 
 This directory contains comprehensive documentation for the UOS Drilling System evolution from v0.2.5 inference-only platform to a complete ML training and deployment ecosystem.
 
-## Current Authoritative Documents
+## Core Documentation (5 Authoritative Files)
 
-### **Developer Documentation**
-- **[SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md)**: Complete system architecture, development commands, and technical patterns
-- **[ROADMAP_MASTER.md](ROADMAP_MASTER.md)**: Comprehensive development timeline from v0.3.x through v2.0.x
-- **[TRAINING_PLATFORM_COMPLETE.md](TRAINING_PLATFORM_COMPLETE.md)**: Complete training platform architecture and implementation guide
-- **[PLATFORM_ARCHITECTURE_DECISIONS.md](PLATFORM_ARCHITECTURE_DECISIONS.md)**: Technology stack decisions and MLflow + DVC architecture
+### **1. PROJECT_OVERVIEW.md**
+- Entry point and navigation guide
+- Project context and vision
+- Quick start for different user types
 
-### **User Documentation**  
-- **[UOS_DRILLING_TRAINING_PLATFORM_USER_GUIDE.md](UOS_DRILLING_TRAINING_PLATFORM_USER_GUIDE.md)**: Comprehensive user guide optimized for AI assistant integration
+### **2. SYSTEM_REFERENCE.md**
+- Complete system architecture and technical patterns
+- Development commands and workflows
+- Build system and deployment patterns
 
-### **Project Management**
-- **[DOCUMENTATION_CONSOLIDATION_PLAN.md](DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Documentation strategy and consolidation approach
-- **[BREADCRUMBS.md](BREADCRUMBS.md)**: Development context and session tracking
+### **3. DEVELOPMENT_ROADMAP.md**
+- Comprehensive development timeline (v0.3.x → v2.0.x)
+- Resource requirements and estimates
+- Risk assessment and mitigation strategies
+
+### **4. TRAINING_PLATFORM_COMPLETE.md**
+- Complete training platform documentation (technical + user guide)
+- PyTorch training + ONNX deployment architecture
+- GUI annotation tools and CLI workflows
+- Troubleshooting and best practices
+
+### **5. PLATFORM_ARCHITECTURE_DECISIONS.md**
+- Technology stack decisions (MLflow + DVC)
+- Implementation strategy and rationale
+- Rejected alternatives analysis
 
 ## Document Purpose & Usage
 
 ### For Developers
-- Start with **SYSTEM_OVERVIEW.md** for current architecture understanding
-- Consult **ROADMAP_MASTER.md** for version planning and resource requirements
-- Reference **TRAINING_PLATFORM_COMPLETE.md** for training platform implementation
-- Use **PLATFORM_ARCHITECTURE_DECISIONS.md** for technology choices and rationale
+- Start with **PROJECT_OVERVIEW.md** for navigation and context
+- Deep dive into **SYSTEM_REFERENCE.md** for current architecture
+- Consult **DEVELOPMENT_ROADMAP.md** for version planning
+- Reference **TRAINING_PLATFORM_COMPLETE.md** Part I for implementation details
 
 ### For End Users
-- **UOS_DRILLING_TRAINING_PLATFORM_USER_GUIDE.md** provides complete training platform usage
+- **TRAINING_PLATFORM_COMPLETE.md** Part II provides complete user guide
 - Optimized for AI assistant queries (Google Gemini, Claude, etc.)
 - Includes troubleshooting database and step-by-step workflows
 
 ### For Project Managers
-- **ROADMAP_MASTER.md** contains resource requirements and timeline estimates
-- **DOCUMENTATION_CONSOLIDATION_PLAN.md** explains documentation strategy
+- **PROJECT_OVERVIEW.md** for high-level project understanding
+- **DEVELOPMENT_ROADMAP.md** contains resource requirements and timeline estimates
+- **PLATFORM_ARCHITECTURE_DECISIONS.md** explains technology choices
+
+## Recent Updates
+
+### **MQTT_IMPROVEMENTS_SUMMARY.md** (2025-07-16)
+- Comprehensive improvements to MQTT components
+- Thread safety enhancements for MessageBuffer
+- Logging level optimization (INFO → DEBUG for routine operations)
+- Early warning system implementation
+- Load testing and robustness improvements
+
+### **OVERVIEW.md**
+- High-level system overview moved from root directory
+- Contains system architecture and component descriptions
 
 ## Archive Directory
 
-The `archive/` directory contains previous documentation versions that were consolidated into the authoritative documents. These files are preserved for historical reference but should not be used for current development:
+The `archive/` directory contains previous documentation versions that were consolidated. Historical consolidations:
 
-- DEVNOTES.md → Consolidated into SYSTEM_OVERVIEW.md
-- EXECUTIVE_SUMMARY.md + FINAL_EXECUTIVE_SUMMARY.md → Consolidated into ROADMAP_MASTER.md
-- TRAINING_FEATURE_ANALYSIS.md + TRAINING_PLATFORM_DESIGN.md + DATA_STRUCTURE_ANALYSIS.md → Consolidated into TRAINING_PLATFORM_COMPLETE.md
-- PLATFORM_ALTERNATIVES_ANALYSIS.md + MLFLOW_DVC_ANALYSIS.md → Consolidated into PLATFORM_ARCHITECTURE_DECISIONS.md
+### 2025-07-13 Consolidation
+- Multiple analysis documents → Initial 7-file structure
+
+### 2025-07-16 Consolidation  
+- 15 files → 5 core authoritative documents
+- Merged user guide into TRAINING_PLATFORM_COMPLETE.md
+- Eliminated redundant meta-documentation
+- Created unified PROJECT_OVERVIEW.md entry point
+
+### 2025-07-16 MQTT Improvements
+- Moved duplicate analysis files to archive
+- Created MQTT_IMPROVEMENTS_SUMMARY.md for consolidated reference
+- Organized abyss-specific documentation
 
 ## AI Assistant Integration
 
-The user guide is specifically optimized for AI assistant interrogation with:
-- Self-contained context for each query
-- Hierarchical structure for targeted information retrieval  
-- Common question → section mapping
-- Troubleshooting database with specific solutions
-- Progressive complexity (basic → advanced workflows)
+Documentation is optimized for AI assistant interrogation:
+- **Self-contained context** in each document
+- **Hierarchical structure** for targeted retrieval
+- **User guide section** in TRAINING_PLATFORM_COMPLETE.md Part II
+- **Troubleshooting database** with specific solutions
+- **Query optimization patterns** for Gemini/Claude
 
-## Maintenance
+## Maintenance Strategy
 
-This documentation set reduces maintenance overhead by:
-- **90% reduction** in content duplication (17 → 7 files)
-- **Single source of truth** for each technical domain
-- **Clear ownership** and update responsibilities per document
-- **Automated validation** through cross-reference checking
+This consolidated structure provides:
+- **67% reduction** in file count (15 → 5 files)
+- **Single source of truth** for each domain
+- **Clear ownership** per document
+- **Reduced cross-reference complexity**
 
-For questions or updates, refer to the appropriate authoritative document above.
+For updates or questions, start with PROJECT_OVERVIEW.md for navigation.
