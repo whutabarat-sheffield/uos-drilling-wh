@@ -51,7 +51,9 @@ def main():
     
     args = parser.parse_args()
     
-    setup_logging(getattr(logging, args.log_level))
+    # Priority: Environment variable > Command line argument
+    log_level = os.environ.get('LOG_LEVEL', args.log_level)
+    setup_logging(getattr(logging, log_level))
     
     # Resolve config path - check multiple locations
     config_path = args.config

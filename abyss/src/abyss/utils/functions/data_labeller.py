@@ -138,6 +138,6 @@ def add_cf2ti_point(df_processed, offset=300):
     #     plt.legend()
     #     plt.show()
 
-    logging.info(f"Turning point local index: {turning_point}")
+    logging.debug(f"Turning point local index: {turning_point}")
 
     return cf2ti_pos

@@ -208,12 +208,12 @@ def data_scaler(df, ref_data_path):
     has_nan = df.isna().any().any()
     #print(f"DataFrame contains NaN values: {has_nan}")
     df = df.replace({True: 1, False: 0})
-    logging.info("Adjusting local and PREDRILLED values...")
+    logging.debug("Adjusting local and PREDRILLED values...")
     df['local'] = df['local'] * 0.034 - 1.7 # TODO check if this is correct
     df['PREDRILLED'] = df['PREDRILLED'].replace({0: -1.45, 1: 0.69})
 
     '''scale the combined df'''
-    logging.info("Scaling the data...")
+    logging.debug("Scaling the data...")
     df['source'] = 'original'
     df_ref['source'] = 'reference'
     df_combined = pd.concat([df, df_ref])
@@ -222,9 +222,9 @@ def data_scaler(df, ref_data_path):
                         'torque7', 'torque8', 'torque9', 'torque10', 'torque11', 'torque12',
                         'torque13', 'torque14', 'torque15']
     scaler = StandardScaler()
-    logging.info("Fitting the scaler...")
+    logging.debug("Fitting the scaler...")
     df_combined[columns_to_scale] = scaler.fit_transform(df_combined[columns_to_scale])
-    logging.info("Transforming the data...")
+    logging.debug("Transforming the data...")
     df_extracted = df_combined[df_combined['source'] == 'original'].copy()
     df_extracted.drop('source', axis=1, inplace=True)
 
@@ -242,6 +242,6 @@ def data_scaler(df, ref_data_path):
     start_timestamp = pd.Timestamp('2024-02-25 00:00:00')  # only for ref, the exact values are not important
     df_extracted['timestamp'] = [start_timestamp + pd.Timedelta(seconds=i) for i in range(len(df_extracted))]
 
-    logging.info("Data scaling completed.")
+    logging.debug("Data scaling completed.")
     return df_extracted
 
