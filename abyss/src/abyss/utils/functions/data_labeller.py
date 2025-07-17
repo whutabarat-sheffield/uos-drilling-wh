@@ -1,11 +1,17 @@
 import numpy as np
 import pandas as pd
 # import os
-from tqdm import tqdm
 import logging
 
 from scipy.signal import savgol_filter
 # import matplotlib.pyplot as plt
+
+from tqdm import tqdm as _tqdm
+
+def tqdm(*args, **kwargs):
+    if logging.getLogger().getEffectiveLevel() > logging.DEBUG:
+        kwargs['disable'] = True
+    return _tqdm(*args, **kwargs)
 
 def raw_data_checker(data):
     """
@@ -132,6 +138,6 @@ def add_cf2ti_point(df_processed, offset=300):
     #     plt.legend()
     #     plt.show()
 
-    logging.info(f"Turning point local index: {turning_point}")
+    logging.debug(f"Turning point local index: {turning_point}")
 
     return cf2ti_pos

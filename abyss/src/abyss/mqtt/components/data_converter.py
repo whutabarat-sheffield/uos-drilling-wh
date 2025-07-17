@@ -90,7 +90,7 @@ class DataFrameConverter:
             if df.empty:
                 raise MessageProcessingError("DataFrame conversion returned empty DataFrame")
             
-            logging.info("Base DataFrame conversion completed", extra={
+            logging.debug("Base DataFrame conversion completed", extra={
                 'dataframe_shape': df.shape,
                 'columns': list(df.columns)
             })

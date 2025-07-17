@@ -64,7 +64,7 @@ class TestExceptionBasedErrorHandling:
         
         # Should not raise any exception
         result_publisher.publish_processing_result(
-            sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.4"
+            sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.6"
         )
         
         # Verify MQTT publish was called
@@ -76,7 +76,7 @@ class TestExceptionBasedErrorHandling:
         
         with pytest.raises(AbyssProcessingError, match="Failed to publish processing result"):
             result_publisher.publish_processing_result(
-                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.4"
+                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.6"
             )
     
     def test_mqtt_connection_error_raises_exception(self, mock_mqtt_client_exception, mock_config, sample_processing_result):
@@ -85,7 +85,7 @@ class TestExceptionBasedErrorHandling:
         
         with pytest.raises(AbyssProcessingError, match="Failed to publish processing result"):
             result_publisher.publish_processing_result(
-                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.4"
+                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.6"
             )
     
     def test_invalid_timestamp_raises_exception(self, mock_mqtt_client_success, mock_config, sample_processing_result):
@@ -94,7 +94,7 @@ class TestExceptionBasedErrorHandling:
         
         with pytest.raises(AbyssProcessingError, match="Failed to publish processing result"):
             result_publisher.publish_processing_result(
-                sample_processing_result, "tb1", "t1", "invalid_timestamp", "0.2.4"
+                sample_processing_result, "tb1", "t1", "invalid_timestamp", "0.2.6"
             )
     
     def test_custom_result_publish_error_raises_exception(self, mock_mqtt_client_failure, mock_config):
@@ -139,7 +139,7 @@ class TestExceptionBasedErrorHandling:
         
         # Should not raise any exception
         result_publisher.publish_processing_result(
-            failed_result, "tb1", "t1", 1672574400.0, "0.2.4"
+            failed_result, "tb1", "t1", 1672574400.0, "0.2.6"
         )
         
         # Verify MQTT publish was called twice (keypoints + depth)
@@ -170,7 +170,7 @@ class TestExceptionBasedErrorHandling:
         
         # Should not raise any exception
         result_publisher.publish_processing_result(
-            insufficient_result, "tb1", "t1", 1672574400.0, "0.2.4"
+            insufficient_result, "tb1", "t1", 1672574400.0, "0.2.6"
         )
         
         # Verify MQTT publish was called twice
@@ -200,7 +200,7 @@ class TestExceptionBasedErrorHandling:
         
         with pytest.raises(AbyssProcessingError, match="Failed to publish processing result"):
             result_publisher.publish_processing_result(
-                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.4"
+                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.6"
             )
         
         # Verify both publish calls were attempted
@@ -212,7 +212,7 @@ class TestExceptionBasedErrorHandling:
         
         with pytest.raises(AbyssProcessingError) as exc_info:
             result_publisher.publish_processing_result(
-                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.4"
+                sample_processing_result, "tb1", "t1", 1672574400.0, "0.2.6"
             )
         
         # Verify exception chaining preserved original error through the chain

@@ -1,4 +1,4 @@
-# UOS Drilling Training Platform: Complete Architecture & Implementation Guide
+# UOS Drilling Training Platform: Complete Architecture, Implementation & User Guide
 
 ## Platform Overview
 
@@ -7,6 +7,8 @@ The UOS Drilling Training Platform enables end-users to perform their own traini
 **Target Users**: Industrial drilling professionals with basic ML knowledge
 **Dataset Scale**: 1300 drilling files (300 labeled + 1000 unlabeled holes)
 **Training Approach**: Current 24-fold CV with future algorithm flexibility
+
+> **Note**: This document consolidates both technical implementation details (Part I) and user guide content (Part II) into a single comprehensive reference.
 
 ## Core Requirements & User Workflows
 
@@ -608,3 +610,265 @@ class ModelSwapManager:
 - Audit trails and compliance reporting
 
 The UOS Drilling Training Platform represents a comprehensive solution that bridges the gap between domain expertise and machine learning capabilities, enabling industrial drilling professionals to leverage advanced ML techniques while maintaining focus on their core competencies in drilling operations.
+
+---
+
+# PART II: USER GUIDE FOR TRAINING PLATFORM
+
+## User Guide Overview
+
+This section provides complete end-user documentation for operating the UOS Drilling Training Platform, optimized for both direct consultation and AI assistant integration (Google Gemini, Claude, etc.).
+
+## Quick Start Guide
+
+### Getting Started with Training Platform
+
+**System Access**:
+```bash
+# Web interface access
+http://drilling-platform:5000/    # MLflow experiment tracking
+http://drilling-platform:8501/    # Streamlit annotation GUI (if configured)
+
+# Command-line access (advanced users)
+ssh user@drilling-platform
+cd /opt/uos-training-platform
+```
+
+**First-Time Setup**:
+1. Organize your drilling files by material type
+2. Validate data quality using automated checks
+3. Generate automatic labels with hybrid labeling
+4. Review and validate annotations in GUI
+5. Start training with default configuration
+6. Monitor training progress in MLflow
+7. Evaluate and deploy trained models
+
+### Common User Workflows
+
+#### Basic Training Workflow (GUI-Focused)
+1. **Upload Data** → GUI file browser
+2. **Auto-Label** → Automatic step-code extraction
+3. **Validate** → GUI annotation review
+4. **Train** → One-click training start
+5. **Deploy** → Export to production
+
+#### Advanced Workflow (CLI-Focused)
+1. **Batch Process** → CLI data validation
+2. **Custom Config** → YAML parameter tuning
+3. **Distributed Training** → Multi-GPU setup
+4. **A/B Testing** → Model comparison
+5. **API Integration** → Custom deployment
+
+## Data Preparation Guide
+
+### Understanding Setitec XLS Files
+
+**Required Format**:
+- Tab-separated text files with .xls extension
+- Minimum 1000 data points per drilling operation
+- Complete step sequences (1→2→N transitions)
+
+**Essential Columns**:
+- `Position (mm)`: Drilling depth progression
+- `I Torque (A)`: Torque current measurements
+- `I Thrust (A)`: Thrust current measurements
+- `Step (nb)`: Drilling phase indicators
+
+**Data Validation Commands**:
+```bash
+# Validate single file
+uos-training-platform validate --file your_file.xls
+
+# Validate entire directory
+uos-training-platform validate --directory raw_drilling_files/
+
+# Generate quality report
+uos-training-platform quality-check --input-dir data/ --report
+```
+
+### Annotation Best Practices
+
+**Understanding Drilling Signals**:
+- **Position (Blue)**: Inverted depth progression
+- **Torque (Red)**: Rotational force patterns
+- **Thrust (Green)**: Downward force application
+- **Step Codes (Purple)**: Phase transitions
+
+**Depth Point Identification**:
+- **Entry**: First material contact (Step 1→2)
+- **Transition**: Material change or breakthrough (Step 2→N)
+- **Exit**: Operation completion (final step)
+
+**Quality Indicators**:
+- High confidence (>80%): Auto-approve
+- Medium confidence (50-80%): Review recommended
+- Low confidence (<50%): Manual validation required
+
+## Training Operations
+
+### Starting Your First Training
+
+**Using Default Configuration**:
+```bash
+# Basic training with defaults
+uos-training-platform train --config default --data-dir your_data/
+
+# Monitor progress
+# Open: http://drilling-platform:5000/
+```
+
+**Understanding Training Metrics**:
+- **Loss**: Should decrease over epochs
+- **MAE**: Target <5mm for excellent performance
+- **R²**: Target >0.90 for good correlation
+
+### Advanced Training Options
+
+**Custom Configuration Example**:
+```yaml
+# custom_training.yaml
+model:
+  strategy: "patchtsmixer_24cv"
+  sequence_length: 512
+  
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.0005
+  
+validation:
+  cv_folds: 24
+  early_stopping: true
+```
+
+**Material-Specific Training**:
+```bash
+# Train on specific materials
+uos-training-platform train --filter-materials concrete,steel
+
+# Compare material performance
+uos-training-platform evaluate --group-by material
+```
+
+## Model Deployment
+
+### Export and Conversion
+
+**PyTorch to ONNX**:
+```bash
+# Convert for production
+uos-training-platform convert --model best_model --format onnx
+
+# Validate conversion accuracy
+uos-training-platform validate-conversion --pytorch-model original --onnx-model converted
+```
+
+### Production Integration
+
+**MQTT Deployment**:
+```bash
+# Deploy to drilling system
+uos-training-platform deploy --model production.onnx --target mqtt-system
+
+# Enable monitoring
+uos-training-platform monitor --enable --model production
+```
+
+## Troubleshooting Guide
+
+### Common Issues and Solutions
+
+**Data Format Errors**:
+```
+Error: Required column 'I Torque (A)' not found
+Solution: Check exact column naming and capitalization
+```
+
+**Training Memory Issues**:
+```
+Error: CUDA out of memory
+Solution: Reduce batch size or use gradient accumulation
+```
+
+**Poor Model Performance**:
+```
+Issue: R² < 0.80
+Solutions:
+- Increase training data
+- Check data quality
+- Adjust hyperparameters
+```
+
+### Performance Optimization Tips
+
+1. **Data Quality**: Clean signals improve accuracy
+2. **Balanced Dataset**: Equal material representation
+3. **Sufficient Labels**: Minimum 100 examples per material
+4. **Hyperparameter Tuning**: Use grid search for optimization
+
+## Advanced Features
+
+### Scaling to Large Datasets (1000+ holes)
+
+**Memory-Efficient Processing**:
+```bash
+# Stream data during training
+uos-training-platform train --streaming --buffer-size 1000
+
+# Use data compression
+uos-training-platform compress-data --format npz
+```
+
+### Cloud Training Setup
+
+**AWS Configuration**:
+```bash
+# Configure and launch
+uos-training-platform configure-cloud --provider aws
+uos-training-platform cloud-train --instance-type p3.2xlarge
+```
+
+### Custom Model Architectures
+
+**Available Strategies**:
+- `patchtsmixer_24cv`: Default, proven accuracy
+- `transformer_attention`: Complex patterns
+- `ensemble_voting`: Maximum accuracy
+
+## Reference Quick Links
+
+### Command Reference
+- `validate`: Data quality checks
+- `auto-label`: Automatic annotation
+- `train`: Model training
+- `evaluate`: Performance assessment
+- `convert`: Format conversion
+- `deploy`: Production deployment
+- `monitor`: Performance tracking
+
+### Configuration Templates
+Available in `/opt/uos-training-platform/configs/`:
+- `default.yaml`: Standard training
+- `advanced.yaml`: Custom parameters
+- `cloud.yaml`: Distributed training
+- `production.yaml`: Deployment settings
+
+## AI Assistant Integration
+
+### Optimized Query Patterns
+
+**For Google Gemini or Claude**:
+```
+"I'm training on [material] with [N] files and getting [error/issue].
+My configuration is [details]. What should I try?"
+```
+
+**Context Template**:
+```
+Context: UOS Drilling Training Platform v1.3.x
+Data: [N] Setitec XLS files for [materials]
+Hardware: [GPU/CPU specs]
+Issue: [Specific problem]
+```
+
+This comprehensive guide enables both independent operation and AI-assisted troubleshooting for all platform features.

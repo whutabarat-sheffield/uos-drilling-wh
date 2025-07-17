@@ -7,6 +7,8 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 
 import logging
 import json
+import time
+from collections import defaultdict
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Union
 from dataclasses import dataclass
@@ -66,6 +68,11 @@ class MessageProcessor:
             # Legacy support for raw config dictionary
             self.config_manager = None
             self.config = config
+        
+        # Error tracking for warnings
+        self._processing_failures = defaultdict(int)  # tool_key -> failure count
+        self._validation_failures = defaultdict(int)  # error_type -> count
+        self._last_warning_time = {}  # warning_type -> timestamp
     
     def process_matching_messages(self, matches: List[TimestampedData]) -> ProcessingResult:
         """
@@ -93,6 +100,7 @@ class MessageProcessor:
             # Enhanced message validation
             validation_error = self._validate_messages(result_msg, trace_msg)
             if validation_error:
+                self._track_validation_failure(validation_error)
                 return ProcessingResult(
                     success=False,
                     head_id=self.head_id,
@@ -134,9 +142,7 @@ class MessageProcessor:
                     error_message=f"Failed to extract IDs from DataFrame: {str(e)}"
                 )
             
-            logging.info(f"Machine ID: {self.machine_id}")
-            logging.info(f"Result ID: {self.result_id}")
-            logging.info(f"Head ID: {self.head_id}")
+            logging.debug(f"Machine ID: {self.machine_id}, Result ID: {self.result_id}, Head ID: {self.head_id}")
             
             # Debug file output if enabled
             self._write_debug_files(result_msg, trace_msg, heads_msg, toolbox_id, tool_id, df)
@@ -199,7 +205,7 @@ class MessageProcessor:
     
     def _log_processing_info(self, result_msg, trace_msg, heads_msg, toolbox_id, tool_id):
         """Log processing information."""
-        logging.info("Processing matched messages", extra={
+        logging.debug("Processing matched messages", extra={
             'toolbox_id': toolbox_id,
             'tool_id': tool_id,
             'timestamp': datetime.fromtimestamp(result_msg.timestamp),
@@ -261,6 +267,11 @@ class MessageProcessor:
                 'result_id': self.result_id
             })
             
+            # Reset failure count on successful estimation
+            tool_key = self._get_tool_key_from_machine_id(self.machine_id)
+            if tool_key in self._processing_failures:
+                self._processing_failures[tool_key] = 0
+            
             return ProcessingResult(
                 success=True,
                 keypoints=keypoints,
@@ -277,6 +288,13 @@ class MessageProcessor:
                 'machine_id': self.machine_id,
                 'result_id': self.result_id
             })
+            
+            # Track failure for warning detection
+            tool_key = self._get_tool_key_from_machine_id(self.machine_id)
+            if tool_key:
+                self._processing_failures[tool_key] += 1
+                self._check_processing_failures(tool_key)
+            
             return ProcessingResult(
                 success=False,
                 machine_id=self.machine_id,
@@ -296,7 +314,7 @@ class MessageProcessor:
             Extracted head_id as string or None if not available
         """
         if not heads_msg or not heads_msg.data:
-            logging.info("Heads message is None or empty")
+            logging.debug("Heads message is None or empty")
             return None
         
         try:
@@ -489,3 +507,71 @@ class MessageProcessor:
                 logging.warning("Found negative step values in DataFrame")
         
         return None
+    
+    def _get_tool_key_from_machine_id(self, machine_id: str) -> Optional[str]:
+        """Extract tool key from machine ID for tracking."""
+        try:
+            if machine_id and '/' in machine_id:
+                parts = machine_id.split('/')
+                if len(parts) >= 2:
+                    return f"{parts[0]}/{parts[1]}"
+        except Exception:
+            pass
+        return None
+    
+    def _track_validation_failure(self, error_message: str):
+        """Track validation failures and warn if rate is too high."""
+        # Categorize error type
+        error_type = 'unknown'
+        if 'Missing required' in error_message:
+            error_type = 'missing_message'
+        elif 'no data content' in error_message:
+            error_type = 'empty_data'
+        elif 'Invalid JSON' in error_message:
+            error_type = 'invalid_json'
+        elif 'missing required Messages.Payload' in error_message:
+            error_type = 'invalid_structure'
+        
+        self._validation_failures[error_type] += 1
+        
+        # Check if we should warn
+        current_time = time.time()
+        last_check = self._last_warning_time.get('validation_check', 0)
+        
+        if current_time - last_check >= 300:  # Check every 5 minutes
+            self._last_warning_time['validation_check'] = current_time
+            
+            total_failures = sum(self._validation_failures.values())
+            if total_failures > 20:
+                self._log_rate_limited_warning('high_validation_failures', 600,
+                    "High rate of message validation failures", {
+                        'total_failures': total_failures,
+                        'failure_breakdown': dict(self._validation_failures),
+                        'time_window_minutes': 5,
+                        'possible_cause': 'Schema changes, malformed messages, or data quality issues'
+                    })
+            
+            # Reset counters after check
+            self._validation_failures.clear()
+    
+    def _check_processing_failures(self, tool_key: str):
+        """Check and warn about repeated processing failures for a tool."""
+        failure_count = self._processing_failures[tool_key]
+        
+        if failure_count >= 5:  # Warn after 5 consecutive failures
+            self._log_rate_limited_warning(f'processing_failure_{tool_key}', 600,
+                "Repeated depth estimation failures for tool", {
+                    'tool_key': tool_key,
+                    'consecutive_failures': failure_count,
+                    'possible_cause': 'Insufficient data, corrupted messages, or algorithm issues'
+                })
+    
+    def _log_rate_limited_warning(self, warning_type: str, min_interval: int, 
+                                 message: str, extra: Dict[str, Any]):
+        """Log warning with rate limiting to avoid spam."""
+        current_time = time.time()
+        last_warning = self._last_warning_time.get(warning_type, 0)
+        
+        if current_time - last_warning >= min_interval:
+            logging.warning(message, extra=extra)
+            self._last_warning_time[warning_type] = current_time

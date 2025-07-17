@@ -1,4 +1,4 @@
-# UOS Drilling System Overview: Complete Architecture & Development Guide
+# UOS Drilling System: Complete Architecture & Development Reference
 
 ## Project Overview
 

@@ -2,6 +2,54 @@
 
 This documentation provides a guide to the Deep Learning Drilling Depth Estimation System, which processes drilling data from MQTT messages to perform depth estimation.
 
+### Changes in 0.2.6
+
+**Major Feature Release** - This version includes significant architectural improvements and new capabilities.
+
+1. **Negative Depth Handling**: Implemented detection and handling of negative depth estimation values for air drilling scenarios
+   - Added EMPTY result type that skips MQTT publication for invalid (negative) depth values
+   - Enhanced warning system with individual and sequential (5+ in 5 minutes) negative depth warnings
+   - Added negative depth occurrence tracking with windowed statistics
+
+2. **MQTT Publisher Stress Testing Suite**: Comprehensive performance testing framework
+   - Three modes: Threading (~80-100 signals/sec), Async (with aiomqtt), and Batch publishing
+   - Smart Docker network detection and auto-configuration
+   - Real-time performance metrics (throughput, latency, success rate)
+   - Detailed stress testing guide and helper scripts
+
+3. **Docker Build System Overhaul**: Optimized build performance with caching
+   - BuildKit enabled by default, reducing rebuild times from 15min to 30s
+   - Cache-aware builds with optional --no-cache flag
+   - New cache management utilities and comprehensive Makefile targets
+   - Docker caching guide documentation
+
+4. **MessageBuffer Enhancements**: Improved monitoring and reliability
+   - Rate-limited warning system for high drop rates and old messages
+   - Performance metrics tracking and thread-safety improvements
+   - Comprehensive test suites for load, thread-safety, and warnings
+
+5. **Portainer Stack Automation**: Streamlined deployment updates
+   - Automated stack updates with Git-based change detection
+   - Health checking and secure API integration
+   - Comprehensive documentation and configuration templates
+
+6. **Training Platform Architecture**: Foundation for user training capabilities
+   - Designed dual codebase architecture (PyTorch training + ONNX deployment)
+   - Planned GUI annotation tools and hybrid labeling workflows
+   - Extensive architecture documentation and roadmap
+
+7. **Performance Optimizations**: Reduced logging overhead
+   - Changed multiple logging statements from INFO to DEBUG level
+   - Conditional progress bars based on logging level
+   - Improved overall system performance
+
+8. **Architectural Simplifications**: Cleaner codebase
+   - Removed MessageCorrelator class for simpler message handling
+   - Streamlined correlation logic
+   - Enhanced test coverage
+
+**Full Changelog**: https://github.com/whutabarat-sheffield/uos-drilling-wh/compare/v0.2.5-stable...v0.2.6
+
 ### Changes in 0.2.5
 1. Enhanced duplicate message handling with configurable strategies: "ignore", "replace", "error"
 2. Improved logging format with structured information display and millisecond precision timestamps

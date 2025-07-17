@@ -5,6 +5,27 @@
 
 set -e  # Exit on any error
 
+# Enable BuildKit for better caching
+export DOCKER_BUILDKIT=1
+
+# Parse command line arguments
+ARGS=""
+for arg in "$@"; do
+    case $arg in
+        --no-cache)
+            ARGS="--no-cache"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --no-cache    Force rebuild without using cache for all builds"
+            echo "  --help, -h    Show this help message"
+            exit 0
+            ;;
+    esac
+done
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,6 +36,12 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}===========================================${NC}"
 echo -e "${BLUE}    Building All Docker Configurations    ${NC}"
 echo -e "${BLUE}===========================================${NC}"
+echo ""
+if [ -n "$ARGS" ]; then
+    echo -e "${YELLOW}Building all images without cache (--no-cache flag set)${NC}"
+else
+    echo -e "${GREEN}Using Docker build cache for faster builds${NC}"
+fi
 echo ""
 
 # Track build results
@@ -33,7 +60,7 @@ run_build() {
     echo "Script: $script_name"
     echo ""
     
-    if ./"$script_name"; then
+    if ./"$script_name" $ARGS; then
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
         BUILDS+=("$description")

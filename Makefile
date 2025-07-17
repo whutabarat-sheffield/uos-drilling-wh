@@ -32,10 +32,20 @@ build-simple: ## Build wheel without clean or validation
 	$(PYTHON) $(BUILD_SCRIPT) --verbose
 
 # Clean build artifacts
-clean: ## Clean build artifacts
+clean: ## Clean build artifacts (preserves caches)
 	@echo "Cleaning build artifacts..."
 	$(PYTHON) $(BUILD_SCRIPT) --clean --verbose
 	@echo "Build artifacts cleaned."
+
+# Clean everything including caches
+clean-all: ## Clean all artifacts including pip and Docker caches
+	@echo "Cleaning all build artifacts and caches..."
+	$(PYTHON) $(BUILD_SCRIPT) --clean --verbose
+	@echo "Cleaning Docker build cache..."
+	@docker builder prune -af 2>/dev/null || true
+	@echo "Cleaning pip cache..."
+	@pip cache purge 2>/dev/null || true
+	@echo "All artifacts and caches cleaned."
 
 # Build and validate wheel
 validate: ## Build and validate wheel
@@ -112,15 +122,126 @@ wheel-info: ## Show information about built wheels
 		fi; \
 	done
 
+# Docker build targets
+# Enable BuildKit for better caching
+export DOCKER_BUILDKIT=1
+
+# Check if Docker is installed
+check-docker:
+	@command -v docker >/dev/null 2>&1 || { echo "Error: Docker is not installed. Please install Docker first."; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Error: Docker daemon is not running. Please start Docker."; exit 1; }
+
+docker-all: check-docker ## Build all Docker images (with caching)
+	@echo "Building all Docker images with caching enabled..."
+	@./build-all.sh
+
+docker-all-fresh: check-docker ## Build all Docker images (no cache, forces fresh downloads)
+	@echo "Building all Docker images without cache (fresh build)..."
+	@./build-all.sh --no-cache
+
+docker-main: check-docker ## Build main Docker image (CPU with PyTorch)
+	@echo "Building main Docker image with caching..."
+	@./build-main.sh
+
+docker-main-fresh: check-docker ## Build main Docker image (no cache)
+	@echo "Building main Docker image without cache..."
+	@./build-main.sh --no-cache
+
+docker-cpu: check-docker ## Build CPU-optimized Docker image
+	@echo "Building CPU-optimized Docker image with caching..."
+	@./build-cpu.sh
+
+docker-cpu-fresh: check-docker ## Build CPU-optimized Docker image (no cache)
+	@echo "Building CPU-optimized Docker image without cache..."
+	@./build-cpu.sh --no-cache
+
+docker-runtime: check-docker ## Build GPU-enabled runtime Docker image
+	@echo "Building GPU runtime Docker image with caching..."
+	@./build-runtime.sh
+
+docker-runtime-fresh: check-docker ## Build GPU runtime Docker image (no cache)
+	@echo "Building GPU runtime Docker image without cache..."
+	@./build-runtime.sh --no-cache
+
+docker-devel: check-docker ## Build development Docker image
+	@echo "Building development Docker image with caching..."
+	@./build-devel.sh
+
+docker-devel-fresh: check-docker ## Build development Docker image (no cache)
+	@echo "Building development Docker image without cache..."
+	@./build-devel.sh --no-cache
+
+docker-publish: check-docker ## Build publisher Docker image
+	@echo "Building publisher Docker image with caching..."
+	@./build-publish.sh
+
+docker-publish-fresh: check-docker ## Build publisher Docker image (no cache)
+	@echo "Building publisher Docker image without cache..."
+	@./build-publish.sh --no-cache
+
+# Docker utility targets
+docker-list: check-docker ## List all project Docker images
+	@echo "Project Docker images:"
+	@docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}" | grep -E "(REPOSITORY|uos-depthest-listener|uos-publish-json)" || echo "No project images found"
+
+docker-clean: check-docker ## Remove all project Docker images
+	@echo "Removing project Docker images..."
+	@docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "(uos-depthest-listener|uos-publish-json)" | xargs -r docker rmi -f || echo "No images to remove"
+	@echo "Docker images cleaned."
+
+docker-cache-info: check-docker ## Show Docker build cache usage
+	@echo "Docker build cache information:"
+	@docker system df -v | grep -A 10 "Build Cache" || docker buildx du
+
+docker-cache-clean: check-docker ## Clean Docker build cache
+	@echo "Cleaning Docker build cache..."
+	@docker builder prune -f
+	@echo "Docker build cache cleaned."
+
+# Combined build targets
+full-build: build docker-all ## Build both Python wheel and all Docker images
+	@echo "Full build completed!"
+
+quick-start: build docker-main ## Build wheel and main Docker image
+	@echo "Quick start build completed!"
+
+# Caching help
+cache-help: ## Show caching best practices and tips
+	@echo "Docker Build Caching Best Practices"
+	@echo "==================================="
+	@echo ""
+	@echo "🚀 Caching saves 90% of build time by reusing layers!"
+	@echo ""
+	@echo "Cached builds (default - fast):"
+	@echo "  make docker-all      # Build all images with cache"
+	@echo "  make docker-main     # Build main image with cache"
+	@echo ""
+	@echo "Fresh builds (slow - only when needed):"
+	@echo "  make docker-all-fresh   # Rebuild all from scratch"
+	@echo "  make docker-main-fresh  # Rebuild main from scratch"
+	@echo ""
+	@echo "Cache management:"
+	@echo "  make docker-cache-info  # Show cache usage"
+	@echo "  make docker-cache-clean # Clean build cache"
+	@echo ""
+	@echo "Tips:"
+	@echo "- Use cached builds for normal development"
+	@echo "- Use fresh builds only when dependencies change"
+	@echo "- BuildKit cache mounts preserve pip downloads"
+
 # Help target
 help: ## Show this help message
 	@echo "UOS Drilling Depth Estimation System - Build Targets"
 	@echo "=================================================="
 	@echo
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo "Python Wheel Targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -v "docker-" | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo
+	@echo "Docker Build Targets:"
+	@grep -E '^docker-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "Examples:"
-	@echo "  make build          # Build wheel with clean and validation"
-	@echo "  make install        # Build and install wheel locally"
-	@echo "  make clean          # Clean build artifacts"
-	@echo "  make wheel-info     # Show information about built wheels"
+	@echo "  make build          # Build Python wheel"
+	@echo "  make docker-all     # Build all Docker images (cached)"
+	@echo "  make full-build     # Build wheel + all Docker images"
+	@echo "  make cache-help     # Learn about caching"

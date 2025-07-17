@@ -32,6 +32,11 @@ RUN adduser \
 
 RUN python -m pip install --upgrade pip
 
+# Install system dependencies for async libraries
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
 # Leverage a bind mount to requirements.txt to avoid having to copy them into
@@ -60,12 +65,13 @@ COPY abyss/src ./src
 #     --mount=type=bind,source=requirements.docker,target=requirements.docker \
 #     python -m pip install -r requirements.docker
 
-# Install the package
-# RUN python -m pip install .
-# RUN python -m pip install -r requirements.txt
-# RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl
-# RUN python -m pip install -r requirements.docker
-# RUN python -m pip install --cert cert/airbus-ca.pem --trusted-host pypi.org --trusted-host files.pythonhosted.org .
+# Install wheel dependencies if any
+RUN if [ -f ./wheels/*.whl ]; then \
+    python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org ./wheels/*.whl; \
+    fi
+
+# Install the abyss package
+RUN python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org .
 
 # ENV TRANSFORMERS_CACHE=/cache/transformers
 # ENV HF_HOME=/cache/transformers
@@ -101,6 +107,11 @@ RUN mkdir -p /app/.cache/matplotlib
 ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
 
+# Performance tuning for stress testing
+ENV PYTHONUNBUFFERED=1
+ENV MQTT_MAX_INFLIGHT_MESSAGES=100
+ENV MQTT_MAX_QUEUED_MESSAGES=1000
+
 # Switch to the non-privileged user to run the application.
 # USER appuser
 
@@ -113,4 +124,7 @@ ENV HF_HOME=/app/.cache/transformers
 # CMD ["python", "abyss/src/run/uos_depth_estimation_listen-continuous.py"]
 # Run the application.
 # CMD python listen-continuous.py 
-CMD ["python", "uos_publish_json.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+
+# Default to normal publishing mode
+# To run stress test, override with: --stress-test --rate 1000 --duration 60
+CMD ["python", "uos_publish_wrapper.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]

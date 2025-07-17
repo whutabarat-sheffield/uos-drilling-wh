@@ -60,7 +60,7 @@ mqtt:
         
         # Test publishing
         result_publisher.publish_processing_result(
-            sample_processing_result, "toolbox1", "tool1", 1672574400.0, "0.2.4"
+            sample_processing_result, "toolbox1", "tool1", 1672574400.0, "0.2.6"
         )
         assert mock_mqtt_client.publish.call_count == 2
         
@@ -77,11 +77,11 @@ mqtt:
         
         assert keyp_payload['Value'] == [1.0, 2.0, 3.0]
         assert keyp_payload['HeadId'] == "TEST_HEAD_ID"
-        assert keyp_payload['AlgoVersion'] == "0.2.4"
+        assert keyp_payload['AlgoVersion'] == "0.2.6"
         
         assert dest_payload['Value'] == [10.0, 20.0, 30.0]
         assert dest_payload['HeadId'] == "TEST_HEAD_ID"
-        assert dest_payload['AlgoVersion'] == "0.2.4"
+        assert dest_payload['AlgoVersion'] == "0.2.6"
     
     def test_result_publisher_backward_compatibility(self, mock_mqtt_client, sample_processing_result):
         """Test ResultPublisher still works with raw config dictionary"""
@@ -103,7 +103,7 @@ mqtt:
         
         # Test publishing
         result_publisher.publish_processing_result(
-            sample_processing_result, "toolbox2", "tool2", 1672574400.0, "0.2.4"
+            sample_processing_result, "toolbox2", "tool2", 1672574400.0, "0.2.6"
         )
         assert mock_mqtt_client.publish.call_count == 2
         
