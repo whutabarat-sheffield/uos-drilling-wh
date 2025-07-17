@@ -11,6 +11,27 @@ TAG="latest"
 DOCKERFILE="Dockerfile"
 BUILD_CONTEXT="."
 
+# Enable BuildKit for better caching
+export DOCKER_BUILDKIT=1
+
+# Parse command line arguments
+NO_CACHE=""
+for arg in "$@"; do
+    case $arg in
+        --no-cache)
+            NO_CACHE="--no-cache"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --no-cache    Force rebuild without using cache"
+            echo "  --help, -h    Show this help message"
+            exit 0
+            ;;
+    esac
+done
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -18,6 +39,11 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting main Docker build...${NC}"
+if [ -n "$NO_CACHE" ]; then
+    echo -e "${YELLOW}Building without cache (--no-cache flag set)${NC}"
+else
+    echo -e "${GREEN}Using Docker build cache for faster builds${NC}"
+fi
 
 # Check if Dockerfile exists
 if [ ! -f "$DOCKERFILE" ]; then
@@ -59,7 +85,7 @@ docker build \
     --tag "$IMAGE_NAME:$TAG" \
     --tag "$IMAGE_NAME:main" \
     --progress=plain \
-    --no-cache \
+    $NO_CACHE \
     "$BUILD_CONTEXT"
 
 end_time=$(date +%s)

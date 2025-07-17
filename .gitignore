@@ -607,3 +607,9 @@ scripts/windo/**/*.pdf
 
 ## Unignore requirements.txt
 !requirements.txt
+# Portainer Stack Updater
+mqtt-multistack/.stack-update-config.env
+mqtt-multistack/.stack-update-state.json
+mqtt-multistack/.jwt-token
+mqtt-multistack/.stack-updater.lock
+mqtt-multistack/stack-updater.log
