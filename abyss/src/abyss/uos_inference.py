@@ -22,6 +22,8 @@ Args:
 
 """
 
+
+
 abysspath = abyss.__path__[0]
 
 class DepthInference:
@@ -130,10 +132,10 @@ class DepthInference:
         hole_id = data['HOLE_ID'][0]
         local = data['local'][0]  
         PREDRILLED = data['PREDRILLED'][0]
-        logging.info("Starting inference...")
+        logging.debug("Starting inference...")
         data, enter_pos = inference_data_pipeline(df_for_inference=self._df, ref_data_path=self.ref_data_path)
         # model = load_model(idx_cv=4)
-        logging.info("Estimating depth...")
+        logging.debug("Estimating depth...")
         exit_depth = exit_estimation_pipeline(self.model, data)
         return enter_pos[hole_id], exit_depth
     
@@ -155,13 +157,13 @@ class DepthInference:
         hole_id = data['HOLE_ID'].iloc[0]
         local = data['local'].iloc[0]  
         PREDRILLED = data['PREDRILLED'].iloc[0]
-        logging.info("Starting inference...")
+        logging.debug("Starting inference...")
         data, enter_pos = inference_data_pipeline(df_for_inference=self._df, ref_data_path=self.ref_data_path)
         # model = load_model(idx_cv=4)
-        logging.info("Estimating depth...")
+        logging.debug("Estimating depth...")
         trans_depth = add_cf2ti_point(self._df)
         exit_depth = exit_estimation_pipeline(self.model, data)
-        logging.info(f"Keypoints are: {enter_pos[hole_id]} {trans_depth} {exit_depth}")
+        logging.debug(f"Keypoints are: {enter_pos[hole_id]} {trans_depth} {exit_depth}")
         return enter_pos[hole_id], trans_depth, exit_depth
 
     def infer_xls(self, xls_path, hole_id='test', local=0, PREDRILLED=1):
