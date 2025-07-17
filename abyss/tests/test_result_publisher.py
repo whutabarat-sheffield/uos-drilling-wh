@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import Mock, MagicMock, call
 import json
+import logging
 from datetime import datetime
 
 try:
@@ -348,6 +349,9 @@ class TestResultPublisher:
         assert stats['mqtt_client_connected'] is True
         assert stats['config_loaded'] is True
         assert stats['publisher_ready'] is True
+        assert 'negative_depth_stats' in stats
+        assert stats['negative_depth_stats']['total_occurrences'] == 0
+        assert stats['negative_depth_stats']['recent_count'] == 0
 
 
 class TestResultPublisherComparison:
@@ -506,3 +510,219 @@ class TestResultPublisherComparison:
         assert payload1_keyp == payload2_keyp
         assert payload1_keyp['Value'] == 'Error in keypoint estimation: Test error occurred'
         assert payload1_keyp['Error'] is True
+
+
+class TestNegativeDepthHandling:
+    """Test handling of negative depth estimation values"""
+    
+    @pytest.fixture
+    def mock_config(self):
+        return {
+            'mqtt': {
+                'listener': {'root': 'OPCPUBSUB'},
+                'estimation': {
+                    'keypoints': 'Estimation/Keypoints',
+                    'depth_estimation': 'Estimation/DepthEstimation'
+                }
+            }
+        }
+    
+    @pytest.fixture
+    def mock_mqtt_client(self):
+        """Mock MQTT client"""
+        client = Mock()
+        publish_result = Mock()
+        publish_result.rc = 0
+        client.publish.return_value = publish_result
+        return client
+    
+    @pytest.fixture
+    def result_publisher(self, mock_mqtt_client, mock_config):
+        """Create result publisher with mocked dependencies"""
+        return ResultPublisher(mock_mqtt_client, mock_config)
+    
+    def test_negative_depth_detection_single_value(self, result_publisher, mock_mqtt_client, caplog):
+        """Test detection of single negative depth value"""
+        # Create result with negative depth
+        result_with_negative_depth = ProcessingResult(
+            success=True,
+            keypoints=[1.0, 2.0, 1.5],  # Third keypoint is lower, causing negative depth
+            depth_estimation=[1.0, -0.5],  # Second depth is negative
+            machine_id="TEST_MACHINE",
+            result_id="TEST_RESULT",
+            head_id="TEST_HEAD",
+            error_message=None
+        )
+        
+        # Clear any previous logs
+        caplog.clear()
+        
+        # Publish result
+        with caplog.at_level(logging.WARNING):
+            result_publisher.publish_processing_result(
+                result_with_negative_depth, "tb", "t", 1672574400.0, "0.2.4"
+            )
+        
+        # Verify no MQTT publish occurred
+        assert mock_mqtt_client.publish.call_count == 0
+        
+        # Verify warning was logged
+        warning_logs = [r for r in caplog.records if r.levelname == 'WARNING']
+        assert len(warning_logs) >= 1
+        assert "Negative depth estimation detected" in warning_logs[0].message
+        assert warning_logs[0].negative_values == [-0.5]
+        assert warning_logs[0].all_depths == [1.0, -0.5]
+    
+    def test_negative_depth_detection_multiple_values(self, result_publisher, mock_mqtt_client, caplog):
+        """Test detection of multiple negative depth values"""
+        # Create result with multiple negative depths
+        result_with_negatives = ProcessingResult(
+            success=True,
+            keypoints=[5.0, 3.0, 2.0, 4.0],
+            depth_estimation=[-2.0, -1.0, 2.0],  # Two negative values
+            machine_id="TEST_MACHINE",
+            result_id="TEST_RESULT",
+            head_id="TEST_HEAD",
+            error_message=None
+        )
+        
+        caplog.clear()
+        
+        # Publish result
+        with caplog.at_level(logging.WARNING):
+            result_publisher.publish_processing_result(
+                result_with_negatives, "tb", "t", 1672574400.0, "0.2.4"
+            )
+        
+        # Verify no MQTT publish occurred
+        assert mock_mqtt_client.publish.call_count == 0
+        
+        # Verify warning contains all negative values
+        warning_logs = [r for r in caplog.records if r.levelname == 'WARNING']
+        assert len(warning_logs) >= 1
+        assert warning_logs[0].negative_values == [-2.0, -1.0]
+    
+    def test_positive_depths_published_normally(self, result_publisher, mock_mqtt_client):
+        """Test that positive depths are published normally"""
+        # Create result with all positive depths
+        positive_result = ProcessingResult(
+            success=True,
+            keypoints=[1.0, 2.0, 3.0],
+            depth_estimation=[1.0, 1.0],  # All positive
+            machine_id="TEST_MACHINE",
+            result_id="TEST_RESULT",
+            head_id="TEST_HEAD",
+            error_message=None
+        )
+        
+        # Publish result
+        result_publisher.publish_processing_result(
+            positive_result, "tb", "t", 1672574400.0, "0.2.4"
+        )
+        
+        # Verify MQTT publish occurred normally
+        assert mock_mqtt_client.publish.call_count == 2
+    
+    def test_sequential_negative_depth_warning(self, result_publisher, mock_mqtt_client, caplog):
+        """Test warning when 5 negative depths occur in close sequence"""
+        # Create multiple results with negative depths
+        negative_result = ProcessingResult(
+            success=True,
+            keypoints=[2.0, 1.0],
+            depth_estimation=[-1.0],
+            machine_id="TEST_MACHINE",
+            result_id="TEST_RESULT",
+            head_id="TEST_HEAD",
+            error_message=None
+        )
+        
+        caplog.clear()
+        
+        # Publish 5 negative results
+        with caplog.at_level(logging.WARNING):
+            for i in range(5):
+                result_publisher.publish_processing_result(
+                    negative_result, "tb", f"t{i}", 1672574400.0 + i, "0.2.4"
+                )
+        
+        # Verify no MQTT publishes occurred
+        assert mock_mqtt_client.publish.call_count == 0
+        
+        # Check for sequential warning
+        warning_logs = [r for r in caplog.records if r.levelname == 'WARNING']
+        sequential_warnings = [w for w in warning_logs 
+                             if "Multiple negative depth estimations detected in close sequence" in w.message]
+        assert len(sequential_warnings) >= 1
+        assert sequential_warnings[0].count == 5
+        assert sequential_warnings[0].threshold == 5
+    
+    def test_negative_depth_stats_tracking(self, result_publisher, mock_mqtt_client):
+        """Test that negative depth occurrences are tracked in stats"""
+        # Create result with negative depth
+        negative_result = ProcessingResult(
+            success=True,
+            keypoints=[2.0, 1.0],
+            depth_estimation=[-1.0],
+            machine_id="TEST_MACHINE",
+            result_id="TEST_RESULT",
+            head_id="TEST_HEAD",
+            error_message=None
+        )
+        
+        # Publish several negative results
+        for i in range(3):
+            result_publisher.publish_processing_result(
+                negative_result, "tb", f"t{i}", 1672574400.0 + i, "0.2.4"
+            )
+        
+        # Check stats
+        stats = result_publisher.get_publisher_stats()
+        assert stats['negative_depth_stats']['total_occurrences'] == 3
+        assert stats['negative_depth_stats']['recent_count'] == 3
+    
+    def test_old_negative_depths_expire_from_window(self, result_publisher, mock_mqtt_client):
+        """Test that old negative depth occurrences expire from the tracking window"""
+        import time
+        
+        # Create result with negative depth
+        negative_result = ProcessingResult(
+            success=True,
+            keypoints=[2.0, 1.0],
+            depth_estimation=[-1.0],
+            machine_id="TEST_MACHINE",
+            result_id="TEST_RESULT",
+            head_id="TEST_HEAD",
+            error_message=None
+        )
+        
+        # Mock time to control window expiration
+        original_time = time.time
+        current_mock_time = [1672574400.0]
+        
+        def mock_time():
+            return current_mock_time[0]
+        
+        # Temporarily replace time.time
+        time.time = mock_time
+        
+        try:
+            # Publish a negative result
+            result_publisher.publish_processing_result(
+                negative_result, "tb", "t1", current_mock_time[0], "0.2.4"
+            )
+            
+            # Advance time beyond the window (5 minutes = 300 seconds)
+            current_mock_time[0] += 400  # 400 seconds later
+            
+            # Trigger window cleanup by publishing another negative result
+            result_publisher.publish_processing_result(
+                negative_result, "tb", "t2", current_mock_time[0], "0.2.4"
+            )
+            
+            # Check stats - should only show 1 recent occurrence
+            stats = result_publisher.get_publisher_stats()
+            assert stats['negative_depth_stats']['recent_count'] == 1
+            
+        finally:
+            # Restore original time function
+            time.time = original_time

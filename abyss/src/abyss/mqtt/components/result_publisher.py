@@ -8,7 +8,7 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 import logging
 import json
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union
 from enum import Enum
@@ -28,6 +28,8 @@ class PublishResultType(Enum):
     SUCCESS = "success"
     INSUFFICIENT_DATA = "insufficient_data"
     ERROR = "error"
+    EMPTY = "empty"  # For cases where air drilling happens, with current implementation this would appear as a negative value result
+    
 
 
 class ResultPublisher:
@@ -63,6 +65,10 @@ class ResultPublisher:
         self._publish_failures = defaultdict(int)  # topic -> failure count
         self._last_warning_time = {}  # warning_type -> timestamp
         self._publish_times = []  # Track recent publish times for performance
+        
+        # Tracking for negative depth occurrences
+        self._negative_depth_occurrences = deque(maxlen=100)  # Limited to prevent memory growth
+        self._negative_depth_window = 300  # 5 minutes window for "close sequence"
     
     def publish_processing_result(self, processing_result: ProcessingResult,
                                 toolbox_id: str, tool_id: str, 
@@ -102,6 +108,14 @@ class ResultPublisher:
                     processing_result, toolbox_id, tool_id, dt_string
                 )
                 return
+            
+            # Check for negative depth values
+            if (processing_result.success and 
+                processing_result.depth_estimation is not None and
+                any(depth < 0 for depth in processing_result.depth_estimation)):
+                
+                self._handle_negative_depth(processing_result, toolbox_id, tool_id, dt_string)
+                return  # Skip MQTT publication
             
             self._publish_successful_result(
                 processing_result, toolbox_id, tool_id, 
@@ -390,10 +404,19 @@ class ResultPublisher:
         Returns:
             Dictionary containing publisher statistics
         """
+        current_time = time.time()
+        recent_negative_depths = [t for t in self._negative_depth_occurrences 
+                                 if t > current_time - self._negative_depth_window]
+        
         return {
             'mqtt_client_connected': self.mqtt_client.is_connected() if hasattr(self.mqtt_client, 'is_connected') else 'unknown',
             'config_loaded': self.config is not None,
-            'publisher_ready': True
+            'publisher_ready': True,
+            'negative_depth_stats': {
+                'total_occurrences': len(self._negative_depth_occurrences),
+                'recent_count': len(recent_negative_depths),
+                'window_minutes': self._negative_depth_window / 60
+            }
         }
     
     def _track_publish_failure(self, topic: str):
@@ -455,3 +478,51 @@ class ResultPublisher:
             # Reset failure counter after warning
             if 'topic' in extra and warning_type.startswith('publish_failure_'):
                 self._publish_failures[extra['topic']] = 0
+    
+    def _handle_negative_depth(self, processing_result: ProcessingResult, 
+                              toolbox_id: str, tool_id: str, dt_string: str):
+        """Handle cases where depth estimation contains negative values."""
+        current_time = time.time()
+        
+        # Track occurrence
+        self._negative_depth_occurrences.append(current_time)
+        
+        # Log individual warning
+        negative_values = [d for d in processing_result.depth_estimation if d < 0]
+        logging.warning("Negative depth estimation detected - skipping MQTT publish", extra={
+            'toolbox_id': toolbox_id,
+            'tool_id': tool_id,
+            'negative_values': negative_values,
+            'all_depths': processing_result.depth_estimation,
+            'keypoints': processing_result.keypoints,
+            'machine_id': processing_result.machine_id,
+            'result_id': processing_result.result_id,
+            'timestamp': dt_string
+        })
+        
+        # Check for sequential occurrences
+        self._check_sequential_negative_depths(current_time)
+    
+    def _check_sequential_negative_depths(self, current_time: float):
+        """Check if we have 5+ negative depths in close sequence."""
+        # Remove old occurrences outside the window
+        cutoff_time = current_time - self._negative_depth_window
+        # Filter out old entries (deque doesn't support list comprehension directly)
+        valid_occurrences = [t for t in self._negative_depth_occurrences if t > cutoff_time]
+        self._negative_depth_occurrences.clear()
+        self._negative_depth_occurrences.extend(valid_occurrences)
+        
+        # Check if we have 5 or more in the window
+        if len(self._negative_depth_occurrences) >= 5:
+            # Use rate-limited warning to avoid spam
+            self._log_rate_limited_warning(
+                'sequential_negative_depths',
+                300,  # Don't warn more than once per 5 minutes
+                f"Multiple negative depth estimations detected in close sequence",
+                {
+                    'count': len(self._negative_depth_occurrences),
+                    'window_minutes': self._negative_depth_window / 60,
+                    'threshold': 5,
+                    'action': 'Review drilling parameters or calibration'
+                }
+            )
