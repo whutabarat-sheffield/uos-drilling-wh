@@ -120,7 +120,7 @@
 	// Install Python dependencies
 	"postStartCommand": [
 		"bash", "-c", 
-		"cd abyss && pip install --user -r requirements.txt && pip install --user -e . && pip install --user aiomqtt aiofiles prometheus-client && git config --global credential.helper 'cache --timeout=3600'"
+		"cd abyss && pip install --user --find-links wheels accelerate==1.2.1 transformers==4.41.0.dev0 tsfm_public==0.2.17 && pip install --user -r requirements.txt && pip install --user -e . && pip install --user aiomqtt aiofiles prometheus-client && git config --global credential.helper 'cache --timeout=3600'"
 	],
 
 	// Environment variables for development

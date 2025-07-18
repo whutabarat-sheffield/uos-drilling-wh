@@ -183,7 +183,9 @@ class ConfigurationManager:
         return self.get('mqtt.estimation', {})
     
     def get_time_window(self) -> float:
-        """Get message correlation time window."""
+        """Get message correlation time window (deprecated in exact matching mode)."""
+        # Time window is no longer used in exact matching mode
+        # Kept for API compatibility
         return self.get('mqtt.listener.time_window', 30.0)
     
     def get_cleanup_interval(self) -> int:

@@ -1,664 +1,494 @@
 """
-Message Buffer Module
+Message Buffer Module - Exact Match Implementation
 
-Handles buffering and cleanup of timestamped MQTT messages.
-Extracted from the original MQTTDrillingDataAnalyser class.
+This implementation uses exact (tool_key, source_timestamp) matching instead of fuzzy time windows.
+Maintains the same public API as the original MessageBuffer for compatibility.
 """
 
 import logging
 import threading
-from collections import defaultdict, deque
+import time
+from collections import defaultdict
+from queue import Queue, Empty
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Union
-import time as time_module
+from typing import Dict, List, Any, Optional, Set, Tuple, Union
 
-from ...uos_depth_est import TimestampedData, ConfigurationError
+from ...uos_depth_est import TimestampedData
 from .config_manager import ConfigurationManager
 
 
-class DuplicateMessageError(Exception):
-    """Exception raised when a duplicate message is detected and error handling is configured."""
-    pass
+@dataclass
+class MessageSet:
+    """Holds messages for an exact (tool_key, timestamp) match."""
+    tool_key: str
+    source_timestamp: str
+    created_at: float = field(default_factory=time.time)
+    
+    # Messages by type
+    result_messages: List[TimestampedData] = field(default_factory=list)
+    trace_messages: List[TimestampedData] = field(default_factory=list)
+    heads_messages: List[TimestampedData] = field(default_factory=list)
+    
+    def add(self, msg_type: str, message: TimestampedData):
+        """Add message to appropriate list."""
+        if msg_type == 'result':
+            self.result_messages.append(message)
+        elif msg_type == 'trace':
+            self.trace_messages.append(message)
+        elif msg_type == 'heads':
+            self.heads_messages.append(message)
+    
+    def is_complete(self, require_heads: bool = False) -> bool:
+        """Check if we have minimum required messages."""
+        if require_heads:
+            return (len(self.result_messages) > 0 and 
+                    len(self.trace_messages) > 0 and 
+                    len(self.heads_messages) > 0)
+        return len(self.result_messages) > 0 and len(self.trace_messages) > 0
+    
+    def get_all_messages(self) -> List[TimestampedData]:
+        """Get all messages in this set."""
+        return self.result_messages + self.trace_messages + self.heads_messages
+    
+    def get_all_by_type(self) -> Dict[str, List[TimestampedData]]:
+        """Get messages organized by type."""
+        return {
+            'result': self.result_messages,
+            'trace': self.trace_messages,
+            'heads': self.heads_messages
+        }
+    
+    def age_seconds(self) -> float:
+        """Age of this message set."""
+        return time.time() - self.created_at
 
 
 class MessageBuffer:
     """
-    Manages buffering of timestamped MQTT messages with automatic cleanup.
-    
-    Responsibilities:
-    - Buffer messages by topic type
-    - Validate incoming messages
-    - Perform time-based and size-based cleanup
-    - Provide buffer statistics and monitoring
+    Exact-match message buffer using (tool_key, timestamp_string) as keys.
+    Maintains same public API for compatibility with existing code.
     """
     
-    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], cleanup_interval: int = 60, 
-                 max_buffer_size: int = 10000, max_age_seconds: int = 300):
+    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], 
+                 cleanup_interval: int = 60, max_buffer_size: int = 10000, 
+                 max_age_seconds: int = 300):
         """
-        Initialize MessageBuffer.
+        Initialize MessageBuffer with exact matching.
         
         Args:
             config: Configuration dictionary or ConfigurationManager instance
-            cleanup_interval: Interval between automatic cleanups (seconds)
-            max_buffer_size: Maximum number of messages per buffer
-            max_age_seconds: Maximum age of messages before cleanup (seconds)
+            cleanup_interval: Interval between cleanups (seconds)
+            max_buffer_size: Maximum messages per buffer (ignored in exact-match mode)
+            max_age_seconds: Maximum age before expiry (seconds)
         """
-        # Handle both ConfigurationManager and raw config dict for backward compatibility
+        # Handle both ConfigurationManager and raw config dict
         if isinstance(config, ConfigurationManager):
             self.config_manager = config
             self.config = config.get_raw_config()
-            
-            # Use ConfigurationManager methods for typed access
-            self.duplicate_handling = config.get_duplicate_handling()
-            listener_config = config.get_mqtt_listener_config()
-            
         else:
-            # Legacy support for raw config dictionary
             self.config_manager = None
             self.config = config
-            
-            # Extract listener config manually (legacy method)
-            listener_config = self.config['mqtt']['listener']
-            self.duplicate_handling = listener_config.get('duplicate_handling', 'ignore')
         
-        self.buffers: Dict[str, List[TimestampedData]] = defaultdict(list)
-        self._buffer_lock = threading.RLock()  # Use RLock to prevent deadlocks
         self.cleanup_interval = cleanup_interval
-        self.max_buffer_size = max_buffer_size
+        self.max_buffer_size = max_buffer_size  # Kept for API compatibility
         self.max_age_seconds = max_age_seconds
-        self.last_cleanup = datetime.now().timestamp()
         
-        # Performance metrics
+        # Core data structure: Dict[ExactKey, MessageSet]
+        # ExactKey = (tool_key, source_timestamp_string)
+        self._exact_matches = {}  # type: Dict[Tuple[str, str], MessageSet]
+        self._exact_matches_lock = threading.RLock()
+        
+        # Reverse index for topic pattern queries
+        self._by_topic_pattern = defaultdict(set)  # topic_pattern -> set of exact_keys
+        
+        # Processing queue for completed matches
+        self._completed_matches = Queue()
+        
+        # Always require heads messages for complete match
+        listener_config = self._get_listener_config()
+        self.require_heads = True  # Always require heads messages
+        
+        # Topic patterns for backward compatibility
+        self._topic_patterns = self._build_topic_patterns(listener_config)
+        
+        # Metrics
         self._metrics = {
             'messages_received': 0,
+            'exact_matches_completed': 0,
+            'messages_expired': 0,
             'messages_dropped': 0,
-            'messages_processed': 0,
-            'duplicate_messages': 0,
-            'cleanup_cycles': 0,
-            'last_warning_time': {},  # Track last warning time by type to avoid spam
-            'processing_times': deque(maxlen=1000)  # Keep last 1000 processing times
+            'current_active_keys': 0,
+            'extraction_failures': 0
         }
         self._metrics_lock = threading.Lock()
         
-        # Pre-compute topic patterns for efficiency
-        self._topic_patterns = {
-            'trace': f"{listener_config['root']}/+/+/{listener_config['trace']}",
-            'result': f"{listener_config['root']}/+/+/{listener_config['result']}"
-        }
+        # Start cleanup thread
+        self._running = True
+        self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self._cleanup_thread.start()
         
-        # Add heads pattern only if configured
-        if 'heads' in listener_config:
-            self._topic_patterns['heads'] = f"{listener_config['root']}/+/+/{listener_config['heads']}"
+        logging.info("MessageBuffer initialized with exact matching", extra={
+            'max_age_seconds': max_age_seconds,
+            'cleanup_interval': cleanup_interval,
+            'require_heads': self.require_heads
+        })
     
     def add_message(self, data: TimestampedData) -> bool:
         """
-        Add a message to the buffer with improved error handling.
+        Add message using exact matching.
         
         Args:
             data: Timestamped message data
             
         Returns:
-            True if message was added successfully, False otherwise
+            True if message was added successfully
         """
-        start_time = time_module.time()
         try:
-            # Track received messages
             with self._metrics_lock:
                 self._metrics['messages_received'] += 1
-            # Validation
+            
+            # Validate input
             if not data or not data.source:
-                logging.warning("Message validation failed", extra={
-                    'reason': 'empty_source',
-                    'has_data': data is not None
-                })
+                logging.warning("Invalid message: missing source")
                 return False
             
-            # Determine message type and topic pattern
-            matching_topic = self._get_matching_topic(data.source)
-            if not matching_topic:
-                logging.debug("Non-essential topic received", extra={
-                    'source': data.source
-                })
-                return False
-
-            # Log buffer operation
-            buffer_size_before = len(self.buffers[matching_topic])
-            logging.debug("Adding message to buffer", extra={
-                'topic_pattern': matching_topic,
-                'source': data.source,
-                'buffer_size_before': buffer_size_before,
-                'timestamp': data.timestamp
-            })
+            # Extract exact matching key components
+            tool_key = self._extract_tool_key(data.source)
+            source_timestamp = self._extract_source_timestamp(data)
             
-            # Thread-safe buffer operations
-            with self._buffer_lock:
-                # Check for duplicates before adding
-                existing_messages = self.buffers[matching_topic]
-                duplicate_found, duplicate_index = self._check_for_duplicate(data, existing_messages)
+            if not tool_key or not source_timestamp:
+                logging.error("Cannot extract key components", extra={
+                    'source': data.source,
+                    'has_tool_key': tool_key is not None,
+                    'has_timestamp': source_timestamp is not None,
+                    'data_type': type(data.data).__name__
+                })
+                with self._metrics_lock:
+                    self._metrics['extraction_failures'] += 1
+                return False
+            
+            exact_key = (tool_key, source_timestamp)
+            topic_pattern = self._get_topic_pattern(data.source)
+            message_type = self._get_message_type(data.source)
+            
+            with self._exact_matches_lock:
+                # Get or create message set
+                if exact_key not in self._exact_matches:
+                    self._exact_matches[exact_key] = MessageSet(tool_key, source_timestamp)
+                    self._by_topic_pattern[topic_pattern].add(exact_key)
                 
-                if duplicate_found:
-                    # Track duplicate in metrics
+                message_set = self._exact_matches[exact_key]
+                
+                # Add message to set
+                message_set.add(message_type, data)
+                
+                logging.debug("Added message to exact match set", extra={
+                    'tool_key': tool_key,
+                    'timestamp': source_timestamp,
+                    'message_type': message_type,
+                    'result_count': len(message_set.result_messages),
+                    'trace_count': len(message_set.trace_messages),
+                    'heads_count': len(message_set.heads_messages)
+                })
+                
+                # Check if complete
+                if message_set.is_complete(self.require_heads):
+                    self._completed_matches.put(message_set)
                     with self._metrics_lock:
-                        self._metrics['duplicate_messages'] += 1
-                        
-                    if self.duplicate_handling == 'ignore':
-                        logging.debug("Duplicate message ignored per configuration", extra={
-                            'duplicate_handling': self.duplicate_handling,
-                            'source': data.source,
-                            'timestamp': data.timestamp
-                        })
-                        return False
-                    elif self.duplicate_handling == 'replace':
-                        # Replace the existing duplicate message
-                        if duplicate_index is not None:
-                            self.buffers[matching_topic][duplicate_index] = data
-                            logging.debug("Duplicate message replaced per configuration", extra={
-                                'duplicate_handling': self.duplicate_handling,
-                                'source': data.source,
-                                'timestamp': data.timestamp,
-                                'replaced_index': duplicate_index
-                            })
-                            return True
-                    elif self.duplicate_handling == 'error':
-                        logging.error("Duplicate message detected and error raised per configuration", extra={
-                            'duplicate_handling': self.duplicate_handling,
-                            'source': data.source,
-                            'timestamp': data.timestamp
-                        })
-                        raise DuplicateMessageError(f"Duplicate message detected: {data.source} at {data.timestamp}")
-                
-                # Add message to buffer (only if not a duplicate or handling is not 'ignore')
-                self.buffers[matching_topic].append(data)
-                
-                buffer_size_after = len(self.buffers[matching_topic])
-                
-                # Check buffer capacity with progressive warnings
-                buffer_usage_percent = (buffer_size_after / self.max_buffer_size) * 100
-                
-                # Progressive warnings with rate limiting
-                if buffer_usage_percent >= 90:
-                    self._log_rate_limited_warning('buffer_critical', 30, 
-                        "CRITICAL: Buffer at critical capacity - data loss imminent", {
-                        'topic': matching_topic,
-                        'buffer_usage_percent': buffer_usage_percent,
-                        'buffer_size': buffer_size_after,
-                        'max_size': self.max_buffer_size
+                        self._metrics['exact_matches_completed'] += 1
+                    
+                    # Log successful match
+                    logging.info("Exact match completed", extra={
+                        'tool_key': tool_key,
+                        'timestamp': source_timestamp,
+                        'result_ids': [m.data.get('ResultId') for m in message_set.result_messages]
                     })
-                elif buffer_usage_percent >= 80:
-                    self._log_rate_limited_warning('buffer_high', 60,
-                        "Buffer at high capacity - system under stress", {
-                        'topic': matching_topic,
-                        'buffer_usage_percent': buffer_usage_percent,
-                        'buffer_size': buffer_size_after,
-                        'max_size': self.max_buffer_size
-                    })
-                elif buffer_usage_percent >= 60:
-                    self._log_rate_limited_warning('buffer_moderate', 300,
-                        "Buffer usage elevated - monitor system load", {
-                        'topic': matching_topic,
-                        'buffer_size': buffer_size_after,
-                        'max_size': self.max_buffer_size,
-                        'usage_percent': buffer_usage_percent
-                    })
-            logging.debug("Message added to buffer", extra={
-                'buffer_size_after': buffer_size_after,
-                'all_buffer_sizes': {k: len(v) for k, v in self.buffers.items()},
-                'duplicate_detected': duplicate_found,
-                'duplicate_handling': self.duplicate_handling
-            })
-            
-            # Trigger cleanup if needed
-            self._check_cleanup_triggers()
-            
-            # Track processing time and successful addition
-            processing_time = time_module.time() - start_time
-            with self._metrics_lock:
-                self._metrics['messages_processed'] += 1
-                self._metrics['processing_times'].append(processing_time)
+                    
+                    # Remove from active tracking
+                    del self._exact_matches[exact_key]
+                    self._by_topic_pattern[topic_pattern].discard(exact_key)
             
             return True
             
-        except ValueError as e:
-            logging.warning("Invalid message data", extra={
-                'error_message': str(e),
-                'source': getattr(data, 'source', 'unknown') if data else 'no_data'
-            })
-            # Track dropped message
-            with self._metrics_lock:
-                self._metrics['messages_dropped'] += 1
-            self._check_drop_rate_warning()
-            return False
-        except DuplicateMessageError:
-            # Re-raise duplicate message errors (don't catch them)
-            raise
-        except ConfigurationError as e:
-            logging.error("Configuration error in add_message", extra={
-                'error_message': str(e),
-                'config_section': 'mqtt.listener'
-            })
-            # Track dropped message
-            with self._metrics_lock:
-                self._metrics['messages_dropped'] += 1
-            self._check_drop_rate_warning()
-            return False
         except Exception as e:
-            logging.error("Unexpected error in add_message", extra={
+            logging.error("Error adding message", extra={
                 'error_type': type(e).__name__,
                 'error_message': str(e),
-                'source': getattr(data, 'source', 'unknown') if data else 'no_data'
-            })
-            # Track dropped message
+                'source': getattr(data, 'source', 'unknown')
+            }, exc_info=True)
             with self._metrics_lock:
                 self._metrics['messages_dropped'] += 1
-            self._check_drop_rate_warning()
             return False
     
-    def _check_for_duplicate(self, new_message: TimestampedData, existing_messages: List[TimestampedData]) -> tuple[bool, Optional[int]]:
-        """Check if the new message is a duplicate of any existing message.
-        
-        Returns:
-            Tuple of (is_duplicate, index_of_duplicate)
+    def get_all_buffers(self) -> Dict[str, List[TimestampedData]]:
         """
+        Return buffers in format expected by correlator.
+        Adapts our internal structure to the old API.
+        """
+        buffers = defaultdict(list)
+        
+        with self._exact_matches_lock:
+            # Add active (unmatched) messages
+            for exact_key, message_set in self._exact_matches.items():
+                for msg in message_set.get_all_messages():
+                    topic_pattern = self._get_topic_pattern(msg.source)
+                    buffers[topic_pattern].append(msg)
+        
+        # Add completed matches from queue (for backward compatibility)
+        # Note: This is a bit of a hack to maintain the old API
+        completed = []
         try:
-            # Get configurable time window for duplicate detection
-            if self.config_manager:
-                # Use ConfigurationManager for typed access
-                time_window = self.config_manager.get('mqtt.listener.duplicate_time_window', 1.0)
-            else:
-                # Legacy raw config access
-                time_window = self.config.get('mqtt', {}).get('listener', {}).get('duplicate_time_window', 1.0)
-            
-            for index, existing in enumerate(existing_messages):
-                # Check if this is a potential duplicate based on source and timestamp
-                if (existing.source == new_message.source and 
-                    abs(existing.timestamp - new_message.timestamp) < time_window):
-                    
-                    # Check if data content is identical
-                    if self._compare_message_data(existing.data, new_message.data):
-                        self._log_duplicate_detection(new_message, existing)
-                        return True, index
-            
-            return False, None
-            
-        except Exception as e:
-            logging.debug(f"Error checking for duplicates: {e}")
-            return False, None
-    
-    def _compare_message_data(self, data1: Any, data2: Any) -> bool:
-        """Compare two message data objects for equality with improved accuracy."""
-        try:
-            # Handle None cases
-            if data1 is None and data2 is None:
-                return True
-            if data1 is None or data2 is None:
-                return False
-            
-            # Direct equality check first (handles most cases efficiently)
-            if data1 == data2:
-                return True
-            
-            # For dictionaries, use more reliable comparison
-            if isinstance(data1, dict) and isinstance(data2, dict):
-                return self._compare_dicts(data1, data2)
-            
-            # For lists, compare element by element
-            if isinstance(data1, list) and isinstance(data2, list):
-                if len(data1) != len(data2):
-                    return False
-                return all(self._compare_message_data(item1, item2) 
-                          for item1, item2 in zip(data1, data2))
-            
-            # For numeric types, handle potential precision issues
-            if isinstance(data1, (int, float)) and isinstance(data2, (int, float)):
-                # Allow small differences for floating point comparison
-                return abs(float(data1) - float(data2)) < 1e-10
-            
-            # Fall back to string comparison for other types
-            str1 = str(data1)
-            str2 = str(data2)
-            return str1 == str2
-            
-        except Exception as e:
-            logging.debug(f"Error comparing message data: {e}")
-            return False
-    
-    def _compare_dicts(self, dict1: dict, dict2: dict) -> bool:
-        """Compare two dictionaries recursively."""
-        try:
-            if set(dict1.keys()) != set(dict2.keys()):
-                return False
-            
-            for key in dict1:
-                if not self._compare_message_data(dict1[key], dict2[key]):
-                    return False
-            
-            return True
-        except Exception:
-            return False
-    
-    def _log_duplicate_detection(self, new_message: TimestampedData, existing_message: TimestampedData):
-        """Log details about duplicate message detection."""
-        # Extract tool key for identification
-        tool_key = "unknown"
-        try:
-            parts = new_message.source.split('/')
-            if len(parts) >= 3:
-                tool_key = f"{parts[1]}/{parts[2]}"
-        except Exception:
+            while True:
+                match = self._completed_matches.get_nowait()
+                completed.append(match)
+                for msg in match.get_all_messages():
+                    topic_pattern = self._get_topic_pattern(msg.source)
+                    buffers[topic_pattern].append(msg)
+        except Empty:
             pass
         
-        # Determine message type
-        message_type = "unknown"
-        if "ResultManagement" in new_message.source:
-            message_type = "result"
-        elif "Trace" in new_message.source:
-            message_type = "trace"
-        elif "AssetManagement" in new_message.source:
-            message_type = "heads"
+        # Put completed matches back for correlator to process
+        for match in completed:
+            self._completed_matches.put(match)
         
-        logging.debug("Duplicate message detected at buffer level", extra={
-            'message_type': message_type,
-            'source_topic': new_message.source,
-            'tool_key': tool_key,
-            'new_timestamp': new_message.timestamp,
-            'existing_timestamp': existing_message.timestamp,
-            'timestamp_diff': abs(new_message.timestamp - existing_message.timestamp),
-            'data_preview': str(new_message.data)[:200] + '...' if len(str(new_message.data)) > 200 else str(new_message.data),
-            'duplicate_source': 'message_buffer',
-            'duplicate_handling': self.duplicate_handling
-        })
-    
-    def _get_matching_topic(self, source: str) -> Optional[str]:
-        """
-        Determine which topic pattern matches the message source.
-        
-        Args:
-            source: Message source topic
-            
-        Returns:
-            Matching topic pattern or None if no match
-        """
-        if self.config_manager:
-            # Use ConfigurationManager for typed access
-            listener_config = self.config_manager.get_mqtt_listener_config()
-        else:
-            # Legacy raw config access
-            listener_config = self.config['mqtt']['listener']
-        
-        if listener_config['trace'] in source:
-            logging.debug("Trace message identified")
-            return self._topic_patterns['trace']
-        elif listener_config['result'] in source:
-            logging.debug("Result message identified")
-            return self._topic_patterns['result']
-        elif 'heads' in listener_config and listener_config['heads'] in source:
-            logging.debug("Heads message identified")
-            return self._topic_patterns['heads']
-        
-        return None
-    
-    def _check_cleanup_triggers(self):
-        """Check if cleanup should be triggered based on size or time."""
-        cleanup_needed = False
-        
-        # Check for buffer size overflow
-        with self._buffer_lock:
-            for topic, buffer in self.buffers.items():
-                if len(buffer) >= self.max_buffer_size:
-                    self._log_rate_limited_warning('buffer_overflow', 30,
-                        "Buffer at maximum capacity - cleanup triggered", {
-                        'topic': topic,
-                        'buffer_size': len(buffer),
-                        'max_size': self.max_buffer_size,
-                        'action': 'Removing oldest messages'
-                    })
-                    cleanup_needed = True
-                    break
-        
-        # Check for time-based cleanup
-        current_time = datetime.now().timestamp()
-        if current_time - self.last_cleanup >= self.cleanup_interval:
-            logging.debug("Time-based cleanup triggered", extra={
-                'elapsed_seconds': current_time - self.last_cleanup,
-                'cleanup_interval': self.cleanup_interval
-            })
-            cleanup_needed = True
-        
-        # Perform cleanup if needed
-        if cleanup_needed:
-            self.cleanup_old_messages()
-            self.last_cleanup = current_time
-            
-        # Check for old messages (warning only, doesn't trigger cleanup)
-        self._check_message_age_warnings()
-    
-    def cleanup_old_messages(self):
-        """
-        Improved cleanup with time-based sliding window approach.
-        """
-        try:
-            current_time = datetime.now().timestamp()
-            total_removed = 0
-            cleanup_warnings = []
-            
-            # Track cleanup cycle
-            with self._metrics_lock:
-                self._metrics['cleanup_cycles'] += 1
-            
-            with self._buffer_lock:
-                for topic in list(self.buffers.keys()):
-                    if topic not in self.buffers:
-                        continue
-                        
-                    original_length = len(self.buffers[topic])
-                    if original_length == 0:
-                        continue
-                    
-                    # Remove old messages beyond time window
-                    self.buffers[topic] = [
-                        msg for msg in self.buffers[topic] 
-                        if current_time - msg.timestamp <= self.max_age_seconds
-                    ]
-                    age_removed = original_length - len(self.buffers[topic])
-                    
-                    # If still over size limit, keep only newest messages
-                    size_removed = 0
-                    if len(self.buffers[topic]) > self.max_buffer_size:
-                        self.buffers[topic].sort(key=lambda msg: msg.timestamp, reverse=True)
-                        size_removed = len(self.buffers[topic]) - self.max_buffer_size
-                        self.buffers[topic] = self.buffers[topic][:self.max_buffer_size]
-                    
-                    total_topic_removed = age_removed + size_removed
-                    total_removed += total_topic_removed
-                    
-                    # Check if we're removing too many messages (indicates falling behind)
-                    removal_percent = (total_topic_removed / original_length) * 100 if original_length > 0 else 0
-                    if removal_percent > 50:
-                        cleanup_warnings.append({
-                            'topic': topic,
-                            'removal_percent': removal_percent,
-                            'messages_removed': total_topic_removed
-                        })
-                    
-                    if total_topic_removed > 0:
-                        logging.debug("Buffer cleanup completed", extra={
-                            'topic': topic,
-                            'original_size': original_length,
-                            'final_size': len(self.buffers[topic]),
-                            'age_removed': age_removed,
-                            'size_removed': size_removed,
-                            'total_removed': total_topic_removed
-                        })
-            
-            # Log warnings for excessive cleanup
-            for warning in cleanup_warnings:
-                logging.warning("Excessive buffer cleanup indicates system falling behind", extra={
-                    'topic': warning['topic'],
-                    'removal_percent': warning['removal_percent'],
-                    'messages_removed': warning['messages_removed'],
-                    'possible_cause': 'Processing slower than message arrival rate'
-                })
-            
-            if total_removed > 0:
-                logging.debug("Global cleanup summary", extra={
-                    'total_messages_removed': total_removed,
-                    'buffer_sizes': {k: len(v) for k, v in self.buffers.items()}
-                })
-            
-        except Exception as e:
-            logging.error("Error in cleanup_old_messages", extra={
-                'error_type': type(e).__name__,
-                'error_message': str(e)
-            }, exc_info=True)
+        return dict(buffers)
     
     def get_buffer_stats(self) -> Dict[str, Any]:
-        """
-        Get comprehensive buffer statistics.
-        
-        Returns:
-            Dictionary containing buffer statistics
-        """
-        current_time = datetime.now().timestamp()
-        with self._buffer_lock:
+        """Get buffer statistics (API compatibility)."""
+        with self._exact_matches_lock:
             stats = {
-                'total_buffers': len(self.buffers),
-                'total_messages': sum(len(buffer) for buffer in self.buffers.values()),
-                'buffer_sizes': {topic: len(buffer) for topic, buffer in self.buffers.items()},
+                'total_buffers': len(self._topic_patterns),  # For compatibility
+                'total_messages': sum(
+                    len(ms.get_all_messages()) 
+                    for ms in self._exact_matches.values()
+                ),
+                'buffer_sizes': {},  # Will be populated below
                 'oldest_message_age': None,
                 'newest_message_age': None,
-                'last_cleanup_seconds_ago': current_time - self.last_cleanup
+                'last_cleanup_seconds_ago': 0,  # Not tracked in new implementation
+                
+                # New exact-match specific stats
+                'total_active_keys': len(self._exact_matches),
+                'messages_by_type': defaultdict(int),
+                'completed_matches_pending': self._completed_matches.qsize()
             }
             
-            # Find oldest and newest messages
-            all_timestamps = []
-            for buffer in self.buffers.values():
-                all_timestamps.extend([msg.timestamp for msg in buffer])
+            # Count messages by topic pattern for compatibility
+            for pattern in self._topic_patterns.values():
+                stats['buffer_sizes'][pattern] = len(self.get_messages_by_topic(pattern))
             
-            if all_timestamps:
-                oldest_timestamp = min(all_timestamps)
-                newest_timestamp = max(all_timestamps)
-                stats['oldest_message_age'] = current_time - oldest_timestamp
-                stats['newest_message_age'] = current_time - newest_timestamp
+            # Count messages by type
+            for message_set in self._exact_matches.values():
+                stats['messages_by_type']['result'] += len(message_set.result_messages)
+                stats['messages_by_type']['trace'] += len(message_set.trace_messages)
+                stats['messages_by_type']['heads'] += len(message_set.heads_messages)
+            
+            # Find oldest and newest
+            if self._exact_matches:
+                ages = [ms.age_seconds() for ms in self._exact_matches.values()]
+                stats['oldest_message_age'] = max(ages)
+                stats['newest_message_age'] = min(ages)
+        
+        # Add metrics
+        with self._metrics_lock:
+            stats.update(self._metrics)
         
         return stats
     
     def get_messages_by_topic(self, topic_pattern: str) -> List[TimestampedData]:
-        """
-        Get all messages for a specific topic pattern.
+        """Get messages for a specific topic pattern (API compatibility)."""
+        messages = []
         
-        Args:
-            topic_pattern: Topic pattern to retrieve
+        with self._exact_matches_lock:
+            # Get exact keys for this topic pattern
+            exact_keys = self._by_topic_pattern.get(topic_pattern, set())
             
-        Returns:
-            List of messages for the topic
-        """
-        with self._buffer_lock:
-            return self.buffers.get(topic_pattern, []).copy()
-    
-    def get_all_buffers(self) -> Dict[str, List[TimestampedData]]:
-        """
-        Get all buffer contents.
+            for key in exact_keys:
+                if key in self._exact_matches:
+                    # Only return messages that match this specific topic pattern
+                    message_set = self._exact_matches[key]
+                    for msg in message_set.get_all_messages():
+                        if self._get_topic_pattern(msg.source) == topic_pattern:
+                            messages.append(msg)
         
-        Returns:
-            Dictionary mapping topic patterns to message lists
-        """
-        with self._buffer_lock:
-            return {topic: buffer.copy() for topic, buffer in self.buffers.items()}
+        return messages
     
     def clear_buffer(self, topic_pattern: Optional[str] = None):
-        """
-        Clear buffer(s).
-        
-        Args:
-            topic_pattern: Specific topic to clear, or None to clear all
-        """
-        with self._buffer_lock:
+        """Clear buffers (API compatibility)."""
+        with self._exact_matches_lock:
             if topic_pattern:
-                if topic_pattern in self.buffers:
-                    cleared_count = len(self.buffers[topic_pattern])
-                    self.buffers[topic_pattern].clear()
-                    logging.info(f"Cleared buffer for {topic_pattern}", extra={
-                        'topic': topic_pattern,
-                        'messages_cleared': cleared_count
-                    })
-            else:
-                total_cleared = sum(len(buffer) for buffer in self.buffers.values())
-                self.buffers.clear()
-                logging.info("Cleared all buffers", extra={
-                    'total_messages_cleared': total_cleared
-                })
-    
-    def _log_rate_limited_warning(self, warning_type: str, min_interval_seconds: int, 
-                                 message: str, extra: Dict[str, Any]):
-        """
-        Log warning with rate limiting to avoid spam.
-        
-        Args:
-            warning_type: Type of warning for tracking
-            min_interval_seconds: Minimum seconds between warnings of this type
-            message: Warning message
-            extra: Extra logging context
-        """
-        current_time = time_module.time()
-        with self._metrics_lock:
-            last_warning = self._metrics['last_warning_time'].get(warning_type, 0)
-            if current_time - last_warning >= min_interval_seconds:
-                logging.warning(message, extra=extra)
-                self._metrics['last_warning_time'][warning_type] = current_time
-    
-    def _check_drop_rate_warning(self):
-        """Check and warn if message drop rate is too high."""
-        with self._metrics_lock:
-            total = self._metrics['messages_received'] + self._metrics['messages_dropped']
-            if total > 100:  # Only check after reasonable sample size
-                drop_rate = self._metrics['messages_dropped'] / total
-                if drop_rate > 0.05:  # 5% drop rate
-                    self._log_rate_limited_warning('high_drop_rate', 60,
-                        "High message drop rate detected", {
-                            'drop_rate_percent': drop_rate * 100,
-                            'messages_dropped': self._metrics['messages_dropped'],
-                            'messages_received': self._metrics['messages_received']
-                        })
-    
-    def _check_message_age_warnings(self):
-        """Check for old messages in buffers and warn if needed."""
-        current_time = datetime.now().timestamp()
-        with self._buffer_lock:
-            for topic, buffer in self.buffers.items():
-                if not buffer:
-                    continue
-                    
-                # Check oldest message age
-                oldest_msg = min(buffer, key=lambda m: m.timestamp)
-                age_seconds = current_time - oldest_msg.timestamp
+                # Clear specific topic
+                exact_keys = list(self._by_topic_pattern.get(topic_pattern, set()))
+                for key in exact_keys:
+                    if key in self._exact_matches:
+                        del self._exact_matches[key]
+                self._by_topic_pattern[topic_pattern].clear()
                 
-                if age_seconds > 240:  # 4 minutes
-                    self._log_rate_limited_warning(f'old_messages_{topic}', 120,
-                        "Old messages detected in buffer - processing may be falling behind", {
-                            'topic': topic,
-                            'oldest_message_age_seconds': age_seconds,
-                            'buffer_size': len(buffer),
-                            'oldest_timestamp': datetime.fromtimestamp(oldest_msg.timestamp).isoformat()
-                        })
+                logging.info(f"Cleared buffer for {topic_pattern}")
+            else:
+                # Clear everything
+                self._exact_matches.clear()
+                self._by_topic_pattern.clear()
+                
+                logging.info("Cleared all buffers")
+        
+        # Clear completed matches queue
+        while not self._completed_matches.empty():
+            try:
+                self._completed_matches.get_nowait()
+            except Empty:
+                break
     
     def get_metrics(self) -> Dict[str, Any]:
-        """
-        Get current performance metrics.
-        
-        Returns:
-            Dictionary containing performance metrics
-        """
+        """Get performance metrics (API compatibility)."""
         with self._metrics_lock:
             metrics = self._metrics.copy()
-            # Calculate rates
-            total = metrics['messages_received'] + metrics['messages_dropped']
-            metrics['drop_rate'] = metrics['messages_dropped'] / total if total > 0 else 0
-            metrics['duplicate_rate'] = metrics['duplicate_messages'] / total if total > 0 else 0
             
-            # Calculate average processing time
-            if metrics['processing_times']:
-                metrics['avg_processing_time_ms'] = sum(metrics['processing_times']) / len(metrics['processing_times']) * 1000
-            else:
-                metrics['avg_processing_time_ms'] = 0
+        # Calculate additional metrics
+        if metrics['messages_received'] > 0:
+            metrics['exact_match_rate'] = (
+                metrics['exact_matches_completed'] / metrics['messages_received']
+            )
+            metrics['drop_rate'] = metrics['messages_dropped'] / metrics['messages_received']
+            metrics['extraction_failure_rate'] = (
+                metrics['extraction_failures'] / metrics['messages_received']
+            )
+        else:
+            metrics['exact_match_rate'] = 0
+            metrics['drop_rate'] = 0
+            metrics['extraction_failure_rate'] = 0
+        
+        return metrics
+    
+    def cleanup_old_messages(self):
+        """Manual cleanup trigger (API compatibility)."""
+        self._cleanup_expired_messages()
+    
+    # Private methods
+    
+    def _cleanup_loop(self):
+        """Background thread to remove expired messages."""
+        while self._running:
+            try:
+                time.sleep(self.cleanup_interval)
+                self._cleanup_expired_messages()
+            except Exception as e:
+                logging.error("Error in cleanup loop", exc_info=True)
+    
+    def _cleanup_expired_messages(self):
+        """Remove messages older than max_age_seconds."""
+        current_time = time.time()
+        expired_keys = []
+        
+        with self._exact_matches_lock:
+            for exact_key, message_set in self._exact_matches.items():
+                if message_set.age_seconds() > self.max_age_seconds:
+                    expired_keys.append((exact_key, message_set))
+            
+            # Remove expired entries
+            for exact_key, message_set in expired_keys:
+                # Log what we're expiring for analysis
+                logging.warning("Expiring unmatched message set", extra={
+                    'tool_key': message_set.tool_key,
+                    'source_timestamp': message_set.source_timestamp,
+                    'age_seconds': message_set.age_seconds(),
+                    'had_result': len(message_set.result_messages) > 0,
+                    'had_trace': len(message_set.trace_messages) > 0,
+                    'had_heads': len(message_set.heads_messages) > 0,
+                    'result_ids': [m.data.get('ResultId') for m in message_set.result_messages],
+                    'result_count': len(message_set.result_messages),
+                    'trace_count': len(message_set.trace_messages),
+                    'heads_count': len(message_set.heads_messages)
+                })
                 
-            return metrics
+                del self._exact_matches[exact_key]
+                
+                # Clean up reverse index
+                for msg in message_set.get_all_messages():
+                    topic_pattern = self._get_topic_pattern(msg.source)
+                    self._by_topic_pattern[topic_pattern].discard(exact_key)
+                
+                with self._metrics_lock:
+                    self._metrics['messages_expired'] += len(message_set.get_all_messages())
+            
+            # Update active key count
+            with self._metrics_lock:
+                self._metrics['current_active_keys'] = len(self._exact_matches)
+        
+        if expired_keys:
+            logging.info(f"Expired {len(expired_keys)} unmatched message sets")
+    
+    def _extract_tool_key(self, source: str) -> Optional[str]:
+        """Extract toolbox_id/tool_id from topic."""
+        try:
+            parts = source.split('/')
+            if len(parts) >= 3:
+                return f"{parts[1]}/{parts[2]}"
+        except Exception as e:
+            logging.debug(f"Failed to extract tool key from {source}: {e}")
+        return None
+    
+    def _extract_source_timestamp(self, data: TimestampedData) -> Optional[str]:
+        """Extract original SourceTimestamp string from message data."""
+        if isinstance(data.data, dict):
+            return self._find_source_timestamp(data.data)
+        return None
+    
+    def _find_source_timestamp(self, data: dict, depth: int = 0) -> Optional[str]:
+        """Recursively find SourceTimestamp in nested dict."""
+        if depth > 10:  # Prevent infinite recursion
+            return None
+            
+        for key, value in data.items():
+            if key == 'SourceTimestamp' and isinstance(value, str):
+                return value
+            elif isinstance(value, dict):
+                # First check if SourceTimestamp is directly in this dict
+                if 'SourceTimestamp' in value and isinstance(value['SourceTimestamp'], str):
+                    return value['SourceTimestamp']
+                # Otherwise recurse
+                result = self._find_source_timestamp(value, depth + 1)
+                if result:
+                    return result
+        return None
+    
+    def _get_message_type(self, source: str) -> str:
+        """Determine message type from topic."""
+        if 'ResultManagement' in source:
+            return 'result'
+        elif 'Trace' in source:
+            return 'trace'
+        elif 'AssetManagement' in source or 'Heads' in source:
+            return 'heads'
+        return 'unknown'
+    
+    def _get_topic_pattern(self, source: str) -> str:
+        """Convert source topic to pattern for backward compatibility."""
+        msg_type = self._get_message_type(source)
+        return self._topic_patterns.get(msg_type, source)
+    
+    def _get_listener_config(self) -> dict:
+        """Get listener configuration."""
+        if self.config_manager:
+            return self.config_manager.get_mqtt_listener_config()
+        else:
+            return self.config.get('mqtt', {}).get('listener', {})
+    
+    def _build_topic_patterns(self, listener_config: dict) -> dict:
+        """Build topic patterns for backward compatibility."""
+        patterns = {}
+        root = listener_config.get('root', 'mqtt')
+        
+        if 'result' in listener_config:
+            patterns['result'] = f"{root}/+/+/{listener_config['result']}"
+        if 'trace' in listener_config:
+            patterns['trace'] = f"{root}/+/+/{listener_config['trace']}"
+        if 'heads' in listener_config:
+            patterns['heads'] = f"{root}/+/+/{listener_config['heads']}"
+            
+        return patterns
+    
+    def __del__(self):
+        """Cleanup on deletion."""
+        self._running = False
