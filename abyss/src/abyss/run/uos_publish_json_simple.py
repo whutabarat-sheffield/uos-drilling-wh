@@ -1,11 +1,14 @@
 """
-MQTT JSON Data Publisher
+Simplified MQTT JSON Data Publisher
 
-A simple MQTT publisher that publishes JSON data continuously to a broker.
-The data is read from specified files and published to topics with:
-- Random order simulation for real-time data
-- Updated source timestamps
-- Random toolbox and tool IDs
+A simplified MQTT publisher that preserves original timestamps from JSON files.
+This version does NOT modify timestamps, ensuring exact matching can work properly.
+
+Key differences from uos_publish_json.py:
+- No timestamp modification (preserves original SourceTimestamp values)
+- No random shuffling of message order
+- Publishes all three message types immediately for atomic delivery
+- Validates that all three files have matching timestamps
 """
 
 import argparse
@@ -41,31 +44,35 @@ def find_in_dict(data: dict, target_key: str) -> list:
     _search(data)
     return results
 
-def publish(client, topic, payload, timestamp0, timestamp1) -> None:
+
+def publish_simple(client, topic, payload, debug_timestamps=False) -> None:
     """
-    Publish a payload to a specified MQTT topic after replacing timestamps.
+    Publish a payload to a specified MQTT topic WITHOUT modifying timestamps.
 
     Args:
         client: The MQTT client instance used for publishing
         topic: The MQTT topic to publish to
         payload: The message payload (JSON as string)
-        timestamp0: The original timestamp string to be replaced
-        timestamp1: The new timestamp string to use in the payload
+        debug_timestamps: If True, log the SourceTimestamp values found
     """
-    if timestamp0 in payload:
-        payload = payload.replace(timestamp0, timestamp1)
-    else:
-        logging.warning(f"'{timestamp0}' not found in payload. Skipping replacement.")
+    if debug_timestamps:
+        try:
+            data = json.loads(payload)
+            timestamps = find_in_dict(data, 'SourceTimestamp')
+            if timestamps:
+                logging.debug(f"Publishing to {topic} with SourceTimestamp: {timestamps[0]}")
+        except Exception as e:
+            logging.debug(f"Could not extract timestamp for debugging: {e}")
     
     client.publish(topic, payload)
     current_time = time.strftime("%H:%M:%S", time.localtime())
-    logging.info(f"[{current_time}]: Published data on {topic} '{timestamp1}'")
+    logging.info(f"[{current_time}]: Published data on {topic}")
 
 
 def setup_argument_parser() -> argparse.ArgumentParser:
     """Set up and return the command line argument parser."""
     parser = argparse.ArgumentParser(
-        description="Publish JSON data from files to MQTT broker with simulated real-time behavior"
+        description="Simplified JSON publisher that preserves original timestamps for exact matching"
     )
     
     parser.add_argument(
@@ -80,16 +87,10 @@ def setup_argument_parser() -> argparse.ArgumentParser:
         default="config/mqtt_conf_docker.yaml"
     )
     parser.add_argument(
-        "--sleep-min", 
+        "--delay-between-sets", 
         type=float, 
-        default=0.1, 
-        help="Minimum sleep interval between publishes (seconds)"
-    )
-    parser.add_argument(
-        "--sleep-max", 
-        type=float, 
-        default=0.3, 
-        help="Maximum sleep interval between publishes (seconds)"
+        default=1.0, 
+        help="Delay between publishing different datasets (seconds)"
     )
     parser.add_argument(
         "-r", "--repetitions", 
@@ -103,6 +104,16 @@ def setup_argument_parser() -> argparse.ArgumentParser:
         default="INFO", 
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], 
         help="Set the logging level"
+    )
+    parser.add_argument(
+        "--debug-timestamps",
+        action="store_true",
+        help="Log the SourceTimestamp values being published"
+    )
+    parser.add_argument(
+        "--update-timestamps",
+        action="store_true",
+        help="Update timestamps to current time (legacy behavior)"
     )
     
     return parser
@@ -175,43 +186,85 @@ def setup_signal_handlers(client: mqtt.Client) -> None:
     signal.signal(signal.SIGTERM, signal_handler)
 
 
-def read_and_validate_json_files(data_folder: Path) -> tuple[str, str, str, str]:
+def read_and_validate_json_files(data_folder: Path, validate_matching_timestamps=True) -> tuple[str, str, str, str]:
     """
     Read and validate JSON files from a data folder.
     
+    Args:
+        data_folder: Path to the folder containing JSON files
+        validate_matching_timestamps: If True, ensure all files have identical timestamps
+    
     Returns:
         Tuple of (result_data, trace_data, heads_data, original_timestamp)
+        
+    Raises:
+        ValueError: If timestamps don't match across files (when validation is enabled)
     """
+    timestamps_found = {}
+    
     # Read ResultManagement.json
-    with open(data_folder / "ResultManagement.json") as f:
+    result_file = data_folder / "ResultManagement.json"
+    with open(result_file) as f:
         d_result = f.read()
-        result_source_timestamps = find_in_dict(json.loads(d_result), 'SourceTimestamp')
-        if len(set(result_source_timestamps)) != 1:
-            raise ValueError("ResultManagement SourceTimestamp values are not identical.")
-        original_source_timestamp = result_source_timestamps[0]
+        # Validate JSON and extract timestamps
+        try:
+            result_json = json.loads(d_result)
+            result_timestamps = find_in_dict(result_json, 'SourceTimestamp')
+            if result_timestamps:
+                timestamps_found['result'] = result_timestamps[0]
+                logging.debug(f"Result timestamp: {result_timestamps[0]}")
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in {result_file}: {e}")
+            raise
     
     # Read Trace.json
-    with open(data_folder / "Trace.json") as f:
+    trace_file = data_folder / "Trace.json"
+    with open(trace_file) as f:
         d_trace = f.read()
-        trace_source_timestamps = find_in_dict(json.loads(d_trace), 'SourceTimestamp')
-        if len(set(trace_source_timestamps)) != 1:
-            raise ValueError("Trace SourceTimestamp values are not identical.")
+        try:
+            trace_json = json.loads(d_trace)
+            trace_timestamps = find_in_dict(trace_json, 'SourceTimestamp')
+            if trace_timestamps:
+                timestamps_found['trace'] = trace_timestamps[0]
+                logging.debug(f"Trace timestamp: {trace_timestamps[0]}")
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in {trace_file}: {e}")
+            raise
     
     # Read Heads.json
-    with open(data_folder / "Heads.json") as f:
+    heads_file = data_folder / "Heads.json"
+    with open(heads_file) as f:
         d_heads = f.read()
-        heads_source_timestamps = find_in_dict(json.loads(d_heads), 'SourceTimestamp')
-        if len(set(heads_source_timestamps)) != 1:
-            raise ValueError("Heads SourceTimestamp values are not identical.")
+        try:
+            heads_json = json.loads(d_heads)
+            heads_timestamps = find_in_dict(heads_json, 'SourceTimestamp')
+            if heads_timestamps:
+                timestamps_found['heads'] = heads_timestamps[0]
+                logging.debug(f"Heads timestamp: {heads_timestamps[0]}")
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in {heads_file}: {e}")
+            raise
     
-    return d_result, d_trace, d_heads, original_source_timestamp
+    # Validate that all timestamps match
+    if validate_matching_timestamps:
+        unique_timestamps = set(timestamps_found.values())
+        if len(unique_timestamps) > 1:
+            logging.error(f"Timestamp mismatch in {data_folder}:")
+            for file_type, timestamp in timestamps_found.items():
+                logging.error(f"  {file_type}: {timestamp}")
+            raise ValueError(f"SourceTimestamp values don't match across files in {data_folder}")
+        elif len(unique_timestamps) == 0:
+            raise ValueError(f"No SourceTimestamp found in files in {data_folder}")
+    
+    # Return the data and the common timestamp
+    original_timestamp = list(timestamps_found.values())[0] if timestamps_found else "unknown"
+    return d_result, d_trace, d_heads, original_timestamp
 
 
 def main():
     """
-    Main function to continuously publish JSON data from specified files to MQTT topics.
-    Reads configuration from a YAML file, selects random data, updates timestamps, 
-    and publishes to MQTT broker.
+    Main function to publish JSON data from files to MQTT topics.
+    This simplified version preserves original timestamps for exact matching.
     """
     # Parse command line arguments
     parser = setup_argument_parser()
@@ -221,6 +274,10 @@ def main():
     # Priority: Environment variable > Command line argument
     log_level = os.environ.get('LOG_LEVEL', args.log_level.upper())
     setup_logging(getattr(logging, log_level))
+    
+    logging.info("Starting Simplified MQTT Publisher (timestamp-preserving mode)")
+    if args.update_timestamps:
+        logging.warning("Running with --update-timestamps flag (legacy behavior)")
 
     # Load configuration
     try:
@@ -255,6 +312,10 @@ def main():
     client = setup_mqtt_client(config)
     setup_signal_handlers(client)
 
+    # Statistics
+    successful_publishes = 0
+    failed_publishes = 0
+
     # Publish data for specified number of repetitions
     for repetition in range(args.repetitions):
         logging.info(f"Starting repetition {repetition + 1}/{args.repetitions}")
@@ -265,10 +326,12 @@ def main():
         
         try:
             # Read and validate JSON files
-            d_result, d_trace, d_heads, original_timestamp = read_and_validate_json_files(data_folder)
-
-            # Generate new timestamp
-            new_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
+            d_result, d_trace, d_heads, original_timestamp = read_and_validate_json_files(
+                data_folder, 
+                validate_matching_timestamps=True
+            )
+            
+            logging.info(f"Publishing dataset with SourceTimestamp: {original_timestamp}")
             
             # Select random toolbox and tool IDs
             toolbox_id = random.choice(TOOLBOX_IDS)
@@ -280,30 +343,48 @@ def main():
             topic_trace = f"{mqtt_root}/{toolbox_id}/{tool_id}/{config['mqtt']['listener']['trace']}"
             topic_heads = f"{mqtt_root}/{toolbox_id}/{tool_id}/{config['mqtt']['listener']['heads']}"
 
-            # Prepare data for publishing in random order
-            publish_items = [
-                (topic_result, d_result),
-                (topic_trace, d_trace),
-                (topic_heads, d_heads)
-            ]
-            random.shuffle(publish_items)
+            # If update_timestamps is enabled (legacy mode), update the timestamps
+            if args.update_timestamps:
+                new_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.localtime())
+                logging.debug(f"Updating timestamp from {original_timestamp} to {new_timestamp}")
+                d_result = d_result.replace(original_timestamp, new_timestamp)
+                d_trace = d_trace.replace(original_timestamp, new_timestamp)
+                d_heads = d_heads.replace(original_timestamp, new_timestamp)
 
-            # Publish the data
-            for topic, payload in publish_items:
-                publish(client, topic, payload, original_timestamp, new_timestamp)
-                time.sleep(random.uniform(args.sleep_min, args.sleep_max))
+            # Publish all three messages immediately (no delays between them)
+            # This ensures they arrive close together for exact matching
+            publish_simple(client, topic_result, d_result, args.debug_timestamps)
+            publish_simple(client, topic_trace, d_trace, args.debug_timestamps)
+            publish_simple(client, topic_heads, d_heads, args.debug_timestamps)
+            
+            successful_publishes += 1
+            
+            # Delay before next dataset (not between message types)
+            if repetition < args.repetitions - 1:
+                time.sleep(args.delay_between_sets)
         
         except FileNotFoundError as e:
             logging.error(f"File not found: {e}. Skipping this data folder.")
+            failed_publishes += 1
         except json.JSONDecodeError as e:
-            logging.error(f"JSON decode error: {e}. Skipping this data folder.")
+            logging.error(f"JSON decode error in {data_folder}: {e}")
+            logging.error("This might be due to file truncation. Check file integrity.")
+            failed_publishes += 1
         except ValueError as e:
             logging.error(f"Data validation error: {e}. Skipping this data folder.")
+            failed_publishes += 1
         except Exception as e:
-            logging.error(f"Unexpected error: {e}. Skipping this data folder.")
+            logging.error(f"Unexpected error with {data_folder}: {e}")
+            failed_publishes += 1
 
-    logging.info("Publishing completed")
+    # Summary
+    logging.info(f"Publishing completed. Success: {successful_publishes}, Failed: {failed_publishes}")
+    
+    # Give time for last messages to be sent
+    time.sleep(0.5)
+    
     client.disconnect()
+
 
 if __name__ == "__main__":
     main()
