@@ -1,8 +1,8 @@
 """
-Test for Sequential Message Dropping Bug
+Test for Sequential Message Dropping Bug - Exact Match Implementation
 
-This test reproduces the issue where message 422 gets dropped in a sequence
-of 421, 422, 423, 424 due to buffer cleanup removing unprocessed messages.
+This test verifies that the exact matching implementation correctly handles
+sequential messages and doesn't drop message 422 in a sequence of 421, 422, 423, 424.
 """
 
 import pytest
@@ -17,8 +17,8 @@ from abyss.mqtt.components.simple_correlator import SimpleMessageCorrelator
 from abyss.mqtt.components.config_manager import ConfigurationManager
 
 
-class TestSequentialMessageBug:
-    """Test case for the sequential message dropping bug."""
+class TestSequentialMessageBugFixed:
+    """Test that the sequential message dropping bug is fixed with exact matching."""
     
     @pytest.fixture
     def config(self):
@@ -30,58 +30,70 @@ class TestSequentialMessageBug:
                     'root': 'mqtt',
                     'result': 'ResultManagement',
                     'trace': 'Trace',
+                    'heads': 'AssetManagement',
                     'duplicate_handling': 'ignore',
                     'duplicate_time_window': 1.0
                 }
             },
             'analyser': {
-                'time_window': 30,
-                'cleanup_interval': 2,  # Short interval for testing
-                'max_buffer_size': 5  # Small buffer to trigger cleanup
+                'time_window': 30,  # Ignored in exact match mode
+                'cleanup_interval': 2,
+                'max_buffer_size': 10  # Increased for exact matching
             }
         }
     
     @pytest.fixture
     def message_buffer(self, config):
-        """Create message buffer with small size to trigger cleanup."""
-        config_manager = ConfigurationManager.from_dict(config)
+        """Create message buffer with exact matching."""
         return MessageBuffer(
-            config=config_manager,
-            cleanup_interval=2,
-            max_buffer_size=5,  # Small buffer to force cleanup
+            config=config,
+            cleanup_interval=60,  # Longer cleanup for exact matching
+            max_buffer_size=100,  # Larger buffer for exact matching
             max_age_seconds=300
         )
     
     @pytest.fixture
     def correlator(self, config):
-        """Create message correlator."""
-        config_manager = ConfigurationManager.from_dict(config)
-        return SimpleMessageCorrelator(config=config_manager, time_window=30)
+        """Create message correlator (exact match mode)."""
+        return SimpleMessageCorrelator(config=config, time_window=30)
     
-    def create_message(self, msg_type: str, toolbox_id: str, tool_id: str, 
-                      result_id: int, timestamp: float) -> TimestampedData:
-        """Create a test message."""
-        source = f"mqtt/{toolbox_id}/{tool_id}/{msg_type}"
-        data = {
-            'resultID': result_id,
-            'toolboxID': toolbox_id,
-            'toolID': tool_id,
-            'timestamp': timestamp
+    def create_message_set(self, msg_type: str, toolbox_id: str, tool_id: str, 
+                          result_id: int, source_timestamp: str) -> TimestampedData:
+        """Create a test message with exact SourceTimestamp."""
+        topic_map = {
+            'ResultManagement': 'result',
+            'Trace': 'trace', 
+            'AssetManagement': 'heads'
         }
+        
+        source = f"mqtt/{toolbox_id}/{tool_id}/{msg_type}"
+        
+        # All messages must have SourceTimestamp for exact matching
+        data = {
+            'SourceTimestamp': source_timestamp,
+            'toolboxID': toolbox_id,
+            'toolID': tool_id
+        }
+        
+        # Add type-specific data
+        if msg_type == 'ResultManagement':
+            data['ResultId'] = result_id
+        elif msg_type == 'AssetManagement':
+            data['HeadsId'] = f'HEADS{result_id}'
+        
         return TimestampedData(
-            timestamp=timestamp,
-            source=source,
-            data=data
+            _timestamp=time.time(),  # Current time for receive timestamp
+            _source=source,
+            _data=data
         )
     
-    def test_sequential_message_dropping_bug(self, message_buffer, correlator):
+    def test_sequential_messages_not_dropped_exact_match(self, message_buffer, correlator):
         """
-        Test that demonstrates the bug where message 422 gets dropped
-        when messages arrive in sequence: 421, 422, 423, 424.
+        Test that sequential messages (421, 422, 423, 424) are NOT dropped
+        with exact matching implementation.
         """
         toolbox_id = "E00401"
         tool_id = "009F45BACA"
-        base_time = datetime.now().timestamp()
         
         # Track which messages were processed
         processed_results = []
@@ -89,164 +101,171 @@ class TestSequentialMessageBug:
         def mock_processor(messages):
             """Mock message processor that tracks processed messages."""
             for msg in messages:
-                if 'ResultManagement' in msg.source:
-                    processed_results.append(msg.data['resultID'])
+                if 'ResultManagement' in msg.source and 'ResultId' in msg.data:
+                    processed_results.append(msg.data['ResultId'])
         
-        # Simulate messages arriving in sequence
-        messages = []
+        # Create messages with exact timestamps for each result ID
         for i, result_id in enumerate([421, 422, 423, 424]):
-            timestamp = base_time + i * 0.5  # 0.5 second intervals
+            # Each message set has its own unique SourceTimestamp
+            source_timestamp = f'2024-01-18T10:30:{i:02d}Z'
             
-            # Create result and trace messages
-            result_msg = self.create_message('ResultManagement', toolbox_id, tool_id, result_id, timestamp)
-            trace_msg = self.create_message('Trace', toolbox_id, tool_id, result_id, timestamp + 0.1)
+            # Create all three required messages with same SourceTimestamp
+            result_msg = self.create_message_set('ResultManagement', toolbox_id, tool_id, 
+                                               result_id, source_timestamp)
+            trace_msg = self.create_message_set('Trace', toolbox_id, tool_id, 
+                                              result_id, source_timestamp)
+            heads_msg = self.create_message_set('AssetManagement', toolbox_id, tool_id, 
+                                              result_id, source_timestamp)
             
-            messages.append((result_msg, trace_msg))
-        
-        # Add messages to buffer
-        for result_msg, trace_msg in messages:
+            # Add messages to buffer
             message_buffer.add_message(result_msg)
             message_buffer.add_message(trace_msg)
+            message_buffer.add_message(heads_msg)
             
-            # Get buffer stats after each addition
+            # Log buffer stats after each set
             stats = message_buffer.get_buffer_stats()
-            print(f"After adding resultID {result_msg.data['resultID']}: {stats}")
+            print(f"After adding resultID {result_id}: {stats}")
         
-        # Force cleanup by adding more messages to exceed buffer size
-        # This simulates the condition where cleanup removes unprocessed messages
-        for i in range(5):
-            dummy_time = base_time + 100 + i
-            dummy_result = self.create_message('ResultManagement', 'dummy', 'dummy', 1000 + i, dummy_time)
-            dummy_trace = self.create_message('Trace', 'dummy', 'dummy', 1000 + i, dummy_time)
-            message_buffer.add_message(dummy_result)
-            message_buffer.add_message(dummy_trace)
+        # With exact matching, all message sets should be matched immediately
+        final_stats = message_buffer.get_buffer_stats()
+        assert final_stats['exact_matches_completed'] == 4
+        assert final_stats['messages_dropped'] == 0
         
-        # Now process messages
+        # Process matched messages
         buffers = message_buffer.get_all_buffers()
         correlator.find_and_process_matches(buffers, mock_processor)
         
-        # Check which messages were processed
+        # Verify ALL messages were processed (bug is fixed!)
         print(f"Processed results: {sorted(processed_results)}")
-        
-        # The bug would cause 422 to be missing
-        # With the fix, all messages should be processed
-        assert 421 in processed_results, "Message 421 should be processed"
-        assert 422 in processed_results, "Message 422 should NOT be dropped (this was the bug)"
-        assert 423 in processed_results, "Message 423 should be processed"
-        assert 424 in processed_results, "Message 424 should be processed"
+        assert sorted(processed_results) == [421, 422, 423, 424]
+        assert 422 in processed_results, "Message 422 should NOT be dropped with exact matching!"
     
-    def test_buffer_preserves_unprocessed_messages(self, message_buffer):
+    def test_buffer_handles_many_sequential_messages(self, message_buffer):
         """
-        Test that the buffer cleanup preserves unprocessed messages
-        and removes processed ones first.
-        """
-        base_time = datetime.now().timestamp()
-        
-        # Create a mix of processed and unprocessed messages
-        for i in range(8):
-            msg = self.create_message(
-                'ResultManagement', 
-                'toolbox', 
-                'tool', 
-                100 + i, 
-                base_time + i
-            )
-            message_buffer.add_message(msg)
-            
-            # Mark even-numbered messages as processed
-            if i % 2 == 0:
-                msg.processed = True
-        
-        # Get initial state
-        initial_stats = message_buffer.get_buffer_stats()
-        print(f"Initial buffer state: {initial_stats}")
-        
-        # Force cleanup
-        message_buffer.cleanup_old_messages()
-        
-        # Check that unprocessed messages are preserved
-        buffers = message_buffer.get_all_buffers()
-        result_buffer = buffers.get('mqtt/+/+/ResultManagement', [])
-        
-        unprocessed_ids = []
-        processed_ids = []
-        for msg in result_buffer:
-            if getattr(msg, 'processed', False):
-                processed_ids.append(msg.data['resultID'])
-            else:
-                unprocessed_ids.append(msg.data['resultID'])
-        
-        print(f"After cleanup - Unprocessed: {unprocessed_ids}, Processed: {processed_ids}")
-        
-        # With our fix, unprocessed messages (odd numbers) should be preserved
-        # and processed messages (even numbers) should be removed first
-        assert len(unprocessed_ids) > 0, "Unprocessed messages should be preserved"
-        
-        # Check that if any messages were removed, processed ones were removed first
-        all_original_ids = list(range(100, 108))
-        remaining_ids = unprocessed_ids + processed_ids
-        removed_ids = [id for id in all_original_ids if id not in remaining_ids]
-        
-        if removed_ids:
-            # All removed IDs should be even (processed)
-            for removed_id in removed_ids:
-                assert removed_id % 2 == 0, f"Removed message {removed_id} should be processed (even)"
-    
-    def test_concurrent_processing_and_cleanup(self, message_buffer, correlator):
-        """
-        Test that concurrent processing and cleanup don't cause message loss.
+        Test that buffer can handle many sequential messages without dropping any.
         """
         toolbox_id = "E00401"
         tool_id = "009F45BACA"
-        base_time = datetime.now().timestamp()
         
-        processed_results = []
-        cleanup_count = [0]
-        
-        def mock_processor(messages):
-            """Mock processor with delay to simulate processing time."""
-            time.sleep(0.05)  # Simulate processing delay
-            for msg in messages:
-                if 'ResultManagement' in msg.source:
-                    processed_results.append(msg.data['resultID'])
-        
-        def cleanup_thread():
-            """Thread that performs cleanup while processing is happening."""
-            while cleanup_count[0] < 3:
-                time.sleep(0.1)
-                message_buffer.cleanup_old_messages()
-                cleanup_count[0] += 1
-        
-        # Start cleanup thread
-        cleanup = threading.Thread(target=cleanup_thread)
-        cleanup.daemon = True
-        cleanup.start()
-        
-        # Add messages and process them while cleanup is running
-        for i in range(10):
-            result_id = 500 + i
-            timestamp = base_time + i * 0.1
+        # Add 100 message sets
+        for i in range(100):
+            result_id = 1000 + i
+            source_timestamp = f'2024-01-18T10:{i//60:02d}:{i%60:02d}Z'
             
-            result_msg = self.create_message('ResultManagement', toolbox_id, tool_id, result_id, timestamp)
-            trace_msg = self.create_message('Trace', toolbox_id, tool_id, result_id, timestamp)
+            # Create complete message set
+            result_msg = self.create_message_set('ResultManagement', toolbox_id, tool_id,
+                                               result_id, source_timestamp)
+            trace_msg = self.create_message_set('Trace', toolbox_id, tool_id,
+                                              result_id, source_timestamp)
+            heads_msg = self.create_message_set('AssetManagement', toolbox_id, tool_id,
+                                              result_id, source_timestamp)
             
             message_buffer.add_message(result_msg)
             message_buffer.add_message(trace_msg)
+            message_buffer.add_message(heads_msg)
+        
+        # All should be matched
+        stats = message_buffer.get_buffer_stats()
+        assert stats['exact_matches_completed'] == 100
+        assert stats['messages_dropped'] == 0
+        assert stats['total_active_keys'] == 0  # All matched, no pending
+    
+    def test_incomplete_sets_remain_pending(self, message_buffer):
+        """
+        Test that incomplete message sets remain pending and don't interfere
+        with complete sets.
+        """
+        toolbox_id = "E00401"
+        tool_id = "009F45BACA"
+        
+        # Add some complete sets
+        for i in range(5):
+            source_timestamp = f'2024-01-18T10:30:{i:02d}Z'
+            result_id = 500 + i
             
-            # Process messages
-            buffers = message_buffer.get_all_buffers()
-            correlator.find_and_process_matches(buffers, mock_processor)
+            result_msg = self.create_message_set('ResultManagement', toolbox_id, tool_id,
+                                               result_id, source_timestamp)
+            trace_msg = self.create_message_set('Trace', toolbox_id, tool_id,
+                                              result_id, source_timestamp)
+            heads_msg = self.create_message_set('AssetManagement', toolbox_id, tool_id,
+                                              result_id, source_timestamp)
+            
+            message_buffer.add_message(result_msg)
+            message_buffer.add_message(trace_msg)
+            message_buffer.add_message(heads_msg)
         
-        # Wait for cleanup thread to finish
-        cleanup.join(timeout=1)
+        # Add some incomplete sets (missing heads)
+        for i in range(5, 10):
+            source_timestamp = f'2024-01-18T10:30:{i:02d}Z'
+            result_id = 500 + i
+            
+            result_msg = self.create_message_set('ResultManagement', toolbox_id, tool_id,
+                                               result_id, source_timestamp)
+            trace_msg = self.create_message_set('Trace', toolbox_id, tool_id,
+                                              result_id, source_timestamp)
+            # No heads message!
+            
+            message_buffer.add_message(result_msg)
+            message_buffer.add_message(trace_msg)
         
-        # Process any remaining messages
+        stats = message_buffer.get_buffer_stats()
+        assert stats['exact_matches_completed'] == 5  # Only complete sets
+        assert stats['total_active_keys'] == 5  # Incomplete sets remain pending
+    
+    def test_exact_matching_prevents_race_conditions(self, message_buffer, correlator):
+        """
+        Test that exact matching prevents race conditions that could cause
+        message dropping in fuzzy matching.
+        """
+        processed_results = []
+        processing_lock = threading.Lock()
+        
+        def mock_processor(messages):
+            """Thread-safe message processor."""
+            with processing_lock:
+                for msg in messages:
+                    if 'ResultManagement' in msg.source and 'ResultId' in msg.data:
+                        processed_results.append(msg.data['ResultId'])
+        
+        def add_message_set(result_id, delay=0):
+            """Add a complete message set with optional delay."""
+            if delay:
+                time.sleep(delay)
+            
+            source_timestamp = f'2024-01-18T10:30:{result_id%60:02d}Z'
+            toolbox_id = "E00401"
+            tool_id = "009F45BACA"
+            
+            result_msg = self.create_message_set('ResultManagement', toolbox_id, tool_id,
+                                               result_id, source_timestamp)
+            trace_msg = self.create_message_set('Trace', toolbox_id, tool_id,
+                                              result_id, source_timestamp)
+            heads_msg = self.create_message_set('AssetManagement', toolbox_id, tool_id,
+                                              result_id, source_timestamp)
+            
+            message_buffer.add_message(result_msg)
+            message_buffer.add_message(trace_msg)
+            message_buffer.add_message(heads_msg)
+        
+        # Start multiple threads adding messages concurrently
+        threads = []
+        for i in range(10):
+            t = threading.Thread(target=add_message_set, args=(600 + i, i * 0.01))
+            t.start()
+            threads.append(t)
+        
+        # Wait for all threads
+        for t in threads:
+            t.join()
+        
+        # Process all matches
         buffers = message_buffer.get_all_buffers()
         correlator.find_and_process_matches(buffers, mock_processor)
         
-        print(f"Processed results with concurrent cleanup: {sorted(processed_results)}")
+        # All messages should be processed
+        assert sorted(processed_results) == list(range(600, 610))
         
-        # All messages should be processed despite concurrent cleanup
-        expected_results = list(range(500, 510))
-        assert sorted(processed_results) == expected_results, \
-            f"All messages should be processed. Missing: {set(expected_results) - set(processed_results)}"
+        # Check buffer stats
+        stats = message_buffer.get_buffer_stats()
+        assert stats['exact_matches_completed'] == 10
+        assert stats['messages_dropped'] == 0

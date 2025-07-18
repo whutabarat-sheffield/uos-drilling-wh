@@ -1,0 +1,56 @@
+# MQTT Broker Stack Template for Portainer
+# Deploy this stack FIRST
+# Stack Name: mqtt-broker
+
+version: '3.8'
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: mqtt-broker
+    restart: unless-stopped
+    
+    # Ports exposed to host
+    ports:
+      - "1883:1883"      # MQTT
+      - "9001:9001"      # WebSocket
+    
+    # Persistent volumes for broker data
+    volumes:
+      - mqtt_config:/mosquitto/config
+      - mqtt_data:/mosquitto/data
+      - mqtt_logs:/mosquitto/log
+    
+    # Join external network for cross-stack communication
+    networks:
+      - toolbox-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-p", "1883", "-t", "health", "-m", "check", "-q", "0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+# External network - must be created before deploying stacks
+networks:
+  toolbox-network:
+    external: true
+    name: toolbox-network
+
+# Named volumes for persistent data
+volumes:
+  mqtt_config:
+    driver: local
+  mqtt_data:
+    driver: local
+  mqtt_logs:
+    driver: local

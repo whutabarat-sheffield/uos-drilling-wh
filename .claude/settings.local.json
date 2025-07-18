@@ -29,7 +29,14 @@
       "Bash(chmod:*)",
       "WebFetch(domain:docs.portainer.io)",
       "WebFetch(domain:containers.dev)",
-      "WebFetch(domain:www.kenmuse.com)"
+      "WebFetch(domain:www.kenmuse.com)",
+      "Bash(python -m pytest tests/mqtt/components/test_exact_matching.py -v)",
+      "Bash(python -m pytest tests/mqtt/components/test_message_buffer.py::TestMessageBuffer::test_exact_matching_complete_set -v)",
+      "Bash(python -m pytest tests/test_simple_correlator.py -v)",
+      "Bash(python -m pytest tests/mqtt/components/test_sequential_message_bug.py -v)",
+      "Bash(python -m pytest tests/mqtt/components/ -v --tb=short -k \"exact\")",
+      "Bash(python -m pytest tests/mqtt/components/test_drilling_analyser.py -v --tb=short)",
+      "Bash(python -m pytest tests/mqtt/components/test_exact_matching.py tests/mqtt/components/test_sequential_message_bug.py tests/mqtt/components/test_message_buffer.py tests/test_simple_correlator.py -v)"
     ],
     "deny": []
   }

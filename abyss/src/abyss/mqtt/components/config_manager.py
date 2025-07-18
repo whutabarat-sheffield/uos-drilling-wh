@@ -171,8 +171,37 @@ class ConfigurationManager:
             return default
     
     def get_mqtt_broker_config(self) -> Dict[str, Any]:
-        """Get MQTT broker configuration."""
-        return self.get('mqtt.broker', {})
+        """
+        Get MQTT broker configuration with environment variable priority.
+        
+        Environment variables override YAML configuration:
+        - MQTT_BROKER_HOST overrides mqtt.broker.host
+        - MQTT_BROKER_PORT overrides mqtt.broker.port
+        - MQTT_BROKER_USERNAME overrides mqtt.broker.username
+        - MQTT_BROKER_PASSWORD overrides mqtt.broker.password
+        """
+        yaml_config = self.get('mqtt.broker', {})
+        
+        # Environment variables take priority over YAML configuration
+        config = yaml_config.copy()
+        
+        # Override with environment variables if set
+        if os.environ.get('MQTT_BROKER_HOST'):
+            config['host'] = os.environ.get('MQTT_BROKER_HOST')
+        
+        if os.environ.get('MQTT_BROKER_PORT'):
+            try:
+                config['port'] = int(os.environ.get('MQTT_BROKER_PORT'))
+            except ValueError:
+                logging.warning(f"Invalid MQTT_BROKER_PORT value: {os.environ.get('MQTT_BROKER_PORT')}, using YAML config")
+        
+        if os.environ.get('MQTT_BROKER_USERNAME'):
+            config['username'] = os.environ.get('MQTT_BROKER_USERNAME')
+        
+        if os.environ.get('MQTT_BROKER_PASSWORD'):
+            config['password'] = os.environ.get('MQTT_BROKER_PASSWORD')
+        
+        return config
     
     def get_mqtt_listener_config(self) -> Dict[str, Any]:
         """Get MQTT listener configuration."""
@@ -303,7 +332,21 @@ class ConfigurationManager:
             broker_config = self.get_mqtt_broker_config()
             listener_config = self.get_mqtt_listener_config()
             
-            return {
+            # Check which environment variables are overriding YAML config
+            env_overrides = {}
+            for env_var, yaml_key in [
+                ('MQTT_BROKER_HOST', 'mqtt.broker.host'),
+                ('MQTT_BROKER_PORT', 'mqtt.broker.port'),
+                ('MQTT_BROKER_USERNAME', 'mqtt.broker.username'),
+                ('MQTT_BROKER_PASSWORD', 'mqtt.broker.password')
+            ]:
+                if os.environ.get(env_var):
+                    yaml_value = self.get(yaml_key)
+                    env_value = os.environ.get(env_var)
+                    if str(yaml_value) != str(env_value):
+                        env_overrides[env_var] = f"'{yaml_value}' → '{env_value}'"
+            
+            summary = {
                 'config_file': self.config_path,
                 'broker_host': broker_config.get('host'),
                 'broker_port': broker_config.get('port'),
@@ -315,6 +358,12 @@ class ConfigurationManager:
                 'duplicate_handling': self.get_duplicate_handling(),
                 'topic_patterns': list(self.get_topic_patterns().keys())
             }
+            
+            # Add environment variable overrides info
+            if env_overrides:
+                summary['environment_overrides'] = env_overrides
+            
+            return summary
             
         except Exception as e:
             logging.warning("Error generating config summary", extra={

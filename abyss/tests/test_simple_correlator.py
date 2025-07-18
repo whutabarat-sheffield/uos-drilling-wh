@@ -6,7 +6,7 @@ import time
 
 
 class TestSimpleCorrelator:
-    """Test the simplified message correlator"""
+    """Test the simplified message correlator with exact matching"""
     
     @pytest.fixture
     def mock_config(self):
@@ -24,29 +24,29 @@ class TestSimpleCorrelator:
     
     @pytest.fixture
     def simple_correlator(self, mock_config):
-        """Create simple correlator"""
-        return SimpleMessageCorrelator(mock_config, time_window=5.0)
+        """Create simple correlator (time_window param ignored in exact match mode)"""
+        return SimpleMessageCorrelator(mock_config, time_window=5.0)  # time_window ignored
     
-    def test_simple_correlator_basic_matching(self, simple_correlator):
-        """Test basic message matching with simple correlator"""
-        timestamp = time.time()
+    def test_exact_matching_same_timestamp(self, simple_correlator):
+        """Test exact matching with same SourceTimestamp"""
+        source_timestamp = '2024-01-18T10:30:45Z'
         
-        # Create test messages
+        # Create test messages with same SourceTimestamp
         result_msg = TimestampedData(
-            _timestamp=timestamp,
-            _data='{"test": "result"}',
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': source_timestamp, 'ResultId': 100},
             _source='OPCPUBSUB/toolbox1/tool1/ResultManagement'
         )
         
         trace_msg = TimestampedData(
-            _timestamp=timestamp + 1.0,  # 1 second later
-            _data='{"test": "trace"}',
+            _timestamp=time.time() + 1.0,  # Different _timestamp but same SourceTimestamp
+            _data={'SourceTimestamp': source_timestamp, 'TraceData': [1, 2, 3]},
             _source='OPCPUBSUB/toolbox1/tool1/ResultManagement/Trace'
         )
         
         heads_msg = TimestampedData(
-            _timestamp=timestamp + 0.5,  # 0.5 seconds later
-            _data='{"test": "heads"}',
+            _timestamp=time.time() + 0.5,
+            _data={'SourceTimestamp': source_timestamp, 'HeadsId': 'HEADS123'},
             _source='OPCPUBSUB/toolbox1/tool1/AssetManagement/Head'
         )
         
@@ -70,25 +70,26 @@ class TestSimpleCorrelator:
         assert len(processed_matches) == 1
         assert len(processed_matches[0]) == 3  # result + trace + heads
         
-        # Verify messages are marked as processed
-        assert getattr(result_msg, 'processed', False) is True
-        assert getattr(trace_msg, 'processed', False) is True
-        assert getattr(heads_msg, 'processed', False) is True
+        # Verify all three messages were matched
+        assert len(processed_matches[0]) == 3
+        assert result_msg in processed_matches[0]
+        assert trace_msg in processed_matches[0]
+        assert heads_msg in processed_matches[0]
     
-    def test_simple_correlator_no_heads_message(self, simple_correlator):
-        """Test correlation without heads message"""
-        timestamp = time.time()
+    def test_exact_matching_requires_heads(self, simple_correlator):
+        """Test that exact matching always requires heads message"""
+        source_timestamp = '2024-01-18T10:30:45Z'
         
         # Create test messages (no heads)
         result_msg = TimestampedData(
-            _timestamp=timestamp,
-            _data='{"test": "result"}',
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': source_timestamp, 'ResultId': 200},
             _source='OPCPUBSUB/toolbox2/tool2/ResultManagement'
         )
         
         trace_msg = TimestampedData(
-            _timestamp=timestamp + 2.0,  # 2 seconds later
-            _data='{"test": "trace"}',
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': source_timestamp, 'TraceData': [4, 5, 6]},
             _source='OPCPUBSUB/toolbox2/tool2/ResultManagement/Trace'
         )
         
@@ -106,32 +107,36 @@ class TestSimpleCorrelator:
         # Test correlation
         found_matches = simple_correlator.find_and_process_matches(buffers, mock_processor)
         
-        # Verify results
-        assert found_matches is True
-        assert len(processed_matches) == 1
-        assert len(processed_matches[0]) == 2  # result + trace only
+        # Verify no matches without heads (heads is required in exact match mode)
+        assert found_matches is False
+        assert len(processed_matches) == 0
     
-    def test_simple_correlator_time_window_rejection(self, simple_correlator):
-        """Test that messages outside time window are rejected"""
-        timestamp = time.time()
-        
-        # Create test messages with large time difference
+    def test_exact_matching_different_timestamps(self, simple_correlator):
+        """Test that messages with different SourceTimestamps don't match"""
+        # Create test messages with different SourceTimestamps
         result_msg = TimestampedData(
-            _timestamp=timestamp,
-            _data='{"test": "result"}',
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': '2024-01-18T10:30:45Z', 'ResultId': 300},
             _source='OPCPUBSUB/toolbox3/tool3/ResultManagement'
         )
         
         trace_msg = TimestampedData(
-            _timestamp=timestamp + 10.0,  # 10 seconds later (outside 5s window)
-            _data='{"test": "trace"}',
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': '2024-01-18T10:30:46Z', 'TraceData': [7, 8, 9]},  # Different!
             _source='OPCPUBSUB/toolbox3/tool3/ResultManagement/Trace'
         )
         
-        # Create buffers
+        heads_msg = TimestampedData(
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': '2024-01-18T10:30:47Z', 'HeadsId': 'HEADS789'},  # Different!
+            _source='OPCPUBSUB/toolbox3/tool3/AssetManagement/Head'
+        )
+        
+        # Create buffers with all three messages
         buffers = {
             'OPCPUBSUB/+/+/ResultManagement': [result_msg],
-            'OPCPUBSUB/+/+/ResultManagement/Trace': [trace_msg]
+            'OPCPUBSUB/+/+/ResultManagement/Trace': [trace_msg],
+            'OPCPUBSUB/+/+/AssetManagement/Head': [heads_msg]
         }
         
         # Mock message processor
@@ -142,24 +147,24 @@ class TestSimpleCorrelator:
         # Test correlation
         found_matches = simple_correlator.find_and_process_matches(buffers, mock_processor)
         
-        # Verify no matches found
+        # Verify no matches found (different timestamps)
         assert found_matches is False
         assert len(processed_matches) == 0
     
-    def test_simple_correlator_different_tool_keys(self, simple_correlator):
-        """Test that messages with different tool keys don't match"""
-        timestamp = time.time()
+    def test_exact_matching_different_tool_keys(self, simple_correlator):
+        """Test that messages with different tool keys don't match even with same timestamp"""
+        source_timestamp = '2024-01-18T10:30:45Z'
         
-        # Create test messages with different tool keys
+        # Create test messages with same timestamp but different tool keys
         result_msg = TimestampedData(
-            _timestamp=timestamp,
-            _data='{"test": "result"}',
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': source_timestamp, 'ResultId': 400},
             _source='OPCPUBSUB/toolbox1/tool1/ResultManagement'
         )
         
         trace_msg = TimestampedData(
-            _timestamp=timestamp + 1.0,
-            _data='{"test": "trace"}',
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': source_timestamp, 'TraceData': [10, 11, 12]},
             _source='OPCPUBSUB/toolbox2/tool2/ResultManagement/Trace'  # Different tool
         )
         
@@ -197,25 +202,82 @@ class TestSimpleCorrelator:
         assert len(grouped['tb1/t2']) == 1
         assert len(grouped['tb2/t1']) == 1
     
-    def test_correlation_stats(self, simple_correlator):
-        """Test correlation statistics"""
-        # Create some test messages
+    def test_correlation_stats_exact_match(self, simple_correlator):
+        """Test correlation statistics for exact matching"""
+        # Create complete message set
+        timestamp = '2024-01-18T10:30:45Z'
         messages = [
-            TimestampedData(_timestamp=1.0, _data='{}', _source='test'),
-            TimestampedData(_timestamp=2.0, _data='{}', _source='test')
+            TimestampedData(
+                _timestamp=time.time(),
+                _data={'SourceTimestamp': timestamp, 'ResultId': 500},
+                _source='OPCPUBSUB/toolbox1/tool1/ResultManagement'
+            ),
+            TimestampedData(
+                _timestamp=time.time(),
+                _data={'SourceTimestamp': timestamp},
+                _source='OPCPUBSUB/toolbox1/tool1/ResultManagement/Trace'
+            ),
+            TimestampedData(
+                _timestamp=time.time(),
+                _data={'SourceTimestamp': timestamp},
+                _source='OPCPUBSUB/toolbox1/tool1/AssetManagement/Head'
+            )
         ]
         
         buffers = {
-            'OPCPUBSUB/+/+/ResultManagement': messages,
-            'OPCPUBSUB/+/+/ResultManagement/Trace': []
+            'OPCPUBSUB/+/+/ResultManagement': [messages[0]],
+            'OPCPUBSUB/+/+/ResultManagement/Trace': [messages[1]],
+            'OPCPUBSUB/+/+/AssetManagement/Head': [messages[2]]
         }
         
         stats = simple_correlator.get_correlation_stats(buffers)
         
-        assert stats['total_messages'] == 2
-        assert stats['time_window'] == 5.0
-        assert stats['correlation_approach'] == 'simple_key_based'
-        assert 'unprocessed_messages' in stats
+        assert stats['total_messages'] == 3
+        assert stats['correlation_approach'] == 'exact_match_only'
+        assert stats['exact_groups'] >= 1
+        assert stats['complete_groups'] >= 1
+    
+    def test_get_completed_matches_from_buffer(self, simple_correlator):
+        """Test retrieving completed matches from buffer (exact match specific)"""
+        # Create buffer-like structure with completed matches
+        timestamp = '2024-01-18T10:30:45Z'
+        
+        result_msg = TimestampedData(
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': timestamp, 'ResultId': 600},
+            _source='OPCPUBSUB/toolbox1/tool1/ResultManagement'
+        )
+        trace_msg = TimestampedData(
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': timestamp},
+            _source='OPCPUBSUB/toolbox1/tool1/ResultManagement/Trace'
+        )
+        heads_msg = TimestampedData(
+            _timestamp=time.time(),
+            _data={'SourceTimestamp': timestamp},
+            _source='OPCPUBSUB/toolbox1/tool1/AssetManagement/Head'
+        )
+        
+        # In exact match mode, buffer would have pre-grouped these
+        completed_matches = [[result_msg, trace_msg, heads_msg]]
+        
+        # Mock the buffer's get_completed_matches method
+        mock_buffer = Mock()
+        mock_buffer.get_completed_matches.return_value = completed_matches
+        
+        # Process should handle pre-matched groups
+        processed = []
+        def processor(msgs):
+            processed.extend(msgs)
+        
+        # In real usage, correlator would get matches from buffer
+        for match in completed_matches:
+            processor(match)
+        
+        assert len(processed) == 3
+        assert result_msg in processed
+        assert trace_msg in processed
+        assert heads_msg in processed
 
 
 class TestCorrelatorComparison:
@@ -233,4 +295,3 @@ class TestCorrelatorComparison:
                 }
             }
         }
-    

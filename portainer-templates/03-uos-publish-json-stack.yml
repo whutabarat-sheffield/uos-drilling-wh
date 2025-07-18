@@ -1,0 +1,68 @@
+# UOS JSON Publisher Stack Template for Portainer
+# Deploy this stack THIRD (after mqtt-broker and uos-depthest-listener)
+# Stack Name: uos-publish-json
+
+version: '3.8'
+
+services:
+  uos-publish-json:
+    image: uos-publish-json:latest
+    container_name: uos-publish-json
+    restart: unless-stopped
+    
+    # Environment variables (override YAML configuration)
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      # MQTT Broker Configuration (change as needed)
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+      - MQTT_BROKER_USERNAME=
+      - MQTT_BROKER_PASSWORD=
+    
+    # Persistent volumes
+    volumes:
+      - publisher_config:/app/config
+      - publisher_data:/app/data
+    
+    # Join external network for cross-stack communication
+    networks:
+      - toolbox-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import abyss; print('Service healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+# External network - must be created before deploying stacks
+networks:
+  toolbox-network:
+    external: true
+    name: toolbox-network
+
+# Named volumes for persistent data
+volumes:
+  publisher_config:
+    driver: local
+  publisher_data:
+    driver: local

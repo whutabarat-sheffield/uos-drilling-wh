@@ -1,5 +1,5 @@
 """
-Test suite for MessageBuffer thread safety.
+Test suite for MessageBuffer thread safety with exact matching.
 """
 
 import pytest
@@ -19,7 +19,7 @@ from abyss.uos_depth_est import TimestampedData
 
 
 class TestMessageBufferThreadSafety:
-    """Test cases for MessageBuffer thread safety."""
+    """Test cases for MessageBuffer thread safety with exact matching."""
     
     @pytest.fixture
     def sample_config(self):
@@ -28,9 +28,9 @@ class TestMessageBufferThreadSafety:
             'mqtt': {
                 'listener': {
                     'root': 'test/root',
-                    'result': 'Result',
+                    'result': 'ResultManagement',
                     'trace': 'Trace',
-                    'heads': 'Heads',
+                    'heads': 'AssetManagement',
                     'duplicate_handling': 'ignore'
                 }
             }
@@ -46,60 +46,94 @@ class TestMessageBufferThreadSafety:
             max_age_seconds=300
         )
     
-    def create_test_message(self, topic_type: str, tool_id: int, msg_id: int) -> TimestampedData:
-        """Create a test message with unique data."""
+    def create_test_message(self, topic_type: str, tool_id: int, msg_id: int, 
+                          source_timestamp: str) -> TimestampedData:
+        """Create a test message with exact matching fields."""
+        data = {
+            'SourceTimestamp': source_timestamp,
+            'toolboxID': f'toolbox{tool_id}',
+            'toolID': f'tool{tool_id}',
+            'test_id': msg_id
+        }
+        
+        # Add type-specific fields
+        if topic_type == 'ResultManagement':
+            data['ResultId'] = msg_id
+        elif topic_type == 'AssetManagement':
+            data['HeadsId'] = f'HEADS{msg_id}'
+        
         return TimestampedData(
-            _timestamp=time.time() + (msg_id * 0.001),  # Slightly different timestamps
-            _data={'test_id': msg_id, 'tool_id': tool_id, 'type': topic_type},
+            _timestamp=time.time() + (msg_id * 0.001),  # Slightly different receive timestamps
+            _data=data,
             _source=f'test/root/toolbox{tool_id}/tool{tool_id}/{topic_type}'
         )
     
     def test_concurrent_add_messages(self, thread_safe_buffer):
-        """Test adding messages from multiple threads concurrently."""
+        """Test adding complete message sets from multiple threads concurrently."""
         num_threads = 10
-        messages_per_thread = 100
+        message_sets_per_thread = 50
         
-        def add_messages(thread_id):
-            """Add messages from a single thread."""
-            for i in range(messages_per_thread):
-                msg = self.create_test_message('Result', thread_id, i)
-                success = thread_safe_buffer.add_message(msg)
-                assert success is True
+        def add_message_sets(thread_id):
+            """Add complete message sets from a single thread."""
+            for i in range(message_sets_per_thread):
+                source_timestamp = f'2024-01-18T{thread_id:02d}:{i//60:02d}:{i%60:02d}Z'
+                
+                # Create complete message set
+                result_msg = self.create_test_message('ResultManagement', thread_id, i, source_timestamp)
+                trace_msg = self.create_test_message('Trace', thread_id, i, source_timestamp)
+                heads_msg = self.create_test_message('AssetManagement', thread_id, i, source_timestamp)
+                
+                # Add all three messages
+                success1 = thread_safe_buffer.add_message(result_msg)
+                success2 = thread_safe_buffer.add_message(trace_msg)
+                success3 = thread_safe_buffer.add_message(heads_msg)
+                
+                assert success1 is True
+                assert success2 is True
+                assert success3 is True
         
-        # Run multiple threads adding messages
+        # Run multiple threads adding message sets
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [executor.submit(add_messages, i) for i in range(num_threads)]
+            futures = [executor.submit(add_message_sets, i) for i in range(num_threads)]
             for future in futures:
                 future.result()  # Wait for all threads to complete
         
-        # Verify all messages were added
+        # Verify message sets were processed
         stats = thread_safe_buffer.get_buffer_stats()
-        assert stats['total_messages'] == num_threads * messages_per_thread
+        expected_total_messages = num_threads * message_sets_per_thread * 3
+        assert stats['messages_received'] == expected_total_messages
+        assert stats['exact_matches_completed'] == num_threads * message_sets_per_thread
     
     def test_concurrent_add_and_cleanup(self, thread_safe_buffer):
-        """Test adding messages while cleanup is running."""
+        """Test adding incomplete message sets while cleanup is running."""
         stop_event = threading.Event()
         messages_added = threading.Event()
         
-        def add_messages():
-            """Continuously add messages."""
+        def add_incomplete_message_sets():
+            """Continuously add incomplete message sets."""
             count = 0
             while not stop_event.is_set():
-                msg = self.create_test_message('Trace', count % 5, count)
-                thread_safe_buffer.add_message(msg)
+                source_timestamp = f'2024-01-18T10:30:{count%60:02d}Z'
+                
+                # Create incomplete message set (missing heads to trigger cleanup)
+                result_msg = self.create_test_message('ResultManagement', count % 5, count, source_timestamp)
+                trace_msg = self.create_test_message('Trace', count % 5, count, source_timestamp)
+                
+                thread_safe_buffer.add_message(result_msg)
+                thread_safe_buffer.add_message(trace_msg)
                 count += 1
-                if count > 50:
+                if count > 25:  # Fewer incomplete sets since they stay in buffer
                     messages_added.set()
                 time.sleep(0.001)
         
         def run_cleanup():
             """Continuously run cleanup."""
             while not stop_event.is_set():
-                thread_safe_buffer.cleanup_old_messages()
+                thread_safe_buffer._cleanup_old_incomplete_sets()
                 time.sleep(0.01)
         
         # Start threads
-        add_thread = threading.Thread(target=add_messages)
+        add_thread = threading.Thread(target=add_incomplete_message_sets)
         cleanup_thread = threading.Thread(target=run_cleanup)
         
         add_thread.start()
@@ -116,15 +150,21 @@ class TestMessageBufferThreadSafety:
         
         # Verify buffer is in consistent state
         stats = thread_safe_buffer.get_buffer_stats()
-        assert stats['total_messages'] >= 0
-        assert stats['total_buffers'] >= 0
+        assert stats['total_active_keys'] >= 0
+        assert stats['messages_received'] >= 0
     
     def test_concurrent_read_operations(self, thread_safe_buffer):
-        """Test reading from buffer while adding messages."""
-        # Pre-populate some messages
-        for i in range(100):
-            msg = self.create_test_message('Result', i % 3, i)
-            thread_safe_buffer.add_message(msg)
+        """Test reading from buffer while adding complete message sets."""
+        # Pre-populate some complete message sets
+        for i in range(30):
+            source_timestamp = f'2024-01-18T10:30:{i%60:02d}Z'
+            result_msg = self.create_test_message('ResultManagement', i % 3, i, source_timestamp)
+            trace_msg = self.create_test_message('Trace', i % 3, i, source_timestamp)
+            heads_msg = self.create_test_message('AssetManagement', i % 3, i, source_timestamp)
+            
+            thread_safe_buffer.add_message(result_msg)
+            thread_safe_buffer.add_message(trace_msg)
+            thread_safe_buffer.add_message(heads_msg)
         
         results = []
         
@@ -135,17 +175,23 @@ class TestMessageBufferThreadSafety:
                 op = random.choice([
                     lambda: thread_safe_buffer.get_buffer_stats(),
                     lambda: thread_safe_buffer.get_all_buffers(),
-                    lambda: thread_safe_buffer.get_messages_by_topic('test/root/+/+/Result')
+                    lambda: thread_safe_buffer.get_messages_by_topic('test/root/+/+/ResultManagement')
                 ])
                 result = op()
                 results.append(result)
                 time.sleep(0.001)
         
         def write_operations():
-            """Add more messages while reading."""
-            for i in range(50):
-                msg = self.create_test_message('Trace', i % 3, i + 100)
-                thread_safe_buffer.add_message(msg)
+            """Add more complete message sets while reading."""
+            for i in range(25):
+                source_timestamp = f'2024-01-18T11:30:{i%60:02d}Z'
+                result_msg = self.create_test_message('ResultManagement', i % 3, i + 100, source_timestamp)
+                trace_msg = self.create_test_message('Trace', i % 3, i + 100, source_timestamp)
+                heads_msg = self.create_test_message('AssetManagement', i % 3, i + 100, source_timestamp)
+                
+                thread_safe_buffer.add_message(result_msg)
+                thread_safe_buffer.add_message(trace_msg)
+                thread_safe_buffer.add_message(heads_msg)
                 time.sleep(0.001)
         
         # Run concurrent reads and writes
@@ -166,27 +212,36 @@ class TestMessageBufferThreadSafety:
         # Set a small buffer size for testing
         thread_safe_buffer.max_buffer_size = 10
         
-        # Add messages to approach capacity
+        # Add incomplete message sets to approach capacity
         for i in range(9):  # 90% capacity
-            msg = self.create_test_message('Result', 1, i)
-            thread_safe_buffer.add_message(msg)
+            source_timestamp = f'2024-01-18T10:30:{i:02d}Z'
+            result_msg = self.create_test_message('ResultManagement', 1, i, source_timestamp)
+            trace_msg = self.create_test_message('Trace', 1, i, source_timestamp)
+            # Don't add heads to keep them incomplete
+            
+            thread_safe_buffer.add_message(result_msg)
+            thread_safe_buffer.add_message(trace_msg)
         
         # This should trigger a warning (>80% capacity)
         # In real test, we would capture logs and verify warning was logged
         stats = thread_safe_buffer.get_buffer_stats()
-        assert stats['total_messages'] == 9
+        assert stats['total_active_keys'] == 9
     
     def test_clear_buffer_thread_safety(self, thread_safe_buffer):
         """Test clearing buffers while other operations are ongoing."""
         stop_event = threading.Event()
         
-        def add_messages():
-            """Add messages continuously."""
+        def add_incomplete_message_sets():
+            """Add incomplete message sets continuously."""
             count = 0
             while not stop_event.is_set():
-                msg = self.create_test_message('Result', count % 3, count)
+                source_timestamp = f'2024-01-18T10:30:{count%60:02d}Z'
+                result_msg = self.create_test_message('ResultManagement', count % 3, count, source_timestamp)
+                trace_msg = self.create_test_message('Trace', count % 3, count, source_timestamp)
+                
                 try:
-                    thread_safe_buffer.add_message(msg)
+                    thread_safe_buffer.add_message(result_msg)
+                    thread_safe_buffer.add_message(trace_msg)
                 except Exception:
                     pass  # Ignore errors during concurrent clear
                 count += 1
@@ -201,7 +256,7 @@ class TestMessageBufferThreadSafety:
         # Start threads
         threads = []
         for _ in range(3):
-            t = threading.Thread(target=add_messages)
+            t = threading.Thread(target=add_incomplete_message_sets)
             t.start()
             threads.append(t)
         
@@ -219,7 +274,7 @@ class TestMessageBufferThreadSafety:
         
         # Buffer should be in valid state (possibly empty)
         stats = thread_safe_buffer.get_buffer_stats()
-        assert stats['total_messages'] >= 0
+        assert stats['total_active_keys'] >= 0
     
     def test_deadlock_prevention(self, thread_safe_buffer):
         """Test that no deadlocks occur with nested operations."""
@@ -232,8 +287,13 @@ class TestMessageBufferThreadSafety:
         def fill_and_trigger_cleanup():
             """Fill buffer to trigger automatic cleanup."""
             for i in range(10):
-                msg = self.create_test_message('Result', 1, i)
-                thread_safe_buffer.add_message(msg)
+                source_timestamp = f'2024-01-18T10:30:{i:02d}Z'
+                result_msg = self.create_test_message('ResultManagement', 1, i, source_timestamp)
+                trace_msg = self.create_test_message('Trace', 1, i, source_timestamp)
+                # Don't add heads to keep them incomplete and trigger cleanup
+                
+                thread_safe_buffer.add_message(result_msg)
+                thread_safe_buffer.add_message(trace_msg)
         
         # Run in multiple threads
         with ThreadPoolExecutor(max_workers=3) as executor:
@@ -243,4 +303,4 @@ class TestMessageBufferThreadSafety:
         
         # Verify buffer state
         stats = thread_safe_buffer.get_buffer_stats()
-        assert stats['total_messages'] <= thread_safe_buffer.max_buffer_size
+        assert stats['total_active_keys'] <= thread_safe_buffer.max_buffer_size

@@ -1,0 +1,74 @@
+# UOS Depth Estimation Listener Stack Template for Portainer
+# Deploy this stack SECOND (after mqtt-broker)
+# Stack Name: uos-depthest-listener
+
+version: '3.8'
+
+services:
+  uos-depthest-listener:
+    image: uos-depthest-listener:latest
+    container_name: uos-depthest-listener
+    restart: unless-stopped
+    
+    # Environment variables (override YAML configuration)
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      # MQTT Broker Configuration (change as needed)
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+      - MQTT_BROKER_USERNAME=
+      - MQTT_BROKER_PASSWORD=
+      # Cache directories
+      - MPLCONFIGDIR=/app/.cache/matplotlib
+      - HF_HOME=/app/.cache/transformers
+    
+    # Persistent volumes
+    volumes:
+      - uos_config:/app/config
+      - uos_cache_transformers:/app/.cache/transformers
+      - uos_cache_matplotlib:/app/.cache/matplotlib
+    
+    # Join external network for cross-stack communication
+    networks:
+      - toolbox-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import abyss; print('Service healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+# External network - must be created before deploying stacks
+networks:
+  toolbox-network:
+    external: true
+    name: toolbox-network
+
+# Named volumes for persistent data
+volumes:
+  uos_config:
+    driver: local
+  uos_cache_transformers:
+    driver: local
+  uos_cache_matplotlib:
+    driver: local

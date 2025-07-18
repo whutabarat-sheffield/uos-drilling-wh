@@ -35,6 +35,7 @@ RUN python -m pip install --upgrade pip
 # Install system dependencies for async libraries
 RUN apt-get update && apt-get install -y \
     build-essential \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 # Download dependencies as a separate step to take advantage of Docker's caching.

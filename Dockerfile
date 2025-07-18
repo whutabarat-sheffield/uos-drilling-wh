@@ -86,8 +86,13 @@ ENV MPLCONFIGDIR=/app/.cache/matplotlib
 ENV HF_HOME=/app/.cache/transformers
 # ENV TRANSFORMERS_CACHE=/app/.cache/transformers
 
-# Expose MQTT port
-EXPOSE 1883
+# MQTT broker configuration (environment variables override YAML config)
+ENV MQTT_BROKER_HOST=mqtt-broker
+ENV MQTT_BROKER_PORT=1883
+ENV MQTT_BROKER_USERNAME=""
+ENV MQTT_BROKER_PASSWORD=""
+
+# Note: No EXPOSE 1883 - this is an MQTT client, not broker
 
 # Optional: Switch to non-privileged user (commented for debugging)
 # USER appuser

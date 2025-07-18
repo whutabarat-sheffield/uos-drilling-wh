@@ -11,8 +11,8 @@ import json
 from datetime import datetime
 from unittest.mock import Mock, patch
 
-from abyss.mqtt.components.message_buffer_exact import MessageBuffer, MessageSet
-from abyss.mqtt.components.simple_correlator_exact import SimpleMessageCorrelator
+from abyss.mqtt.components.message_buffer import MessageBuffer, MessageSet
+from abyss.mqtt.components.simple_correlator import SimpleMessageCorrelator
 from abyss.uos_depth_est import TimestampedData
 
 

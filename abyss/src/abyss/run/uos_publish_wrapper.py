@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-MQTT Publisher Wrapper - Handles normal, stress test, and async modes
+MQTT Publisher Wrapper - Handles normal, simple, stress test, and async modes
 
 This wrapper script provides a unified interface for:
-- Normal publishing mode
+- Normal publishing mode (timestamp updating, random order)
+- Simple publishing mode (timestamp preserving for exact matching)
 - High-performance stress testing (threading)
 - Ultra-high-performance async mode (asyncio)
 """
@@ -29,6 +30,10 @@ def main():
         # Use threaded stress test publisher
         from uos_publish_json_stress import main as stress_main
         stress_main()
+    elif '--simple' in sys.argv or '--exact-match' in sys.argv:
+        # Use simple publisher for exact timestamp matching
+        from uos_publish_json_simple import main as simple_main
+        simple_main()
     else:
         # Use normal publisher
         from uos_publish_json import main as normal_main
