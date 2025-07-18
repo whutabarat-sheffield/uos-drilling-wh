@@ -6,10 +6,6 @@ This test verifies that ALL components now properly support ConfigurationManager
 and that raw config access is only used for backward compatibility.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'abyss', 'src'))
-
 from abyss.mqtt.components.config_manager import ConfigurationManager
 from abyss.mqtt.components.message_buffer import MessageBuffer
 from abyss.mqtt.components.simple_correlator import SimpleMessageCorrelator
@@ -17,7 +13,7 @@ from abyss.mqtt.components.message_processor import MessageProcessor
 from abyss.mqtt.components.client_manager import MQTTClientManager
 from abyss.mqtt.components.data_converter import DataFrameConverter
 from abyss.mqtt.components.result_publisher import ResultPublisher
-from abyss.mqtt.components.correlator import MessageCorrelator
+# Note: MessageCorrelator doesn't exist - using SimpleMessageCorrelator instead
 from abyss.mqtt.components.drilling_analyser import DrillingDataAnalyser
 import tempfile
 import yaml

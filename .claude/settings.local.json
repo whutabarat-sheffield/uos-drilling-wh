@@ -29,7 +29,11 @@
       "Bash(chmod:*)",
       "WebFetch(domain:docs.portainer.io)",
       "WebFetch(domain:containers.dev)",
-      "WebFetch(domain:www.kenmuse.com)"
+      "WebFetch(domain:www.kenmuse.com)",
+      "Bash(touch:*)",
+      "Bash(cp:*)",
+      "Bash(python -m pytest tests/unit/mqtt/test_config_manager_clean.py -v)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
