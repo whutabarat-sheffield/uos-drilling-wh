@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  devcontainer:
+    image: python:3.10.16-slim
+    volumes:
+      # Workspace
+      - ..:/workspaces/uos-drilling-wh:cached
+      # Git config
+      - ~/.gitconfig:/home/vscode/.gitconfig:cached
+      # Docker socket
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Cache volumes
+      - pip-cache:/home/vscode/.cache/pip
+      - transformers-cache:/home/vscode/.cache/transformers
+      - matplotlib-cache:/home/vscode/.cache/matplotlib
+      - torch-cache:/home/vscode/.cache/torch
+    
+    # Network connection to MQTT
+    networks:
+      - mqtt-network
+      
+    # Performance settings
+    shm_size: '2gb'
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=DEBUG
+      - MPLCONFIGDIR=/home/vscode/.cache/matplotlib
+      - HF_HOME=/home/vscode/.cache/transformers
+      - TORCH_HOME=/home/vscode/.cache/torch
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+      - STRESS_TEST_ENABLED=true
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONIOENCODING=utf-8
+    
+    # Keep container running
+    command: sleep infinity
+    
+    # Port forwarding
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+      - "8883:8883"
+      - "9090:9090"
+
+# External network - must be created first
+networks:
+  mqtt-network:
+    external: true
+    name: mqtt-broker_toolbox-network
+
+# Named volumes for caching
+volumes:
+  pip-cache:
+  transformers-cache:
+  matplotlib-cache:
+  torch-cache:

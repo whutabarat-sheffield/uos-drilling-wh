@@ -1,0 +1,155 @@
+{
+	// For quick reference: https://containers.dev/implementors/json_reference/
+	"name": "UOS Drilling Development Environment",
+	"image": "python:3.10.16-slim",
+	// Alternative: Use Dockerfile for custom build
+	//"build": {
+	//	"context": "..",
+	//	"dockerfile": "Dockerfile.devel"
+	//},
+
+	// 1. Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": []
+
+	// 2. Use 'mounts' to make a list of local directories available inside the container. More info: https://code.visualstudio.com/remote/advancedcontainers/add-local-file-mount
+	// "mounts": [],
+		// Configures Docker volume mounts for the devcontainer
+	// This section defines file system volumes that will be mounted from the host machine
+	// into the container, allowing persistent data and access to host resources
+	"mounts": [
+		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+		// Enable volume mounts for dependency caching
+		// Cache pip downloads
+		"source=pip-cache,target=/home/vscode/.cache/pip,type=volume",
+		// Cache transformers models
+		"source=transformers-cache,target=/home/vscode/.cache/transformers,type=volume",
+		// Cache matplotlib config
+		"source=matplotlib-cache,target=/home/vscode/.cache/matplotlib,type=volume",
+		// Cache PyTorch models
+		"source=torch-cache,target=/home/vscode/.cache/torch,type=volume"
+	],
+	
+
+    // For faster disk I/O performance
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+
+	// 3. Use 'runArgs' to pass arguments to the container. 
+	// run the container with all GPUs
+	// "runArgs": [
+	// 	"--gpus",
+	// 	"all"
+	// ],
+
+	"hostRequirements": {
+		"gpu": false
+	  },
+
+	// 4. Features to add to the Dev Container. More info: https://containers.dev/implementors/features.
+	"features": {
+		// ZSH without OMZ
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": "true",
+			"configureZshAsDefaultShell": "true",
+			"installOhMyZsh": "false",
+			"installOhMyZshConfig": "false",
+			"username": "vscode",
+			"userUid": "1000",
+			"userGid": "1000",
+			"upgradePackages": "true"
+		},
+		// git
+		"ghcr.io/devcontainers/features/git:1": {
+			"version": "os-provided",
+			"ppa": "false"
+		},
+		// Claude Code
+ 	   "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {}
+	},
+
+	// 5. Configure tool-specific properties.
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			// Set *default* container specific settings.json values on container create.
+			"settings": {
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"github.gitAuthentication": true,  // Credential helper for git
+				// Environment variables for cache locations
+				"python.terminal.activateEnvironment": false,
+				"python.testing.pytestEnabled": true,
+				"python.testing.pytestArgs": [
+					"--asyncio-mode=auto"
+				],
+				"python.analysis.autoImportCompletions": true,
+				"python.analysis.extraPaths": [
+					"${containerWorkspaceFolder}/abyss/src"
+				]
+			},
+			// installs useful extensions
+			"extensions": [
+				"ms-python.python",
+				"ms-python.debugpy",
+				"ms-python.vscode-pylance",
+				"ms-python.isort",
+				"ms-toolsai.jupyter",
+				"ms-toolsai.jupyter-keymap",
+				"ms-toolsai.vscode-jupyter-cell-tags",
+				"ms-toolsai.jupyter-renderers",
+				"ms-toolsai.vscode-jupyter-slideshow",
+				"ms-toolsai.tensorboard",
+				"ms-azuretools.vscode-containers",
+				"ms-azuretools.vscode-docker",
+				"charliermarsh.ruff"
+			]
+		}
+	},
+	
+	// 6. Set `remoteUser` to `root` to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
+	"remoteUser": "vscode",
+
+
+	
+	// the following commands are related to container lifecylce. More info: https://containers.dev/implementors/json_reference/#lifecycle-scripts
+	
+	// 7. Use 'initializeCommand' to run commands ON THE HOST before container is created or started.
+	// "initializeCommand": "",
+
+	// 8. Use 'onCreateCommand' to run commands INSIDE THE CONTAINER after it started for the first time.
+	// "onCreateCommand": "",
+	
+	// 9. Use 'updateContentCommand' to run commands if the root filetree have any changes, during container creation.
+	// "updateContentCommand": "",
+
+	// 10. Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": [
+		"bash", "-c", 
+		"apt-get update && apt-get install -y --no-install-recommends build-essential vim-tiny && rm -rf /var/lib/apt/lists/* && chown -R vscode:vscode /home/vscode/.cache"
+	],
+
+
+	// 11. Use 'postStartCommand' to run a command each time the container starts successfully.
+	"postStartCommand": [
+		"bash", "-c", 
+		"cd abyss && pip install --user -r requirements.txt && pip install --user -e . && git config --global credential.helper 'cache --timeout=3600'"
+	],
+
+	// Environment variables for development
+	"containerEnv": {
+		"PYTHONUNBUFFERED": "1",
+		"LOG_LEVEL": "DEBUG",
+		"MPLCONFIGDIR": "/home/vscode/.cache/matplotlib",
+		"HF_HOME": "/home/vscode/.cache/transformers",
+		"TORCH_HOME": "/home/vscode/.cache/torch"
+	},
+
+	// Connect to mqtt-broker network if available
+	"runArgs": [
+		"--network=mqtt-broker_toolbox-network"
+	],
+
+	// Forward MQTT ports for local testing
+	"forwardPorts": [1883, 9001]
+	
+	// 12. Use 'postAttachCommand' to run a command each time a tool attaches to the container successfully. 
+	// "postAttachCommand": "",
+}

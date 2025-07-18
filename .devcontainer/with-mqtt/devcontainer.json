@@ -1,0 +1,103 @@
+{
+	// Uses Docker Compose for guaranteed MQTT network connectivity
+	"name": "UOS Drilling with MQTT Network",
+	
+	// Use docker-compose.yml to define the container
+	"dockerComposeFile": [
+		"../docker-compose.yml"
+	],
+	
+	// The service to use from docker-compose.yml
+	"service": "devcontainer",
+	
+	// The workspace folder inside the container
+	"workspaceFolder": "/workspaces/uos-drilling-wh",
+	
+	// Features to add to the Dev Container
+	"features": {
+		// Common utilities
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": "true",
+			"configureZshAsDefaultShell": "true",
+			"installOhMyZsh": "false",
+			"installOhMyZshConfig": "false",
+			"username": "vscode",
+			"userUid": "1000",
+			"userGid": "1000",
+			"upgradePackages": "true"
+		},
+		// Git
+		"ghcr.io/devcontainers/features/git:1": {
+			"version": "os-provided",
+			"ppa": "false"
+		},
+		// Claude Code
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {}
+	},
+
+	// Configure tool-specific properties
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"github.gitAuthentication": true,
+				"python.terminal.activateEnvironment": false,
+				"python.testing.pytestEnabled": true,
+				"python.testing.pytestArgs": [
+					"--asyncio-mode=auto"
+				],
+				"python.analysis.autoImportCompletions": true,
+				"python.analysis.extraPaths": [
+					"${containerWorkspaceFolder}/abyss/src"
+				],
+				"files.watcherExclude": {
+					"**/.git/objects/**": true,
+					"**/.git/subtree-cache/**": true,
+					"**/node_modules/**": true,
+					"**/.cache/**": true
+				}
+			},
+			"extensions": [
+				"ms-python.python",
+				"ms-python.debugpy",
+				"ms-python.vscode-pylance",
+				"ms-python.isort",
+				"ms-toolsai.jupyter",
+				"ms-toolsai.jupyter-keymap",
+				"ms-toolsai.vscode-jupyter-cell-tags",
+				"ms-toolsai.jupyter-renderers",
+				"ms-toolsai.vscode-jupyter-slideshow",
+				"ms-toolsai.tensorboard",
+				"ms-azuretools.vscode-containers",
+				"ms-azuretools.vscode-docker",
+				"charliermarsh.ruff"
+			]
+		}
+	},
+	
+	"remoteUser": "vscode",
+
+	// Ensure MQTT network exists before starting
+	"initializeCommand": [
+		"bash", "-c",
+		"docker network create mqtt-broker_toolbox-network 2>/dev/null || true"
+	],
+
+	// Install system packages and tools
+	"postCreateCommand": [
+		"bash", "-c", 
+		"apt-get update && apt-get install -y --no-install-recommends build-essential vim-tiny mosquitto-clients htop curl jq netcat-openbsd && rm -rf /var/lib/apt/lists/* && chown -R vscode:vscode /home/vscode/.cache"
+	],
+
+	// Install Python dependencies
+	"postStartCommand": [
+		"bash", "-c", 
+		"cd /workspaces/uos-drilling-wh/abyss && pip install --user -r requirements.txt && pip install --user -e . && pip install --user aiomqtt aiofiles prometheus-client && git config --global credential.helper 'cache --timeout=3600'"
+	],
+
+	// Validation
+	"postAttachCommand": [
+		"bash", "-c",
+		"echo '=== UOS Drilling with MQTT Network ===' && echo 'Testing MQTT connectivity...' && mosquitto_pub -h mqtt-broker -p 1883 -t test/devcontainer -m 'Connected via Docker Compose' && echo '✓ MQTT broker connected via network' && echo 'Ready for development!'"
+	]
+}

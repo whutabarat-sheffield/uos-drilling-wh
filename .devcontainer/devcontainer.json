@@ -1,52 +1,43 @@
 {
 	// For quick reference: https://containers.dev/implementors/json_reference/
-	"name": "UOS Drilling Development Environment",
+	"name": "UOS Drilling Development Environment v0.2.6",
 	"image": "python:3.10.16-slim",
-	// Alternative: Use Dockerfile for custom build
-	//"build": {
-	//	"context": "..",
-	//	"dockerfile": "Dockerfile.devel"
-	//},
-
-	// 1. Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": []
-
-	// 2. Use 'mounts' to make a list of local directories available inside the container. More info: https://code.visualstudio.com/remote/advancedcontainers/add-local-file-mount
-	// "mounts": [],
-		// Configures Docker volume mounts for the devcontainer
-	// This section defines file system volumes that will be mounted from the host machine
-	// into the container, allowing persistent data and access to host resources
+	
+	// Volume mounts for persistence and caching
 	"mounts": [
 		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
-		// Enable volume mounts for dependency caching
-		// Cache pip downloads
-		"source=pip-cache,target=/home/vscode/.cache/pip,type=volume",
+		// Cache pip downloads - include cache version for invalidation
+		"source=pip-cache-${localEnv:CACHE_VERSION:-v1},target=/home/vscode/.cache/pip,type=volume",
 		// Cache transformers models
 		"source=transformers-cache,target=/home/vscode/.cache/transformers,type=volume",
 		// Cache matplotlib config
 		"source=matplotlib-cache,target=/home/vscode/.cache/matplotlib,type=volume",
 		// Cache PyTorch models
-		"source=torch-cache,target=/home/vscode/.cache/torch,type=volume"
+		"source=torch-cache,target=/home/vscode/.cache/torch,type=volume",
+		// Docker socket for stress testing (optional)
+		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind,consistency=cached"
 	],
 	
+	// For faster disk I/O performance
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
 
-    // For faster disk I/O performance
-    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+	// Run arguments - keep it simple
+	"runArgs": [
+		// Performance optimizations
+		"--shm-size=2g",
+		"--ulimit", "nofile=65536:65536"
+	],
 
-	// 3. Use 'runArgs' to pass arguments to the container. 
-	// run the container with all GPUs
-	// "runArgs": [
-	// 	"--gpus",
-	// 	"all"
-	// ],
-
+	// Resource requirements
 	"hostRequirements": {
-		"gpu": false
-	  },
+		"gpu": false,
+		"memory": "4gb",
+		"cpus": 2
+	},
 
-	// 4. Features to add to the Dev Container. More info: https://containers.dev/implementors/features.
+	// Features to add to the Dev Container
 	"features": {
-		// ZSH without OMZ
+		// Common utilities
 		"ghcr.io/devcontainers/features/common-utils:2": {
 			"installZsh": "true",
 			"configureZshAsDefaultShell": "true",
@@ -57,24 +48,26 @@
 			"userGid": "1000",
 			"upgradePackages": "true"
 		},
-		// git
+		// Git
 		"ghcr.io/devcontainers/features/git:1": {
 			"version": "os-provided",
 			"ppa": "false"
 		},
 		// Claude Code
- 	   "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {}
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {},
+		// Docker CLI for stress testing
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+			"version": "latest",
+			"moby": false
+		}
 	},
 
-	// 5. Configure tool-specific properties.
+	// Configure tool-specific properties
 	"customizations": {
-		// Configure properties specific to VS Code.
 		"vscode": {
-			// Set *default* container specific settings.json values on container create.
 			"settings": {
 				"python.defaultInterpreterPath": "/usr/local/bin/python",
-				"github.gitAuthentication": true,  // Credential helper for git
-				// Environment variables for cache locations
+				"github.gitAuthentication": true,
 				"python.terminal.activateEnvironment": false,
 				"python.testing.pytestEnabled": true,
 				"python.testing.pytestArgs": [
@@ -83,9 +76,15 @@
 				"python.analysis.autoImportCompletions": true,
 				"python.analysis.extraPaths": [
 					"${containerWorkspaceFolder}/abyss/src"
-				]
+				],
+				// Performance settings
+				"files.watcherExclude": {
+					"**/.git/objects/**": true,
+					"**/.git/subtree-cache/**": true,
+					"**/node_modules/**": true,
+					"**/.cache/**": true
+				}
 			},
-			// installs useful extensions
 			"extensions": [
 				"ms-python.python",
 				"ms-python.debugpy",
@@ -104,33 +103,24 @@
 		}
 	},
 	
-	// 6. Set `remoteUser` to `root` to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode",
 
-
-	
-	// the following commands are related to container lifecylce. More info: https://containers.dev/implementors/json_reference/#lifecycle-scripts
-	
-	// 7. Use 'initializeCommand' to run commands ON THE HOST before container is created or started.
-	// "initializeCommand": "",
-
-	// 8. Use 'onCreateCommand' to run commands INSIDE THE CONTAINER after it started for the first time.
-	// "onCreateCommand": "",
-	
-	// 9. Use 'updateContentCommand' to run commands if the root filetree have any changes, during container creation.
-	// "updateContentCommand": "",
-
-	// 10. Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": [
-		"bash", "-c", 
-		"apt-get update && apt-get install -y --no-install-recommends build-essential vim-tiny && rm -rf /var/lib/apt/lists/* && chown -R vscode:vscode /home/vscode/.cache"
+	// Setup script that creates the network if needed
+	"initializeCommand": [
+		"bash", "-c",
+		"echo '=== Preparing development environment ===' && docker network create mqtt-broker_toolbox-network 2>/dev/null || echo 'Network already exists or Docker not available'"
 	],
 
+	// Install system packages and tools
+	"postCreateCommand": [
+		"bash", "-c", 
+		"apt-get update && apt-get install -y --no-install-recommends build-essential vim-tiny mosquitto-clients htop curl jq netcat-openbsd && rm -rf /var/lib/apt/lists/* && chown -R vscode:vscode /home/vscode/.cache"
+	],
 
-	// 11. Use 'postStartCommand' to run a command each time the container starts successfully.
+	// Install Python dependencies
 	"postStartCommand": [
 		"bash", "-c", 
-		"cd abyss && pip install --user -r requirements.txt && pip install --user -e . && git config --global credential.helper 'cache --timeout=3600'"
+		"cd abyss && pip install --user -r requirements.txt && pip install --user -e . && pip install --user aiomqtt aiofiles prometheus-client && git config --global credential.helper 'cache --timeout=3600'"
 	],
 
 	// Environment variables for development
@@ -139,17 +129,28 @@
 		"LOG_LEVEL": "DEBUG",
 		"MPLCONFIGDIR": "/home/vscode/.cache/matplotlib",
 		"HF_HOME": "/home/vscode/.cache/transformers",
-		"TORCH_HOME": "/home/vscode/.cache/torch"
+		"TORCH_HOME": "/home/vscode/.cache/torch",
+		// MQTT configuration - uses localhost by default, can be overridden
+		"MQTT_BROKER_HOST": "${localEnv:MQTT_BROKER_HOST:-localhost}",
+		"MQTT_BROKER_PORT": "${localEnv:MQTT_BROKER_PORT:-1883}",
+		// Stress testing enabled by default
+		"STRESS_TEST_ENABLED": "${localEnv:STRESS_TEST_ENABLED:-true}",
+		// Performance
+		"PYTHONDONTWRITEBYTECODE": "1",
+		"PYTHONIOENCODING": "utf-8"
 	},
 
-	// Connect to mqtt-broker network if available
-	"runArgs": [
-		"--network=mqtt-broker_toolbox-network"
+	// Forward MQTT and monitoring ports
+	"forwardPorts": [
+		1883,  // MQTT
+		9001,  // MQTT WebSocket
+		8883,  // MQTT TLS (if configured)
+		9090   // Prometheus metrics (for stress testing)
 	],
 
-	// Forward MQTT ports for local testing
-	"forwardPorts": [1883, 9001]
-	
-	// 12. Use 'postAttachCommand' to run a command each time a tool attaches to the container successfully. 
-	// "postAttachCommand": "",
+	// Validation and environment check
+	"postAttachCommand": [
+		"bash", "-c",
+		"echo '=== UOS Drilling v0.2.6 Development Environment ===' && echo 'MQTT Configuration:' && echo \"  Host: ${MQTT_BROKER_HOST}:${MQTT_BROKER_PORT}\" && echo \"  Stress Testing: ${STRESS_TEST_ENABLED}\" && echo '' && echo 'Testing MQTT connectivity...' && timeout 2 mosquitto_pub -h ${MQTT_BROKER_HOST} -p ${MQTT_BROKER_PORT} -t test/devcontainer -m 'ping' 2>/dev/null && echo '✓ MQTT broker reachable' || echo '✗ MQTT broker not reachable - app will run in offline mode' && echo '' && echo 'To connect to MQTT broker:' && echo '  1. Run mqtt-multistack/mqtt-broker with docker-compose' && echo '  2. Or set MQTT_BROKER_HOST environment variable' && echo '' && echo 'Ready for development!'"
+	]
 }

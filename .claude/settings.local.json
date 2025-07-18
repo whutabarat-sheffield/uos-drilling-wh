@@ -27,7 +27,9 @@
       "Bash(tree:*)",
       "Bash(python -m pytest abyss/tests/mqtt/components/test_message_buffer_thread_safety.py -v)",
       "Bash(chmod:*)",
-      "WebFetch(domain:docs.portainer.io)"
+      "WebFetch(domain:docs.portainer.io)",
+      "WebFetch(domain:containers.dev)",
+      "WebFetch(domain:www.kenmuse.com)"
     ],
     "deny": []
   }
