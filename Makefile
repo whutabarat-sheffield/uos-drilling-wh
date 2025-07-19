@@ -179,6 +179,31 @@ docker-publish-fresh: check-docker ## Build publisher Docker image (no cache)
 	@echo "Building publisher Docker image without cache..."
 	@./build-publish.sh --no-cache
 
+# Publisher testing targets
+test-publisher: docker-publish ## Test the publisher Docker image
+	@echo "Testing publisher module..."
+	@docker run --rm uos-publish-json:publisher python -m abyss.mqtt.publishers --help
+
+publisher-modes: docker-publish ## Show publisher operation modes
+	@echo "Publisher Operation Modes:"
+	@echo "========================="
+	@echo ""
+	@echo "1. Standard Mode (with realistic patterns):"
+	@echo "   docker run --rm -v \$$(pwd)/test_data:/data uos-publish-json:publisher \\"
+	@echo "     python -m abyss.mqtt.publishers /data"
+	@echo ""
+	@echo "2. Stress Test Mode (high performance):"
+	@echo "   docker run --rm -v \$$(pwd)/test_data:/data uos-publish-json:publisher \\"
+	@echo "     python -m abyss.mqtt.publishers /data --stress-test --rate 1000 --duration 60"
+	@echo ""
+	@echo "3. Standard Mode (without patterns):"
+	@echo "   docker run --rm -v \$$(pwd)/test_data:/data uos-publish-json:publisher \\"
+	@echo "     python -m abyss.mqtt.publishers /data --no-patterns"
+	@echo ""
+	@echo "4. With Signal Tracking:"
+	@echo "   docker run --rm -v \$$(pwd)/test_data:/data -v \$$(pwd)/tracking:/tracking uos-publish-json:publisher \\"
+	@echo "     python -m abyss.mqtt.publishers /data --track-signals --signal-log /tracking/signals.csv"
+
 # Docker utility targets
 docker-list: check-docker ## List all project Docker images
 	@echo "Project Docker images:"

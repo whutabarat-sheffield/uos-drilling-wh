@@ -127,4 +127,5 @@ ENV MQTT_MAX_QUEUED_MESSAGES=1000
 
 # Default to normal publishing mode
 # To run stress test, override with: --stress-test --rate 1000 --duration 60
-CMD ["python", "uos_publish_wrapper.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+# CMD ["python", "uos_publish_wrapper.py", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+CMD ["python", "-m", "abyss.mqtt.publishers", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml"]
