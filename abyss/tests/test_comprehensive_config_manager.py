@@ -6,6 +6,15 @@ This test verifies that ALL components now properly support ConfigurationManager
 and that raw config access is only used for backward compatibility.
 """
 
+import os
+import sys
+import tempfile
+import yaml
+from unittest.mock import Mock
+
+# Add the source directory to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 from abyss.mqtt.components.config_manager import ConfigurationManager
 from abyss.mqtt.components.message_buffer import MessageBuffer
 from abyss.mqtt.components.simple_correlator import SimpleMessageCorrelator
@@ -13,11 +22,7 @@ from abyss.mqtt.components.message_processor import MessageProcessor
 from abyss.mqtt.components.client_manager import MQTTClientManager
 from abyss.mqtt.components.data_converter import DataFrameConverter
 from abyss.mqtt.components.result_publisher import ResultPublisher
-# Note: MessageCorrelator doesn't exist - using SimpleMessageCorrelator instead
 from abyss.mqtt.components.drilling_analyser import DrillingDataAnalyser
-import tempfile
-import yaml
-from unittest.mock import Mock
 
 def create_test_config():
     """Create a comprehensive test configuration."""
@@ -76,11 +81,6 @@ def test_all_components_with_config_manager():
         assert simple_correlator.time_window == 25.0  # From config
         print("✓ SimpleMessageCorrelator works with ConfigurationManager")
         
-        # Test MessageCorrelator (legacy)
-        correlator = MessageCorrelator(config=config_manager)
-        assert correlator.config_manager is not None
-        assert correlator.time_window == 25.0  # From config
-        print("✓ MessageCorrelator works with ConfigurationManager")
         
         # Test DataConverter
         data_converter = DataFrameConverter(config=config_manager)
@@ -130,10 +130,6 @@ def test_backward_compatibility_with_raw_config():
     assert simple_correlator.config_manager is None
     print("✓ SimpleMessageCorrelator backward compatible with raw config")
     
-    # Test MessageCorrelator
-    correlator = MessageCorrelator(config=config)
-    assert correlator.config_manager is None
-    print("✓ MessageCorrelator backward compatible with raw config")
     
     # Test DataConverter
     data_converter = DataFrameConverter(config=config)

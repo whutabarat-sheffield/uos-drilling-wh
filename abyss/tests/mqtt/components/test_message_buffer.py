@@ -12,7 +12,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
 
-from abyss.mqtt.components.message_buffer import MessageBuffer
+from abyss.mqtt.components.message_buffer import MessageBuffer, DuplicateMessageError
 from abyss.uos_depth_est import TimestampedData
 
 
@@ -209,6 +209,256 @@ class TestMessageBuffer:
         # Clear all buffers
         message_buffer.clear_buffer()
         assert message_buffer.get_buffer_stats()['total_messages'] == 0
+
+
+class TestDuplicateDetection:
+    """Test cases for duplicate message detection functionality."""
+    
+    @pytest.fixture
+    def config_with_duplicate_handling(self, request):
+        """Configuration with parameterized duplicate handling."""
+        return {
+            'mqtt': {
+                'listener': {
+                    'root': 'OPCPUBSUB',
+                    'result': 'ResultManagement',
+                    'trace': 'ResultManagement/Trace',
+                    'duplicate_handling': request.param,
+                    'duplicate_time_window': 1.0
+                }
+            }
+        }
+    
+    def test_basic_duplicate_detection(self):
+        """Test basic duplicate detection scenarios."""
+        config = {
+            'mqtt': {
+                'listener': {
+                    'root': 'OPCPUBSUB',
+                    'result': 'ResultManagement',
+                    'trace': 'ResultManagement/Trace',
+                    'duplicate_handling': 'ignore',
+                    'duplicate_time_window': 1.0
+                }
+            }
+        }
+        
+        buffer = MessageBuffer(config)
+        timestamp = time.time()
+        test_data = {"test": "data", "value": 123}
+        source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
+        
+        # Test 1: Same source, same timestamp, same data → duplicate
+        msg1 = TimestampedData(timestamp, test_data, source)
+        msg2 = TimestampedData(timestamp, test_data, source)
+        
+        assert buffer.add_message(msg1) is True
+        assert buffer.add_message(msg2) is False  # Duplicate ignored
+        
+        # Test 2: Same source, different timestamp within window → duplicate
+        msg3 = TimestampedData(timestamp + 0.5, test_data, source)
+        assert buffer.add_message(msg3) is False
+        
+        # Test 3: Same source, different timestamp outside window → not duplicate
+        msg4 = TimestampedData(timestamp + 2.0, test_data, source)
+        assert buffer.add_message(msg4) is True
+        
+        # Test 4: Same timestamp, different data → not duplicate
+        msg5 = TimestampedData(timestamp, {"different": "data"}, source)
+        assert buffer.add_message(msg5) is True
+    
+    @pytest.mark.parametrize('config_with_duplicate_handling', ['ignore'], indirect=True)
+    def test_duplicate_handling_ignore(self, config_with_duplicate_handling):
+        """Test duplicate handling with 'ignore' strategy."""
+        buffer = MessageBuffer(config_with_duplicate_handling)
+        timestamp = time.time()
+        test_data = {"test": "data", "value": 123}
+        source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
+        
+        msg1 = TimestampedData(timestamp, test_data, source)
+        msg2 = TimestampedData(timestamp + 0.5, test_data, source)
+        
+        # First message should be added
+        assert buffer.add_message(msg1) is True
+        assert buffer.get_buffer_stats()['total_messages'] == 1
+        
+        # Duplicate should be ignored
+        assert buffer.add_message(msg2) is False
+        assert buffer.get_buffer_stats()['total_messages'] == 1
+    
+    @pytest.mark.parametrize('config_with_duplicate_handling', ['replace'], indirect=True)
+    def test_duplicate_handling_replace(self, config_with_duplicate_handling):
+        """Test duplicate handling with 'replace' strategy."""
+        buffer = MessageBuffer(config_with_duplicate_handling)
+        timestamp = time.time()
+        original_data = {"version": 1, "value": "original"}
+        updated_data = {"version": 1, "value": "original"}  # Same data for true duplicate
+        source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
+        
+        msg1 = TimestampedData(timestamp, original_data, source)
+        msg2 = TimestampedData(timestamp + 0.5, updated_data, source)
+        
+        # First message should be added
+        assert buffer.add_message(msg1) is True
+        assert buffer.get_buffer_stats()['total_messages'] == 1
+        
+        # Duplicate should replace the original
+        assert buffer.add_message(msg2) is True
+        assert buffer.get_buffer_stats()['total_messages'] == 1
+        
+        # Verify the message was replaced (checking timestamp)
+        topic_pattern = 'OPCPUBSUB/+/+/ResultManagement'
+        messages = buffer.get_messages_by_topic(topic_pattern)
+        assert len(messages) == 1
+        assert messages[0].timestamp == timestamp + 0.5
+    
+    @pytest.mark.parametrize('config_with_duplicate_handling', ['error'], indirect=True)
+    def test_duplicate_handling_error(self, config_with_duplicate_handling):
+        """Test duplicate handling with 'error' strategy."""
+        buffer = MessageBuffer(config_with_duplicate_handling)
+        timestamp = time.time()
+        test_data = {"test": "data", "value": 123}
+        source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
+        
+        msg1 = TimestampedData(timestamp, test_data, source)
+        msg2 = TimestampedData(timestamp + 0.5, test_data, source)
+        
+        # First message should be added
+        assert buffer.add_message(msg1) is True
+        
+        # Duplicate should raise error
+        with pytest.raises(DuplicateMessageError) as exc_info:
+            buffer.add_message(msg2)
+        
+        assert "Duplicate message detected" in str(exc_info.value)
+        assert buffer.get_buffer_stats()['total_messages'] == 1
+    
+    def test_complex_data_comparison(self):
+        """Test duplicate detection with complex nested data structures."""
+        config = {
+            'mqtt': {
+                'listener': {
+                    'root': 'OPCPUBSUB',
+                    'result': 'ResultManagement',
+                    'trace': 'ResultManagement/Trace',
+                    'duplicate_handling': 'ignore'
+                }
+            }
+        }
+        
+        buffer = MessageBuffer(config)
+        timestamp = time.time()
+        source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
+        
+        # Complex nested data with different key orders
+        data1 = {
+            "outer": {
+                "b": 2,
+                "a": 1,
+                "nested": {
+                    "list": [1, 2, {"key": "value"}],
+                    "number": 3.14159
+                }
+            },
+            "simple": "test"
+        }
+        
+        data2 = {
+            "simple": "test",
+            "outer": {
+                "a": 1,
+                "nested": {
+                    "number": 3.14159,
+                    "list": [1, 2, {"key": "value"}]
+                },
+                "b": 2
+            }
+        }
+        
+        data3 = {
+            "simple": "test",
+            "outer": {
+                "a": 1,
+                "nested": {
+                    "number": 3.14159,
+                    "list": [1, 2, {"key": "different"}]  # Changed value
+                },
+                "b": 2
+            }
+        }
+        
+        msg1 = TimestampedData(timestamp, data1, source)
+        msg2 = TimestampedData(timestamp + 0.5, data2, source)  # Same data, different order
+        msg3 = TimestampedData(timestamp + 0.7, data3, source)  # Different data
+        
+        # First message should be added
+        assert buffer.add_message(msg1) is True
+        assert buffer.get_buffer_stats()['total_messages'] == 1
+        
+        # Same data with different key order should be duplicate
+        assert buffer.add_message(msg2) is False
+        assert buffer.get_buffer_stats()['total_messages'] == 1
+        
+        # Actually different data should be added
+        assert buffer.add_message(msg3) is True
+        assert buffer.get_buffer_stats()['total_messages'] == 2
+    
+    def test_custom_time_window(self):
+        """Test duplicate detection with custom time window."""
+        config = {
+            'mqtt': {
+                'listener': {
+                    'root': 'OPCPUBSUB',
+                    'result': 'ResultManagement',
+                    'trace': 'ResultManagement/Trace',
+                    'duplicate_handling': 'ignore',
+                    'duplicate_time_window': 2.0  # 2 second window
+                }
+            }
+        }
+        
+        buffer = MessageBuffer(config)
+        timestamp = time.time()
+        test_data = {"test": "data"}
+        source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
+        
+        msg1 = TimestampedData(timestamp, test_data, source)
+        msg2 = TimestampedData(timestamp + 1.5, test_data, source)  # Within 2s window
+        msg3 = TimestampedData(timestamp + 2.5, test_data, source)  # Outside 2s window
+        
+        assert buffer.add_message(msg1) is True
+        assert buffer.add_message(msg2) is False  # Duplicate
+        assert buffer.add_message(msg3) is True   # Not duplicate
+    
+    def test_numeric_precision_in_duplicates(self):
+        """Test duplicate detection handles floating point precision."""
+        config = {
+            'mqtt': {
+                'listener': {
+                    'root': 'OPCPUBSUB',
+                    'result': 'ResultManagement',
+                    'trace': 'ResultManagement/Trace',
+                    'duplicate_handling': 'ignore'
+                }
+            }
+        }
+        
+        buffer = MessageBuffer(config)
+        timestamp = time.time()
+        source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
+        
+        # Test floating point comparison
+        data1 = {"value": 3.14159265359}
+        data2 = {"value": 3.14159265359}  # Exact same
+        data3 = {"value": 3.14159265358}  # Slightly different
+        
+        msg1 = TimestampedData(timestamp, data1, source)
+        msg2 = TimestampedData(timestamp + 0.1, data2, source)
+        msg3 = TimestampedData(timestamp + 0.2, data3, source)
+        
+        assert buffer.add_message(msg1) is True
+        assert buffer.add_message(msg2) is False  # Duplicate
+        assert buffer.add_message(msg3) is True   # Different value
 
 
 if __name__ == '__main__':

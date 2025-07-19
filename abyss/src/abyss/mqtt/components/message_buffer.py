@@ -33,7 +33,8 @@ class MessageBuffer:
     """
     
     def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], cleanup_interval: int = 60, 
-                 max_buffer_size: int = 10000, max_age_seconds: int = 300):
+                 max_buffer_size: int = 10000, max_age_seconds: int = 300, 
+                 hysteresis_factor: float = 0.8):
         """
         Initialize MessageBuffer.
         
@@ -42,6 +43,7 @@ class MessageBuffer:
             cleanup_interval: Interval between automatic cleanups (seconds)
             max_buffer_size: Maximum number of messages per buffer
             max_age_seconds: Maximum age of messages before cleanup (seconds)
+            hysteresis_factor: Cleanup target size as fraction of max (0.8 = 80%)
         """
         # Handle both ConfigurationManager and raw config dict for backward compatibility
         if isinstance(config, ConfigurationManager):
@@ -61,12 +63,15 @@ class MessageBuffer:
             listener_config = self.config['mqtt']['listener']
             self.duplicate_handling = listener_config.get('duplicate_handling', 'ignore')
         
-        self.buffers: Dict[str, List[TimestampedData]] = defaultdict(list)
+        self.buffers: Dict[str, Deque[TimestampedData]] = defaultdict(deque)
         self._buffer_lock = threading.RLock()  # Use RLock to prevent deadlocks
         self.cleanup_interval = cleanup_interval
         self.max_buffer_size = max_buffer_size
         self.max_age_seconds = max_age_seconds
+        self.hysteresis_factor = hysteresis_factor  # Cleanup target size as fraction of max
+        self.cleanup_target_size = int(max_buffer_size * hysteresis_factor)
         self.last_cleanup = datetime.now().timestamp()
+        self.last_cleanup_by_topic: Dict[str, float] = {}  # Track cleanup times per topic
         
         # Performance metrics
         self._metrics = {
@@ -76,7 +81,10 @@ class MessageBuffer:
             'duplicate_messages': 0,
             'cleanup_cycles': 0,
             'last_warning_time': {},  # Track last warning time by type to avoid spam
-            'processing_times': deque(maxlen=1000)  # Keep last 1000 processing times
+            'processing_times': deque(maxlen=1000),  # Keep last 1000 processing times
+            'messages_dropped_by_topic': defaultdict(int),  # Track drops per topic
+            'messages_dropped_age': defaultdict(int),  # Drops due to age
+            'messages_dropped_size': defaultdict(int)  # Drops due to size limit
         }
         self._metrics_lock = threading.Lock()
         
@@ -99,9 +107,6 @@ class MessageBuffer:
         """
         start_time = time_module.time()
         try:
-            # Track received messages
-            with self._metrics_lock:
-                self._metrics['messages_received'] += 1
             # Validation
             if not data or not data.source:
                 logging.warning("Message validation failed", extra={
@@ -167,21 +172,30 @@ class MessageBuffer:
                 # Add message to buffer (only if not a duplicate or handling is not 'ignore')
                 self.buffers[matching_topic].append(data)
                 
+                # Track received messages after successful addition
+                with self._metrics_lock:
+                    self._metrics['messages_received'] += 1
+                
                 buffer_size_after = len(self.buffers[matching_topic])
                 
                 # Check buffer capacity with progressive warnings
                 buffer_usage_percent = (buffer_size_after / self.max_buffer_size) * 100
                 
-                # Progressive warnings with rate limiting
-                if buffer_usage_percent >= 90:
+                # Progressive warnings with rate limiting and cleanup awareness
+                current_time = time_module.time()
+                time_since_cleanup = current_time - self.last_cleanup_by_topic.get(matching_topic, 0)
+                suppress_warnings = time_since_cleanup < 30  # Suppress warnings for 30s after cleanup
+                
+                if not suppress_warnings and buffer_usage_percent >= 90:
                     self._log_rate_limited_warning('buffer_critical', 30, 
                         "CRITICAL: Buffer at critical capacity - data loss imminent", {
                         'topic': matching_topic,
                         'buffer_usage_percent': buffer_usage_percent,
                         'buffer_size': buffer_size_after,
-                        'max_size': self.max_buffer_size
+                        'max_size': self.max_buffer_size,
+                        'cleanup_target': self.cleanup_target_size
                     })
-                elif buffer_usage_percent >= 80:
+                elif not suppress_warnings and buffer_usage_percent >= 80:
                     self._log_rate_limited_warning('buffer_high', 60,
                         "Buffer at high capacity - system under stress", {
                         'topic': matching_topic,
@@ -189,7 +203,7 @@ class MessageBuffer:
                         'buffer_size': buffer_size_after,
                         'max_size': self.max_buffer_size
                     })
-                elif buffer_usage_percent >= 60:
+                elif not suppress_warnings and buffer_usage_percent >= 60:
                     self._log_rate_limited_warning('buffer_moderate', 300,
                         "Buffer usage elevated - monitor system load", {
                         'topic': matching_topic,
@@ -223,6 +237,7 @@ class MessageBuffer:
             # Track dropped message
             with self._metrics_lock:
                 self._metrics['messages_dropped'] += 1
+                # Can't determine topic for validation failures
             self._check_drop_rate_warning()
             return False
         except DuplicateMessageError:
@@ -247,10 +262,18 @@ class MessageBuffer:
             # Track dropped message
             with self._metrics_lock:
                 self._metrics['messages_dropped'] += 1
+                # Try to determine topic for metrics
+                if data and hasattr(data, 'source'):
+                    try:
+                        matching_topic = self._get_matching_topic(data.source)
+                        if matching_topic:
+                            self._metrics['messages_dropped_by_topic'][matching_topic] += 1
+                    except:
+                        pass  # Don't let metrics tracking cause additional errors
             self._check_drop_rate_warning()
             return False
     
-    def _check_for_duplicate(self, new_message: TimestampedData, existing_messages: List[TimestampedData]) -> tuple[bool, Optional[int]]:
+    def _check_for_duplicate(self, new_message: TimestampedData, existing_messages: Deque[TimestampedData]) -> tuple[bool, Optional[int]]:
         """Check if the new message is a duplicate of any existing message.
         
         Returns:
@@ -431,7 +454,7 @@ class MessageBuffer:
     
     def cleanup_old_messages(self):
         """
-        Improved cleanup with time-based sliding window approach.
+        Improved cleanup with hysteresis and deque-optimized operations.
         """
         try:
             current_time = datetime.now().timestamp()
@@ -451,19 +474,39 @@ class MessageBuffer:
                     if original_length == 0:
                         continue
                     
-                    # Remove old messages beyond time window
-                    self.buffers[topic] = [
-                        msg for msg in self.buffers[topic] 
-                        if current_time - msg.timestamp <= self.max_age_seconds
-                    ]
-                    age_removed = original_length - len(self.buffers[topic])
+                    # First pass: Remove old messages beyond time window
+                    # For deque, we need to rebuild without old messages
+                    age_removed = 0
+                    new_buffer = deque()
+                    for msg in self.buffers[topic]:
+                        if current_time - msg.timestamp <= self.max_age_seconds:
+                            new_buffer.append(msg)
+                        else:
+                            age_removed += 1
+                            with self._metrics_lock:
+                                self._metrics['messages_dropped_age'][topic] += 1
                     
-                    # If still over size limit, keep only newest messages
+                    self.buffers[topic] = new_buffer
+                    
+                    # If still over size limit, implement hysteresis
                     size_removed = 0
                     if len(self.buffers[topic]) > self.max_buffer_size:
-                        self.buffers[topic].sort(key=lambda msg: msg.timestamp, reverse=True)
-                        size_removed = len(self.buffers[topic]) - self.max_buffer_size
-                        self.buffers[topic] = self.buffers[topic][:self.max_buffer_size]
+                        # Sort messages by timestamp (newest first)
+                        sorted_messages = sorted(self.buffers[topic], key=lambda msg: msg.timestamp, reverse=True)
+                        # Keep only up to cleanup_target_size (hysteresis)
+                        messages_to_keep = sorted_messages[:self.cleanup_target_size]
+                        size_removed = len(self.buffers[topic]) - len(messages_to_keep)
+                        
+                        # Track size-based drops
+                        with self._metrics_lock:
+                            self._metrics['messages_dropped_size'][topic] += size_removed
+                        
+                        # Rebuild deque with kept messages in original order
+                        self.buffers[topic] = deque(sorted(messages_to_keep, key=lambda msg: msg.timestamp))
+                    
+                    # Track cleanup time for this topic
+                    if age_removed > 0 or size_removed > 0:
+                        self.last_cleanup_by_topic[topic] = current_time
                     
                     total_topic_removed = age_removed + size_removed
                     total_removed += total_topic_removed
@@ -657,5 +700,14 @@ class MessageBuffer:
                 metrics['avg_processing_time_ms'] = sum(metrics['processing_times']) / len(metrics['processing_times']) * 1000
             else:
                 metrics['avg_processing_time_ms'] = 0
+            
+            # Add per-topic drop information
+            metrics['drops_by_topic'] = dict(metrics['messages_dropped_by_topic'])
+            metrics['drops_by_age'] = dict(metrics['messages_dropped_age'])
+            metrics['drops_by_size'] = dict(metrics['messages_dropped_size'])
+            
+            # Add hysteresis information
+            metrics['hysteresis_factor'] = self.hysteresis_factor
+            metrics['cleanup_target_size'] = self.cleanup_target_size
                 
             return metrics
