@@ -33,7 +33,10 @@
       "Bash(touch:*)",
       "Bash(cp:*)",
       "Bash(python -m pytest tests/unit/mqtt/test_config_manager_clean.py -v)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(rm:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker-compose logs:*)"
     ],
     "deny": []
   }
