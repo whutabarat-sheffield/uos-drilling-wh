@@ -1,0 +1,21 @@
+{
+  "MessageId": "a2018f53-ba9f-495e-b91d-2f05b988c7b1",
+  "MessageType": "ua-data",
+  "PublisherId": "localhost",
+  "Messages": {
+    "DataSetWriterId": "setitecgabriele",
+    "SequenceNumber": 1750936594592,
+    "Timestamp": "2025-06-26T11:16:34Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.CuttingTools.0.OperationCounters.OperationCycleCounter": {
+        "Value": 22,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.CuttingTools.0.OperationCounters.OperationCycleCounter2": {
+        "Value": 22,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      }
+    }
+  }
+}

@@ -1,0 +1,128 @@
+version: '3.8'
+
+# Simplified version for Portainer deployment
+# This version embeds scripts and config directly in the compose file
+
+services:
+  # Publisher with signal tracking
+  publisher:
+    image: uos-publish-json:latest
+    container_name: signal-publisher-simple
+    command: >
+      sh -c "
+      echo 'Note: This requires the modified uos_publish_json.py to be in the image';
+      echo 'If tracking is not working, build a custom image with the modified script';
+      python /app/uos_publish_json.py 
+      /data 
+      --conf /app/config/mqtt_conf_docker.yaml
+      --repetitions 1000
+      --track-signals 
+      --signal-log /tracking/sent_signals.csv
+      "
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    volumes:
+      - tracking-data:/tracking
+    networks:
+      - mqtt-broker_toolbox-network
+    external_links:
+      - mqtt-broker
+
+  # Signal monitor with inline script
+  signal-monitor:
+    image: python:3.10.16-slim
+    container_name: signal-monitor
+    working_dir: /
+    command: >
+      sh -c "
+      pip install paho-mqtt >/dev/null 2>&1;
+      cat > /signal_monitor.py << 'SCRIPT'
+      #!/usr/bin/env python3
+      import csv
+      import json
+      import os
+      import time
+      import paho.mqtt.client as mqtt
+
+      def on_message(client, userdata, msg):
+          try:
+              data = json.loads(msg.payload)
+              signal_id = data.get('_signal_id')
+              if signal_id:
+                  with open('/tracking/received_signals.csv', 'a', newline='') as f:
+                      csv.writer(f).writerow([signal_id, time.time(), msg.topic])
+                  print(f'Tracked signal: {signal_id}')
+          except:
+              pass
+
+      client = mqtt.Client()
+      client.on_message = on_message
+      client.connect(os.getenv('MQTT_HOST', 'mqtt-broker'), 1883)
+      client.subscribe('#')
+      print('Signal monitor started - tracking to received_signals.csv')
+      client.loop_forever()
+      SCRIPT
+      python /signal_monitor.py
+      "
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MQTT_HOST=mqtt-broker
+    volumes:
+      - tracking-data:/tracking
+    networks:
+      - mqtt-broker_toolbox-network
+    external_links:
+      - mqtt-broker
+
+  # Live statistics with inline script
+  live-stats:
+    image: busybox
+    container_name: live-stats
+    command: >
+      sh -c "
+      cat > /compare_signals.sh << 'SCRIPT'
+      #!/bin/sh
+      echo '=== Signal Tracking Report - '\$(date)' ==='
+      echo
+      if [ -f /tracking/sent_signals.csv ]; then
+          sent_count=\$(wc -l /tracking/sent_signals.csv | cut -d' ' -f1)
+          echo 'Signals sent:     '\$sent_count
+      else
+          echo 'Signals sent:     0'
+      fi
+      if [ -f /tracking/received_signals.csv ]; then
+          received_count=\$(wc -l /tracking/received_signals.csv | cut -d' ' -f1)
+          echo 'Messages received: '\$received_count
+          unique_sent=\$(cut -d, -f1 /tracking/sent_signals.csv | sort | uniq | wc -l)
+          unique_received=\$(cut -d, -f1 /tracking/received_signals.csv | sort | uniq | wc -l)
+          echo 'Unique signals sent:     '\$unique_sent
+          echo 'Unique signals received: '\$unique_received
+          missing=\$((unique_sent - unique_received))
+          echo
+          echo 'Missing signals: '\$missing
+      else
+          echo 'Messages received: 0'
+          echo
+          echo 'Missing signals: N/A (no received signals file)'
+      fi
+      echo '================================='
+      SCRIPT
+      chmod +x /compare_signals.sh;
+      while true; do clear; sh /compare_signals.sh; sleep 5; done
+      "
+    volumes:
+      - tracking-data:/tracking:ro
+    networks:
+      - mqtt-broker_toolbox-network
+    depends_on:
+      - publisher
+      - signal-monitor
+
+volumes:
+  tracking-data:
+    driver: local
+
+networks:
+  mqtt-broker_toolbox-network:
+    external: true

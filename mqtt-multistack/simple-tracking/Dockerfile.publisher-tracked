@@ -1,0 +1,45 @@
+# Dockerfile for signal-tracking publisher
+FROM uos-publish-json:latest
+
+# Copy the modified publisher script with signal tracking
+COPY abyss/src/abyss/run/uos_publish_json.py /app/uos_publish_json.py
+
+# Create test data directory and minimal test data
+RUN mkdir -p /app/test_data && \
+    echo '{"MessageId":"test1","_signal_id":"embedded-test-1"}' > /app/test_data/ResultManagement.json && \
+    echo '{"MessageId":"test2","_signal_id":"embedded-test-2"}' > /app/test_data/Trace.json && \
+    echo '{"MessageId":"test3","_signal_id":"embedded-test-3"}' > /app/test_data/Heads.json
+
+# Create config directory and file
+RUN mkdir -p /app/config
+
+# Create the MQTT configuration file
+RUN printf '%s\n' \
+    'mqtt:' \
+    '  broker:' \
+    '    host: "mqtt-broker"' \
+    '    port: 1883' \
+    '    username: ""' \
+    '    password: ""' \
+    '  listener:' \
+    '    duplicate_handling: "replace"' \
+    '    root: "OPCPUBSUB"' \
+    '    toolboxid: "+"' \
+    '    toolid: "+"' \
+    '    result: "ResultManagement"' \
+    '    trace: "ResultManagement/Trace"' \
+    '    heads: "AssetManagement/Heads"' \
+    '  data_ids:' \
+    '    machine_id: "ResultManagement.Results.0.ResultMetaData.SerialNumber"' \
+    '  publisher:' \
+    '    topics:' \
+    '      result: "OPCPUBSUB/TEST001/device001/ResultManagement"' \
+    '      trace: "OPCPUBSUB/TEST001/device001/ResultManagement/Trace"' \
+    '    client_id: "test_publisher"' \
+    > /app/config/mqtt_conf_docker.yaml
+
+# Set working directory
+WORKDIR /app
+
+# Default command
+CMD ["python", "uos_publish_json.py", "test_data", "--conf", "config/mqtt_conf_docker.yaml", "--repetitions", "1000", "--track-signals", "--signal-log", "/tracking/sent_signals.csv"]

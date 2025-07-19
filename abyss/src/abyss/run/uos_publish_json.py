@@ -9,12 +9,14 @@ The data is read from specified files and published to topics with:
 """
 
 import argparse
+import csv
 import json
 import logging
 import random
 import signal
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
@@ -102,6 +104,17 @@ def setup_argument_parser() -> argparse.ArgumentParser:
         default="INFO", 
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], 
         help="Set the logging level"
+    )
+    parser.add_argument(
+        "--track-signals",
+        action="store_true",
+        help="Enable signal tracking with unique IDs"
+    )
+    parser.add_argument(
+        "--signal-log",
+        type=str,
+        default="sent_signals.csv",
+        help="CSV file for signal tracking log"
     )
     
     return parser
@@ -270,6 +283,33 @@ def main():
             # Select random toolbox and tool IDs
             toolbox_id = random.choice(TOOLBOX_IDS)
             tool_id = random.choice(TOOL_IDS)
+            
+            # Handle signal tracking if enabled
+            signal_id = None
+            if args.track_signals:
+                signal_id = str(uuid.uuid4())
+                # Log to CSV immediately
+                with open(args.signal_log, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([signal_id, time.time(), toolbox_id, tool_id])
+                
+                # Inject signal ID into JSON data
+                result_data = json.loads(d_result)
+                # Add signal ID at top level for easy access
+                result_data['_signal_id'] = signal_id
+                d_result = json.dumps(result_data)
+                
+                trace_data = json.loads(d_trace)
+                # Add signal ID at top level for easy access
+                trace_data['_signal_id'] = signal_id
+                d_trace = json.dumps(trace_data)
+                
+                heads_data = json.loads(d_heads)
+                # Add signal ID at top level for easy access
+                heads_data['_signal_id'] = signal_id
+                d_heads = json.dumps(heads_data)
+                
+                logging.debug(f"Signal tracking enabled - ID: {signal_id}")
             
             # Build topics
             mqtt_root = config['mqtt']['listener']['root']

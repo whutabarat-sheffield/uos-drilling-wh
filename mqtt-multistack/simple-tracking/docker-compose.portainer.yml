@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # Publisher with signal tracking (reusing existing image)
+  publisher:
+    image: uos-publish-json:latest
+    container_name: signal-publisher-simple
+    command: >
+      python /app/uos_publish_json.py 
+      /data 
+      --conf /app/config/mqtt_conf_docker.yaml
+      --repetitions 1000
+      --track-signals 
+      --signal-log /tracking/sent_signals.csv
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    volumes:
+      - tracking-data:/tracking           # Named volume for tracking
+      - test-data:/data:ro               # Named volume for test data
+      - config-data:/app/config:ro       # Named volume for config
+      - scripts-data:/app/scripts:ro     # Named volume for scripts
+    networks:
+      - mqtt-broker_toolbox-network
+    external_links:
+      - mqtt-broker
+
+  # Minimal signal monitor
+  signal-monitor:
+    image: python:3.10.16-slim
+    container_name: signal-monitor
+    working_dir: /app
+    command: /app/start_monitor.sh
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MQTT_HOST=mqtt-broker
+    volumes:
+      - scripts-data:/app:ro         # Scripts (read-only)
+      - tracking-data:/tracking      # Shared tracking directory
+    networks:
+      - mqtt-broker_toolbox-network
+    external_links:
+      - mqtt-broker
+
+  # Live statistics display
+  live-stats:
+    image: busybox
+    container_name: live-stats
+    command: sh -c "while true; do clear; sh /app/compare_signals.sh; sleep 5; done"
+    volumes:
+      - scripts-data:/app:ro         # Scripts (read-only)  
+      - tracking-data:/tracking:ro   # Tracking data (read-only)
+    networks:
+      - mqtt-broker_toolbox-network
+    depends_on:
+      - publisher
+      - signal-monitor
+
+volumes:
+  tracking-data:
+    driver: local
+  test-data:
+    driver: local
+  config-data:
+    driver: local
+  scripts-data:
+    driver: local
+
+networks:
+  mqtt-broker_toolbox-network:
+    external: true

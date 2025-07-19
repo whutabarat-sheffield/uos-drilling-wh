@@ -83,13 +83,10 @@ class MessageBuffer:
         # Pre-compute topic patterns for efficiency
         self._topic_patterns = {
             'trace': f"{listener_config['root']}/+/+/{listener_config['trace']}",
-            'result': f"{listener_config['root']}/+/+/{listener_config['result']}"
+            'result': f"{listener_config['root']}/+/+/{listener_config['result']}",
+            'heads': f"{listener_config['root']}/+/+/{listener_config.get('heads', '')}"
         }
         
-        # Add heads pattern only if configured
-        if 'heads' in listener_config:
-            self._topic_patterns['heads'] = f"{listener_config['root']}/+/+/{listener_config['heads']}"
-    
     def add_message(self, data: TimestampedData) -> bool:
         """
         Add a message to the buffer with improved error handling.

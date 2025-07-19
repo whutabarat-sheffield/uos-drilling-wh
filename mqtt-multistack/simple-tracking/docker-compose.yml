@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Publisher with signal tracking (reusing existing image)
+  publisher:
+    image: uos-publish-json:latest  # Use existing project image
+    container_name: signal-publisher-simple
+    command: >
+      python /app/uos_publish_json.py 
+      /data 
+      --conf /app/config/mqtt_conf_docker.yaml
+      --repetitions 1000
+      --track-signals 
+      --signal-log /tracking/sent_signals.csv
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    volumes:
+      - ./tracking:/tracking       # Shared tracking directory
+      - ./data:/data:ro           # Test data (read-only)
+      - ./config:/app/config:ro   # Config (read-only)
+      - ../../abyss/src/abyss/run/uos_publish_json.py:/app/uos_publish_json.py:ro  # Mount modified script
+    networks:
+      - mqtt-broker_toolbox-network
+    external_links:
+      - mqtt-broker
+
+  # Minimal signal monitor
+  signal-monitor:
+    image: python:3.10.16-slim  # Just base Python
+    container_name: signal-monitor
+    working_dir: /app
+    command: /app/start_monitor.sh
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MQTT_HOST=mqtt-broker
+    volumes:
+      - ./scripts:/app:ro         # Scripts (read-only)
+      - ./tracking:/tracking      # Shared tracking directory
+    networks:
+      - mqtt-broker_toolbox-network
+    external_links:
+      - mqtt-broker
+
+  # Live statistics display
+  live-stats:
+    image: busybox  # Minimal image with shell tools
+    container_name: live-stats
+    command: sh -c "while true; do clear; sh /app/compare_signals.sh; sleep 5; done"
+    volumes:
+      - ./scripts:/app:ro         # Scripts (read-only)  
+      - ./tracking:/tracking:ro   # Tracking data (read-only)
+    networks:
+      - mqtt-broker_toolbox-network
+    depends_on:
+      - publisher
+      - signal-monitor
+
+networks:
+  mqtt-broker_toolbox-network:
+    external: true

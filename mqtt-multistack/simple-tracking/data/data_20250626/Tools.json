@@ -1,0 +1,65 @@
+{
+  "MessageId": "b987a4e6-9e98-4088-b95a-3ed37b8389cb",
+  "MessageType": "ua-data",
+  "PublisherId": "localhost",
+  "Messages": {
+    "DataSetWriterId": "setitecgabriele",
+    "SequenceNumber": 1750936594592,
+    "Timestamp": "2025-06-26T11:16:34Z",
+    "MessageType": "ua-keyframe",
+    "Payload": {
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Identification.SerialNumber": {
+        "Value": "0",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.MaximumCyclesLimit2": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.CCPressure": {
+        "Value": 10,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.MaximumStroke": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.VacuumDelay": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.VacuumFlowRate": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.RetractRotationSpeed": {
+        "Value": 300,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.RetractFeed": {
+        "Value": 13.684,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.DisableAbort": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.ToolBreakageStatus": {
+        "Value": "0",
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.ToolBreakageDEP": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.ToolBreakageThrust": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      },
+      "nsu=http://airbus.com/IJT/ADrilling;s=Objects.DeviceSet.setitecgabriele.AssetManagement.Assets.Tools.0.Parameters.CycleParameters.ToolBreakageTorque": {
+        "Value": 0,
+        "SourceTimestamp": "2024-05-15T07:04:19Z"
+      }
+    }
+  }
+}

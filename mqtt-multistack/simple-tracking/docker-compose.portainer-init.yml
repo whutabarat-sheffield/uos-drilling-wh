@@ -1,0 +1,178 @@
+version: '3.8'
+
+# This compose file initializes the volumes with necessary files
+# Run this once before deploying the main stack in Portainer
+
+services:
+  init-volumes:
+    image: busybox
+    container_name: init-tracking-volumes
+    command: >
+      sh -c "
+      echo 'Initializing volumes...';
+      
+      # Create tracking directory
+      mkdir -p /tracking;
+      touch /tracking/test_write.txt;
+      
+      # Copy test data
+      mkdir -p /data/data_20250326;
+      echo 'Test data would go here' > /data/test.txt;
+      
+      # Copy config
+      mkdir -p /config;
+      cat > /config/mqtt_conf_docker.yaml << 'EOF'
+      # MQTT Configuration
+      mqtt:
+        broker:
+          host: "mqtt-broker"
+          port: 1883
+          username: ""
+          password: ""
+        listener:
+          duplicate_handling: "replace"
+          root: "OPCPUBSUB"
+          toolboxid: "+"
+          toolid: "+"
+          result: "ResultManagement"
+          trace: "ResultManagement/Trace"
+          heads: "AssetManagement/Heads"
+        data_ids:
+          machine_id: 'ResultManagement.Results.0.ResultMetaData.SerialNumber'
+          head_id: 'AssetManagement.Assets.Heads.0.Identification.SerialNumber'
+          result_id: 'ResultManagement.Results.0.ResultMetaData.ResultId'
+          trace_result_id: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepResultId'
+          position: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepTraceContent[0].Values'
+          thrust: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityThrustTrace.StepTraceContent[0].Values'
+          torque: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityTorqueTrace.StepTraceContent[0].Values'
+          step: 'ResultManagement.Results.0.ResultContent.Trace.StepTraces.StepNumberTrace.StepTraceContent[0].Values'
+          torque_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty'
+          thrust_empty_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty'
+          step_vals: 'ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber'
+        estimation:
+          keypoints: 'ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints'
+          depth_estimation: 'ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation'
+        publisher:
+          topics:
+            result: "OPCPUBSUB/ILLL502033771/setitectest/ResultManagement"
+            trace: "OPCPUBSUB/ILLL502033771/setitectest/ResultManagement/Traces"
+          client_id: "setitec_publisher"
+      EOF
+      
+      # Copy scripts
+      mkdir -p /scripts;
+      
+      # Create signal_monitor.py
+      cat > /scripts/signal_monitor.py << 'EOF'
+#!/usr/bin/env python3
+"""Minimal MQTT subscriber that logs received signal IDs to CSV"""
+import csv
+import json
+import os
+import time
+import paho.mqtt.client as mqtt
+
+def on_message(client, userdata, msg):
+    """Extract and log signal IDs from received messages"""
+    try:
+        data = json.loads(msg.payload)
+        
+        # Look for signal ID at top level (where we inject it)
+        signal_id = data.get('_signal_id')
+        
+        if signal_id:
+            with open('/tracking/received_signals.csv', 'a', newline='') as f:
+                csv.writer(f).writerow([signal_id, time.time(), msg.topic])
+            print(f"Tracked signal: {signal_id}")
+    except:
+        pass  # Ignore messages without tracking or parse errors
+
+# Setup and run
+client = mqtt.Client()
+client.on_message = on_message
+client.connect(os.getenv('MQTT_HOST', 'mqtt-broker'), 1883)
+client.subscribe("#")  # Subscribe to all topics
+print("Signal monitor started - tracking to received_signals.csv")
+client.loop_forever()
+EOF
+      
+      # Create start_monitor.sh
+      cat > /scripts/start_monitor.sh << 'EOF'
+#!/bin/bash
+# Simple script to start the signal monitor with paho-mqtt installed
+
+echo "Installing paho-mqtt..."
+pip install paho-mqtt >/dev/null 2>&1
+
+echo "Starting signal monitor..."
+python /app/signal_monitor.py
+EOF
+      chmod +x /scripts/start_monitor.sh;
+      
+      # Create compare_signals.sh
+      cat > /scripts/compare_signals.sh << 'EOF'
+#!/bin/sh
+# Simple signal comparison for busybox
+
+echo "=== Signal Tracking Report - \$(date) ==="
+echo
+
+if [ -f /tracking/sent_signals.csv ]; then
+    sent_count=\$(wc -l /tracking/sent_signals.csv | cut -d' ' -f1)
+    echo "Signals sent:     \$sent_count"
+else
+    echo "Signals sent:     0"
+fi
+
+if [ -f /tracking/received_signals.csv ]; then
+    received_count=\$(wc -l /tracking/received_signals.csv | cut -d' ' -f1)
+    echo "Messages received: \$received_count"
+    
+    # Count unique signals
+    unique_sent=\$(cut -d, -f1 /tracking/sent_signals.csv | sort | uniq | wc -l)
+    unique_received=\$(cut -d, -f1 /tracking/received_signals.csv | sort | uniq | wc -l)
+    echo "Unique signals sent:     \$unique_sent"
+    echo "Unique signals received: \$unique_received"
+    
+    # Calculate missing
+    missing=\$((unique_sent - unique_received))
+    echo
+    echo "Missing signals: \$missing"
+else
+    echo "Messages received: 0"
+    echo
+    echo "Missing signals: N/A (no received signals file)"
+fi
+
+echo "================================="
+EOF
+      chmod +x /scripts/compare_signals.sh;
+      
+      # Create uos_publish_json.py placeholder
+      cat > /scripts/uos_publish_json.py << 'EOF'
+# This is a placeholder file
+# The actual modified uos_publish_json.py needs to be:
+# 1. Built into the uos-publish-json:latest image, OR
+# 2. Mounted from a location accessible to Portainer
+# 
+# For Portainer deployment, it's recommended to build a custom image
+# that includes the modified publisher script with signal tracking
+EOF
+      
+      echo 'Volume initialization complete!';
+      "
+    volumes:
+      - tracking-data:/tracking
+      - test-data:/data
+      - config-data:/config  
+      - scripts-data:/scripts
+
+volumes:
+  tracking-data:
+    driver: local
+  test-data:
+    driver: local
+  config-data:
+    driver: local
+  scripts-data:
+    driver: local

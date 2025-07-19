@@ -1,0 +1,151 @@
+version: '3.8'
+
+# Working version for Portainer with embedded test data
+
+services:
+  # Initialize data volume with test data
+  init-data:
+    image: busybox
+    container_name: init-test-data
+    command: >
+      sh -c "
+      echo 'Creating test data directory...';
+      mkdir -p /data/test_data;
+      echo '{\"MessageId\":\"test\",\"_signal_id\":\"test-signal\"}' > /data/test_data/ResultManagement.json;
+      echo '{\"MessageId\":\"test\",\"_signal_id\":\"test-signal\"}' > /data/test_data/Trace.json;
+      echo '{\"MessageId\":\"test\",\"_signal_id\":\"test-signal\"}' > /data/test_data/Heads.json;
+      echo 'Test data created';
+      sleep 5
+      "
+    volumes:
+      - test-data:/data
+
+  # Publisher - requires modified image
+  publisher:
+    image: uos-publish-json:latest
+    container_name: signal-publisher-simple
+    command: >
+      sh -c "
+      echo 'Waiting for data initialization...';
+      sleep 10;
+      echo 'Starting publisher...';
+      
+      # Create a minimal config file
+      mkdir -p /app/config;
+      cat > /app/config/mqtt_conf_docker.yaml << 'EOF'
+      mqtt:
+        broker:
+          host: mqtt-broker
+          port: 1883
+        listener:
+          root: OPCPUBSUB
+          toolboxid: +
+          toolid: +
+          result: ResultManagement
+          trace: ResultManagement/Trace
+          heads: AssetManagement/Heads
+      EOF
+      
+      # Check if data exists
+      if [ -d /data ]; then
+        ls -la /data/;
+        python /app/uos_publish_json.py /data --conf /app/config/mqtt_conf_docker.yaml --repetitions 1000 --track-signals --signal-log /tracking/sent_signals.csv || echo 'Publisher failed - check if image has modified script';
+      else
+        echo 'ERROR: /data directory not found';
+      fi
+      "
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    volumes:
+      - tracking-data:/tracking
+      - test-data:/data:ro
+    networks:
+      - mqtt-broker_toolbox-network
+    depends_on:
+      - init-data
+
+  # Signal monitor with embedded script
+  signal-monitor:
+    image: python:3.10.16-slim
+    container_name: signal-monitor
+    command: >
+      sh -c "
+      pip install paho-mqtt >/dev/null 2>&1;
+      cat > /monitor.py << 'EOF'
+      import csv
+      import json
+      import os
+      import time
+      import paho.mqtt.client as mqtt
+      
+      def on_message(client, userdata, msg):
+          try:
+              data = json.loads(msg.payload)
+              signal_id = data.get('_signal_id')
+              if signal_id:
+                  with open('/tracking/received_signals.csv', 'a', newline='') as f:
+                      csv.writer(f).writerow([signal_id, time.time(), msg.topic])
+                  print(f'Tracked: {signal_id}')
+          except:
+              pass
+      
+      client = mqtt.Client()
+      client.on_message = on_message
+      client.connect('mqtt-broker', 1883)
+      client.subscribe('#')
+      print('Monitor started')
+      client.loop_forever()
+      EOF
+      python /monitor.py
+      "
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - tracking-data:/tracking
+    networks:
+      - mqtt-broker_toolbox-network
+
+  # Statistics display
+  live-stats:
+    image: busybox
+    container_name: live-stats
+    command: >
+      sh -c "
+      while true; do
+        clear;
+        echo '=== Signal Tracking Report ===';
+        echo;
+        if [ -f /tracking/sent_signals.csv ]; then
+          sent=$(wc -l /tracking/sent_signals.csv | cut -d' ' -f1);
+          echo \"Signals sent: \$sent\";
+        else
+          echo 'Signals sent: 0';
+        fi;
+        if [ -f /tracking/received_signals.csv ]; then
+          recv=$(wc -l /tracking/received_signals.csv | cut -d' ' -f1);
+          echo \"Signals received: \$recv\";
+        else
+          echo 'Signals received: 0';
+        fi;
+        echo '==============================';
+        sleep 5;
+      done
+      "
+    volumes:
+      - tracking-data:/tracking:ro
+    networks:
+      - mqtt-broker_toolbox-network
+    depends_on:
+      - publisher
+      - signal-monitor
+
+volumes:
+  tracking-data:
+    driver: local
+  test-data:
+    driver: local
+
+networks:
+  mqtt-broker_toolbox-network:
+    external: true
