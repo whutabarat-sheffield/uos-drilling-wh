@@ -1,0 +1,215 @@
+# Docker Compose Template for Drilling Data Analysis System
+# ========================================================
+#
+# This template provides a foundation for Docker deployment configurations.
+# Copy and customize for specific environments.
+#
+# Usage:
+#   cp config/templates/docker_template.yml config/environments/development/docker-compose.yml
+
+version: '3.8'
+
+# Common service configuration
+x-common-config: &common-config
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+# Environment variables template
+x-environment: &common-environment
+  # MQTT Configuration
+  MQTT_BROKER_HOST: "${MQTT_BROKER_HOST:-mqtt-broker}"
+  MQTT_BROKER_PORT: "${MQTT_BROKER_PORT:-1883}"
+  MQTT_USERNAME: "${MQTT_USERNAME:-}"
+  MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
+  
+  # Processing Configuration
+  PROCESSING_WORKERS: "${PROCESSING_WORKERS:-4}"
+  MODEL_ID: "${MODEL_ID:-4}"
+  
+  # Logging Configuration
+  LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+  
+  # Performance Configuration
+  MONITORING_ENABLED: "${MONITORING_ENABLED:-true}"
+
+services:
+  # MQTT Broker Service
+  # ------------------
+  # Message broker for drilling data communication
+  mqtt-broker:
+    <<: *common-config
+    image: eclipse-mosquitto:${MOSQUITTO_VERSION:-2.0}
+    container_name: ${COMPOSE_PROJECT_NAME:-drilling}_mqtt_broker
+    ports:
+      - "${MQTT_EXTERNAL_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - mqtt_data:/mosquitto/data
+      - mqtt_logs:/mosquitto/log
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - drilling_network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -C 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Drilling Data Analysis Service
+  # -----------------------------
+  # Main service for processing drilling data and depth estimation
+  drilling-analyzer:
+    <<: *common-config
+    image: ${ANALYZER_IMAGE:-uos-depthest-listener:cpu}
+    container_name: ${COMPOSE_PROJECT_NAME:-drilling}_analyzer
+    environment:
+      <<: *common-environment
+      SERVICE_NAME: "drilling-analyzer"
+      CONFIG_PATH: "/app/config/mqtt_conf.yaml"
+    volumes:
+      - ./config:/app/config:ro
+      - analyzer_logs:/app/logs
+      - model_cache:/app/models
+    networks:
+      - drilling_network
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import abyss.mqtt.components; print(\"OK\")'"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${ANALYZER_MEMORY_LIMIT:-4G}
+          cpus: '${ANALYZER_CPU_LIMIT:-2.0}'
+
+  # Data Publisher Service (for testing)
+  # -----------------------------------
+  # Optional service for publishing test drilling data
+  data-publisher:
+    <<: *common-config
+    image: ${PUBLISHER_IMAGE:-abyss-publisher:lightweight}
+    container_name: ${COMPOSE_PROJECT_NAME:-drilling}_publisher
+    environment:
+      <<: *common-environment
+      SERVICE_NAME: "data-publisher"
+      PUBLISH_MODE: "${PUBLISH_MODE:-standard}"
+      PUBLISH_RATE_HZ: "${PUBLISH_RATE_HZ:-1.0}"
+      DATA_PATH: "/data"
+    volumes:
+      - ${DATA_VOLUME_PATH:-./test_data}:/data:ro
+      - ./config:/app/config:ro
+      - publisher_logs:/app/logs
+    networks:
+      - drilling_network
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    profiles:
+      - testing
+      - development
+    deploy:
+      resources:
+        limits:
+          memory: ${PUBLISHER_MEMORY_LIMIT:-512M}
+          cpus: '${PUBLISHER_CPU_LIMIT:-0.5}'
+
+  # Monitoring Service (optional)
+  # ----------------------------
+  # Service for monitoring system performance and health
+  monitoring:
+    <<: *common-config
+    image: ${MONITORING_IMAGE:-prom/prometheus:latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-drilling}_monitoring
+    ports:
+      - "${MONITORING_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - drilling_network
+    profiles:
+      - monitoring
+      - production
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+# Network Configuration
+# --------------------
+networks:
+  drilling_network:
+    driver: bridge
+    name: ${NETWORK_NAME:-drilling_network}
+    ipam:
+      config:
+        - subnet: ${NETWORK_SUBNET:-172.20.0.0/16}
+
+# Volume Configuration
+# -------------------
+volumes:
+  # MQTT broker data persistence
+  mqtt_data:
+    name: ${COMPOSE_PROJECT_NAME:-drilling}_mqtt_data
+  mqtt_logs:
+    name: ${COMPOSE_PROJECT_NAME:-drilling}_mqtt_logs
+  
+  # Analysis service data
+  analyzer_logs:
+    name: ${COMPOSE_PROJECT_NAME:-drilling}_analyzer_logs
+  model_cache:
+    name: ${COMPOSE_PROJECT_NAME:-drilling}_model_cache
+  
+  # Publisher service data
+  publisher_logs:
+    name: ${COMPOSE_PROJECT_NAME:-drilling}_publisher_logs
+  
+  # Monitoring data
+  prometheus_data:
+    name: ${COMPOSE_PROJECT_NAME:-drilling}_prometheus_data
+
+# Configuration Variables
+# ----------------------
+# Create a .env file to customize these values:
+#
+# # Project Configuration
+# COMPOSE_PROJECT_NAME=drilling_dev
+# 
+# # MQTT Configuration
+# MQTT_BROKER_HOST=localhost
+# MQTT_EXTERNAL_PORT=1883
+# MQTT_USERNAME=
+# MQTT_PASSWORD=
+# 
+# # Service Images
+# ANALYZER_IMAGE=uos-depthest-listener:cpu
+# PUBLISHER_IMAGE=abyss-publisher:lightweight
+# 
+# # Resource Limits
+# ANALYZER_MEMORY_LIMIT=4G
+# ANALYZER_CPU_LIMIT=2.0
+# PUBLISHER_MEMORY_LIMIT=512M
+# PUBLISHER_CPU_LIMIT=0.5
+# 
+# # Processing Configuration
+# PROCESSING_WORKERS=4
+# MODEL_ID=4
+# LOG_LEVEL=INFO
+# 
+# # Data Configuration
+# DATA_VOLUME_PATH=./test_data
+# PUBLISH_MODE=standard
+# PUBLISH_RATE_HZ=1.0
+# 
+# # Network Configuration
+# NETWORK_NAME=drilling_network
+# NETWORK_SUBNET=172.20.0.0/16

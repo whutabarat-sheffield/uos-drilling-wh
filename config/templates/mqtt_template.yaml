@@ -1,0 +1,167 @@
+# MQTT Configuration Template for Drilling Data Analysis System
+# ============================================================
+#
+# This template provides a foundation for MQTT configuration in the drilling data analysis system.
+# Copy this file to an environment-specific location and customize as needed.
+#
+# Usage:
+#   cp config/templates/mqtt_template.yaml config/environments/development/mqtt.yaml
+#   # Edit the copied file with environment-specific values
+
+# MQTT Configuration Section
+mqtt:
+
+  # Broker Connection Settings
+  # -------------------------
+  # Configure connection details for the MQTT broker
+  broker:
+    # Broker hostname or IP address
+    # Examples:
+    #   - "localhost" for local development
+    #   - "host.docker.internal" for Docker containers connecting to host
+    #   - "mqtt-broker" for Docker Compose service name
+    #   - "192.168.1.100" for specific IP address
+    host: "${MQTT_BROKER_HOST:-localhost}"
+    
+    # MQTT port (standard: 1883, secure: 8883)
+    port: "${MQTT_BROKER_PORT:-1883}"
+    
+    # Authentication (leave empty if not required)
+    username: "${MQTT_USERNAME:-}"
+    password: "${MQTT_PASSWORD:-}"
+    
+    # Connection options
+    keepalive: 60                    # Keep-alive interval in seconds
+    clean_session: true              # Start with clean session
+    client_id_prefix: "drilling_"    # Prefix for auto-generated client IDs
+
+  # Topic Structure Configuration
+  # ----------------------------
+  # Define the MQTT topic hierarchy for drilling data
+  listener:
+    # Duplicate message handling strategy
+    # Options: "ignore", "replace", "error"
+    duplicate_handling: "replace"
+    
+    # Topic hierarchy components
+    root: "OPCPUBSUB"               # Root topic prefix
+    toolboxid: "+"                  # Toolbox ID pattern ("+" for wildcard)
+    toolid: "+"                     # Tool ID pattern ("+" for wildcard)
+    
+    # Message type suffixes
+    result: "ResultManagement"              # Result message suffix
+    trace: "ResultManagement/Trace"         # Trace message suffix
+    heads: "AssetManagement/Heads"          # Asset management suffix
+
+  # Data Field Extraction Paths
+  # ---------------------------
+  # JSON paths for extracting data from MQTT messages
+  data_ids:
+    # Equipment identification
+    machine_id: "ResultManagement.Results.0.ResultMetaData.SerialNumber"
+    head_id: "AssetManagement.Assets.Heads.0.Identification.SerialNumber"
+    result_id: "ResultManagement.Results.0.ResultMetaData.ResultId"
+    trace_result_id: "ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepResultId"
+    
+    # Drilling trace data paths
+    position: "ResultManagement.Results.0.ResultContent.Trace.StepTraces.PositionTrace.StepTraceContent[0].Values"
+    thrust: "ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityThrustTrace.StepTraceContent[0].Values"
+    torque: "ResultManagement.Results.0.ResultContent.Trace.StepTraces.IntensityTorqueTrace.StepTraceContent[0].Values"
+    step: "ResultManagement.Results.0.ResultContent.Trace.StepTraces.StepNumberTrace.StepTraceContent[0].Values"
+    
+    # Empty value reference fields
+    torque_empty_vals: "ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityTorqueEmpty"
+    thrust_empty_vals: "ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.IntensityThrustEmpty"
+    step_vals: "ResultManagement.Results.0.ResultContent.StepResults.0.StepResultValues.StepNumber"
+
+  # Result Publication Configuration
+  # -------------------------------
+  # Define where to publish analysis results
+  estimation:
+    # Output data paths for depth estimation results
+    keypoints: "ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints"
+    depth_estimation: "ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation"
+
+  # Processing Configuration
+  # -----------------------
+  # Settings for parallel message processing
+  processing:
+    # Number of parallel worker processes
+    # Each worker loads its own model (~1GB memory per worker)
+    # Adjust based on available CPU cores and memory
+    workers: "${PROCESSING_WORKERS:-4}"
+    
+    # Machine learning model configuration
+    model_id: "${MODEL_ID:-4}"
+
+  # Depth Validation Settings
+  # ------------------------
+  # Control handling of edge cases in depth estimation
+  depth_validation:
+    # How to handle negative depth values
+    # Options:
+    #   - "publish": Always publish results (default, needed for air drilling)
+    #   - "skip": Skip publishing when negative values detected  
+    #   - "warning": Publish but log warnings
+    negative_depth_behavior: "${NEGATIVE_DEPTH_BEHAVIOR:-publish}"
+    
+    # Sequential negative tracking (for operational insights)
+    track_sequential_negatives: "${TRACK_SEQUENTIAL_NEGATIVES:-true}"
+    sequential_threshold: "${SEQUENTIAL_THRESHOLD:-5}"
+    sequential_window_minutes: "${SEQUENTIAL_WINDOW_MINUTES:-5}"
+
+  # Analysis Configuration
+  # ---------------------
+  # Settings for message correlation and analysis
+  analyzer:
+    # Enable detailed correlation debugging
+    correlation_debug: "${CORRELATION_DEBUG:-false}"
+    
+    # Message buffer settings
+    buffer_size: "${BUFFER_SIZE:-1000}"
+    buffer_timeout_seconds: "${BUFFER_TIMEOUT:-30}"
+
+  # Publisher Configuration (for testing)
+  # ------------------------------------
+  # Test publisher settings for generating sample data
+  publisher:
+    # Test topic configuration
+    topics:
+      result: "OPCPUBSUB/${TEST_TOOLBOX_ID:-TESTBOX001}/${TEST_TOOL_ID:-testtool}/ResultManagement"
+      trace: "OPCPUBSUB/${TEST_TOOLBOX_ID:-TESTBOX001}/${TEST_TOOL_ID:-testtool}/ResultManagement/Traces"
+    
+    # Publisher client identification
+    client_id: "${PUBLISHER_CLIENT_ID:-test_publisher}"
+    
+    # Publishing rate for test data
+    publish_rate_hz: "${PUBLISH_RATE_HZ:-1.0}"
+
+# Logging Configuration
+# --------------------
+# Control logging behavior for the drilling analysis system
+logging:
+  # Log level options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "${LOG_LEVEL:-INFO}"
+  
+  # Log format style
+  format: "structured"  # Options: "structured", "simple"
+  
+  # File logging (optional)
+  file:
+    enabled: "${LOG_FILE_ENABLED:-false}"
+    path: "${LOG_FILE_PATH:-logs/drilling_analysis.log}"
+    max_size_mb: "${LOG_FILE_MAX_SIZE_MB:-100}"
+    backup_count: "${LOG_FILE_BACKUP_COUNT:-5}"
+
+# Performance Monitoring
+# ---------------------
+# Settings for performance tracking and metrics
+monitoring:
+  # Enable performance metrics collection
+  enabled: "${MONITORING_ENABLED:-true}"
+  
+  # Metrics collection interval
+  metrics_interval_seconds: "${METRICS_INTERVAL:-30}"
+  
+  # Message processing rate tracking
+  rate_sampling: "${RATE_SAMPLING:-10}"  # 1-in-N sampling for rate calculation

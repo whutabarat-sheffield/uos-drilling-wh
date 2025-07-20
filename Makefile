@@ -241,6 +241,74 @@ full-build: build docker-all ## Build both Python wheel and all Docker images
 quick-start: build docker-main ## Build wheel and main Docker image
 	@echo "Quick start build completed!"
 
+# Documentation and utility targets
+docs-build: ## Build project documentation
+	@echo "Building project documentation..."
+	@if [ -d ".devnotes" ]; then \
+		echo "✓ .devnotes/ documentation found"; \
+	else \
+		echo "⚠ .devnotes/ directory not found"; \
+	fi
+	@if [ -f "GETTING_STARTED.md" ]; then \
+		echo "✓ GETTING_STARTED.md found"; \
+	else \
+		echo "⚠ GETTING_STARTED.md not found"; \
+	fi
+	@if [ -f "REPOSITORY_LAYOUT.md" ]; then \
+		echo "✓ REPOSITORY_LAYOUT.md found"; \
+	else \
+		echo "⚠ REPOSITORY_LAYOUT.md not found"; \
+	fi
+	@if [ -f "DEVELOPERS.md" ]; then \
+		echo "✓ DEVELOPERS.md found"; \
+	else \
+		echo "⚠ DEVELOPERS.md not found"; \
+	fi
+	@echo "Documentation build completed!"
+
+security-scan: ## Run security scans on Docker images
+	@echo "Running security scans..."
+	@command -v docker >/dev/null 2>&1 || { echo "Error: Docker not installed"; exit 1; }
+	@echo "Scanning project Docker images..."
+	@for image in $$(docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "(uos-depthest-listener|uos-publish-json|abyss-publisher)"); do \
+		echo "Scanning $$image..."; \
+		if command -v trivy >/dev/null 2>&1; then \
+			trivy image --exit-code 1 --severity HIGH,CRITICAL $$image || echo "⚠ Vulnerabilities found in $$image"; \
+		else \
+			echo "⚠ trivy not installed - install with: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh"; \
+		fi; \
+	done
+	@echo "Security scan completed!"
+
+validate-config: ## Validate all configuration files
+	@echo "Validating configuration files..."
+	@echo "Checking YAML configurations..."
+	@for file in $$(find . -name "*.yml" -o -name "*.yaml" | grep -v node_modules | grep -v .git); do \
+		echo "Validating $$file..."; \
+		python3 -c "import yaml; yaml.safe_load(open('$$file'))" && echo "✓ $$file" || echo "❌ $$file"; \
+	done
+	@echo "Checking Docker Compose files..."
+	@for file in $$(find . -name "docker-compose*.yml" | head -3); do \
+		if [ -f "$$file" ]; then \
+			echo "Validating $$file..."; \
+			docker-compose -f "$$file" config >/dev/null 2>&1 && echo "✓ $$file" || echo "❌ $$file"; \
+		fi; \
+	done
+	@echo "Configuration validation completed!"
+
+clean-dangling: ## Clean dangling Docker resources
+	@echo "Cleaning dangling Docker resources..."
+	@command -v docker >/dev/null 2>&1 || { echo "Error: Docker not installed"; exit 1; }
+	@echo "Removing dangling images..."
+	@docker image prune -f >/dev/null 2>&1 || true
+	@echo "Removing dangling volumes..."
+	@docker volume prune -f >/dev/null 2>&1 || true
+	@echo "Removing dangling networks..."
+	@docker network prune -f >/dev/null 2>&1 || true
+	@echo "Removing stopped containers..."
+	@docker container prune -f >/dev/null 2>&1 || true
+	@echo "Dangling resource cleanup completed!"
+
 # Caching help
 cache-help: ## Show caching best practices and tips
 	@echo "Docker Build Caching Best Practices"
@@ -271,10 +339,13 @@ help: ## Show this help message
 	@echo "=================================================="
 	@echo
 	@echo "Python Wheel Targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -v "docker-" | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -v "docker-" | grep -v "docs-build\|security-scan\|validate-config\|clean-dangling" | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "Docker Build Targets:"
 	@grep -E '^docker-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo
+	@echo "Utility Targets:"
+	@grep -E '^(docs-build|security-scan|validate-config|clean-dangling):.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "Examples:"
 	@echo "  make build          # Build Python wheel"
