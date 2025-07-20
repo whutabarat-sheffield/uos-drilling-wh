@@ -13,6 +13,8 @@ from .data_converter import DataFrameConverter
 from .result_publisher import ResultPublisher
 from .config_manager import ConfigurationManager
 from .drilling_analyser import DrillingDataAnalyser
+from .message_formatter import ResultMessageFormatter, ResultType
+from .depth_validator import DepthValidator, DepthBehavior, ValidationResult
 
 # Import simplified exceptions
 from .exceptions import (
@@ -32,6 +34,11 @@ __all__ = [
     'ResultPublisher',
     'ConfigurationManager',
     'DrillingDataAnalyser',
+    'ResultMessageFormatter',
+    'ResultType',
+    'DepthValidator',
+    'DepthBehavior',
+    'ValidationResult',
     
     # Simplified exceptions
     'AbyssError',

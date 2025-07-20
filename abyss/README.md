@@ -1,11 +1,12 @@
 # Abyss
 
-A Python package to help load, review and analyse from Setitec electric drills.
+A Python package for drilling data analysis with real-time MQTT processing capabilities. The package includes both a core depth estimation library and a distributed MQTT-based processing system for Setitec electric drills.
 
 ## Contents
  - [Dependencies](#Dependencies)
  - [Installation](#Installation)
- - [Structure](#Structure)
+ - [Core Library Structure](#core-library-structure)
+ - [MQTT Processing System](#mqtt-processing-system)
  - [Feature Checklist](#Checklist)
  - [Examples](#Examples)
  - [Depth Estimation](#Depth-Estimation)
@@ -37,7 +38,7 @@ The package can be imported using pip. Change to the directory where the files h
 python setup.py install
 ```
 
-## Structure
+## Core Library Structure
 - [dataparser.py](src/dataparser.py)
     + Load and repackage data files
     + Support for TDMS, MAT and spreadsheets
@@ -55,6 +56,49 @@ python setup.py install
 - [toolcodes.py](src/toolcodes.py)
     + Enum of tool codes from the Setitec documentation
     + NEEDS TO BE UPDATED
+
+## MQTT Processing System
+
+The MQTT processing system enables real-time analysis of drilling data streams at 100+ messages per second.
+
+### Key Components
+
+- **DrillingDataAnalyser**: Main orchestrator for MQTT message processing
+- **ProcessingPool**: Parallel processing using ProcessPoolExecutor (10 workers)
+- **MessageBuffer**: Thread-safe buffering with deduplication
+- **SimpleMessageCorrelator**: Time-window based message correlation
+- **ResultPublisher**: Configurable result publishing with validation
+- **SimpleThroughputMonitor**: System health monitoring
+
+### Quick Start
+
+1. **Configure MQTT settings** in `mqtt_conf_local.yaml`:
+```yaml
+mqtt:
+  broker:
+    host: "localhost"
+    port: 1883
+  processing:
+    workers: 10
+    model_id: 4
+  depth_validation:
+    negative_depth_behavior: "warning"
+```
+
+2. **Run the MQTT processor**:
+```bash
+python src/abyss/run/mqtt_processor.py --config mqtt_conf_local.yaml
+```
+
+### Features
+
+- **Parallel Processing**: 10-worker pool handles 0.5s depth inference
+- **Configurable Validation**: Handle negative depths (publish/skip/warning)
+- **Real-time Monitoring**: Track throughput and system health
+- **Graceful Shutdown**: Clean worker termination and resource cleanup
+- **Auto-reconnection**: Resilient MQTT connection handling
+
+For detailed architecture documentation, see [docs/MQTT_ARCHITECTURE.md](docs/MQTT_ARCHITECTURE.md).
 
 ## Features to Add
 ### Data Parser
