@@ -39,7 +39,8 @@
       "Bash(docker-compose logs:*)",
       "WebFetch(domain:docs.anthropic.com)",
       "Bash(docker service ps:*)",
-      "Bash(docker service logs:*)"
+      "Bash(docker service logs:*)",
+      "Bash(git rm:*)"
     ],
     "deny": []
   }

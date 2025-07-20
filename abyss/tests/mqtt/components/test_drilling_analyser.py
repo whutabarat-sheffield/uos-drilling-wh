@@ -77,7 +77,7 @@ class TestDrillingDataAnalyser:
         analyser = DrillingDataAnalyser(config_file)
         
         assert analyser.config_path == config_file
-        assert analyser.ALGO_VERSION == "0.2.6"
+        assert analyser.ALGO_VERSION == "0.2.7"
         assert analyser.processing_active is False
         assert analyser.processing_thread is None
         
@@ -109,7 +109,7 @@ class TestDrillingDataAnalyser:
         assert 'config_summary' in status
         
         assert status['processing_active'] is False
-        assert status['algo_version'] == "0.2.6"
+        assert status['algo_version'] == "0.2.7"
         assert status['config_path'] == config_file
     
     @patch('paho.mqtt.client.Client')

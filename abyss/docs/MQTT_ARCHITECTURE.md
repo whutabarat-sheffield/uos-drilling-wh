@@ -24,19 +24,20 @@ The main orchestrator that coordinates all components and manages the processing
 - Simple status logging every 30 seconds
 - Integration with ProcessPoolExecutor for parallel processing
 
-#### 2. ProcessingPool (`processing_pool.py`)
+#### 2. SimpleProcessingPool (`processing_pool.py`)
 Manages parallel processing of depth inference tasks using ProcessPoolExecutor.
 
 **Responsibilities:**
 - Worker pool management (default: 10 workers)
 - Model initialization in each worker process
 - Future tracking and result handling
-- Performance metrics collection
+- Pool statistics and health monitoring
 
 **Key Design Decisions:**
 - Each worker loads its own DepthInference model (~1GB memory)
 - Workers are persistent to avoid model reload overhead
 - Non-blocking submit with Future-based result handling
+- Global model cache per worker process to avoid reloading
 
 #### 3. MessageBuffer (`message_buffer.py`)
 Thread-safe buffer for storing incoming MQTT messages by type.
@@ -62,6 +63,7 @@ Correlates related messages (Results, Traces, Heads) within a time window.
 - Maintain correlation metrics
 
 **Time Window:** 5 seconds (configurable)
+**Correlation Frequency:** Every 0.1 seconds
 
 ### Publishing Components
 
@@ -128,6 +130,8 @@ Monitors if the system is keeping up with message arrival rate.
 - Processing rate (messages/second)
 - Spare capacity or shortfall percentage
 
+**Note:** Replaced the over-engineered DiagnosticCorrelator component
+
 ## Data Flow
 
 ```
@@ -151,6 +155,34 @@ Monitors if the system is keeping up with message arrival rate.
    ├── ResultMessageFormatter creates messages
    └── ResultPublisher sends to MQTT
 ```
+
+## MQTT Topics
+
+### Input Topics (Subscribed)
+The system subscribes to the following topic patterns:
+- **Results**: `OPCPUBSUB/+/+/ResultManagement`
+- **Traces**: `OPCPUBSUB/+/+/ResultManagement/Trace`
+- **Heads**: `OPCPUBSUB/+/+/AssetManagement/Heads`
+
+Where:
+- First `+` matches any toolbox ID (e.g., ILLL502033771)
+- Second `+` matches any tool ID (e.g., setitectest)
+
+### Output Topics (Published)
+Depth estimation results are published to topics using JSON path format:
+- **Keypoints**: `OPCPUBSUB/{toolbox_id}/{tool_id}/ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints`
+- **Depth Estimation**: `OPCPUBSUB/{toolbox_id}/{tool_id}/ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation`
+
+These topics use the full JSON path from the configuration's `mqtt.estimation` section as the topic suffix.
+
+### Example Topics
+Input:
+- `OPCPUBSUB/ILLL502033771/setitectest/ResultManagement`
+- `OPCPUBSUB/ILLL502033771/setitectest/ResultManagement/Trace`
+
+Output:
+- `OPCPUBSUB/ILLL502033771/setitectest/ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints`
+- `OPCPUBSUB/ILLL502033771/setitectest/ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation`
 
 ## Configuration
 
@@ -178,6 +210,7 @@ mqtt:
 - Target: 100 messages/second
 - Processing time: ~0.5 seconds per message
 - Solution: 10 parallel workers = 20 messages/second capacity
+- Actual capacity varies with CPU cores and memory available
 
 ### Memory Usage
 - Each worker: ~1GB (model) + overhead

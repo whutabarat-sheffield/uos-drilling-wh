@@ -85,6 +85,19 @@ mqtt:
 
 These paths use JSONPath-like notation to extract data from nested message structures.
 
+### Analyzer Configuration
+
+```yaml
+mqtt:
+  analyzer:
+    correlation_debug: true  # Enable debug mode for correlation diagnostics
+```
+
+**Correlation Debug:**
+- Shows detailed information about why messages aren't correlating
+- Useful for troubleshooting message matching issues
+- Produces verbose logging output
+
 ### Processing Configuration
 
 ```yaml
@@ -133,7 +146,15 @@ mqtt:
     depth_estimation: 'ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation'
 ```
 
-Defines where to insert depth estimation results in published messages.
+These paths serve a dual purpose:
+1. **Topic Suffixes**: Used to construct MQTT publish topics
+2. **Data Paths**: Define where results would be placed in message payloads
+
+**Published Topics:**
+- Keypoints: `OPCPUBSUB/{toolbox_id}/{tool_id}/ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints`
+- Depth: `OPCPUBSUB/{toolbox_id}/{tool_id}/ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation`
+
+The full JSON path is appended to the base topic to create unique topics for each result type.
 
 ## Environment-Specific Settings
 
@@ -206,6 +227,14 @@ Some settings can be adjusted at runtime:
    - Verify data_ids paths match message structure
    - Use message inspection tools
    - Check for schema changes
+
+5. **Negative Depth Values**
+   - Negative depths can occur in drilling operations (e.g., tool retraction, calibration)
+   - Configure `negative_depth_behavior`:
+     - `"publish"`: Publish all results including negative depths
+     - `"warning"`: Publish with warning log
+     - `"skip"`: Skip publishing negative depth results
+   - System handles negative depths as configured, not as errors
 
 ## Example Configurations
 

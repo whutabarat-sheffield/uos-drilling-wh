@@ -60,7 +60,7 @@ After about 1.2 seconds, the magnitude of the response increases drastically to 
 
 ![UC - 1-PXI1Slot2-ai2-wavelet-tt-2-3](https://user-images.githubusercontent.com/46482002/169813241-94ada553-ee36-4f4b-b7ff-74c3e4f34d6e.png)
 
-The magnitude increases to 8.5 and begins to quieten down until 10.5s. After that point the magnitude decreases back down to between 0.35-0.45. The activity between 10-20 scale remains and it appears the secondary dynamic band dissapears.
+The magnitude increases to 8.5 and begins to quieten down until 10.5s. After that point the magnitude decreases back down to between 0.35-0.45. The activity between 10-20 scale remains and it appears the secondary dynamic band disappears.
 
 ![UC - 1-PXI1Slot2-ai2-wavelet-tt-10-11](https://user-images.githubusercontent.com/46482002/169814227-0861b123-be5e-4904-bd55-2831a0c07204.png)
 
@@ -82,7 +82,7 @@ The signal starts off with three interesting bands of dynamics. The most active 
 
 ![UC - 1-PXI1Slot2-ai4-wavelet-tt-0-1](https://user-images.githubusercontent.com/46482002/169815510-5ffb9a26-9650-48c0-8b4e-9e8ca8f1394c.png)
 
-When the tool is cutting, the magnitude increases to 30-35 and the 3 bands of activity become stringere. The 2nd band betweeen 20 and 40 sppears to be the strongest.
+When the tool is cutting, the magnitude increases to 30-35 and the 3 bands of activity become stronger. The 2nd band between 20 and 40 appears to be the strongest.
 
 ![UC - 1-PXI1Slot2-ai4-wavelet-tt-3-4](https://user-images.githubusercontent.com/46482002/169815573-5c578ba5-26c6-4f9a-b784-2b9314f4a9dc.png)
 
@@ -114,7 +114,7 @@ After 12.7s the band of activity between 40-80 drops in magnitude.
 
 ### a6 - Feed Drive Current
 
-The signal has distinct blocks of activty. It has a distinct noise floor that can be seen at the start and end with an approx magnitude of 2.45 - 2.55 volts. The period when the tool is retracting between 10 and 14 seconds is a distinct with the min/max magnitude staying more firmly between limits. The sharp discontinuities are suspected to be caused by the firmware too.
+The signal has distinct blocks of activity. It has a distinct noise floor that can be seen at the start and end with an approximate magnitude of 2.45 - 2.55 volts. The period when the tool is retracting between 10 and 14 seconds is a distinct with the min/max magnitude staying more firmly between limits. The sharp discontinuities are suspected to be caused by the firmware too.
 
 ![UC - 1-H5-PXI1Slot2-ai6](https://user-images.githubusercontent.com/46482002/169818534-5107aee4-5a3a-4faf-8a9b-cfee9361b066.png)
 
@@ -136,7 +136,7 @@ After 10s, the dynamics in the higher scales (30+) is a lot fuzzier and spreads 
 
 ### a7 - Spindle Drive
 
-The signal has very erratic dynamics across the surface of the recording. It has a noise floor between 2.5 and 2.6 Volts that is present at the bedining and end. When the tool starts cutting around 1-1.2s, signal increases drastically to around 3.5-4 volts. At around 3 seconds, the voltage ramps up to around 4-4.2 volts at approximately 6 seconds. There is a block of activity after that which remains fairly consistently between 0 and 5v for around 1.5s. This is suspected to be when it's cutting into Aluminium.
+The signal has very erratic dynamics across the surface of the recording. It has a noise floor between 2.5 and 2.6 Volts that is present at the beginning and end. When the tool starts cutting around 1-1.2s, signal increases drastically to around 3.5-4 volts. At around 3 seconds, the voltage ramps up to around 4-4.2 volts at approximately 6 seconds. There is a block of activity after that which remains fairly consistently between 0 and 5v for around 1.5s. This is suspected to be when it's cutting into Aluminium.
 
 ![UC - 1-H5-PXI1Slot2-ai7](https://user-images.githubusercontent.com/46482002/169821102-901357b8-df01-4a89-8e7f-dce220ad8c0c.png)
 
@@ -144,7 +144,7 @@ The wavelet at the start is quiet with no distinctive activity. After 1.1 secs, 
 
 ![UC - 1-PXI1Slot2-ai7-wavelet-tt-1-2](https://user-images.githubusercontent.com/46482002/169822398-f898581a-b764-4b8a-a6be-4fc09f6e97a1.png)
 
-After some time, the most distinct dynamics in that 2nd range appear to be between 40 and 60. There is some activity at the upper limits of the scale range (100) suggesting that it might stretch further. Between 6 and 7 secodns the max response peaks around 11.
+After some time, the most distinct dynamics in that 2nd range appear to be between 40 and 60. There is some activity at the upper limits of the scale range (100) suggesting that it might stretch further. Between 6 and 7 seconds the max response peaks around 11.
 
 ![UC - 1-PXI1Slot2-ai7-wavelet-tt-5-6](https://user-images.githubusercontent.com/46482002/169822977-7552dcf5-117e-40ab-86a6-9c5d1e6593d3.png)
 

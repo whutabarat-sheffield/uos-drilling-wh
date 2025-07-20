@@ -92,18 +92,6 @@ mqtt:
     keypoints: 'ResultManagement.Results.0.ResultContent.DepthEstimation.KeyPoints'
     depth_estimation: 'ResultManagement.Results.0.ResultContent.DepthEstimation.DepthEstimation'
 
-  # Processing Configuration
-  # -----------------------
-  # Settings for parallel message processing using ProcessPoolExecutor
-  processing:
-    # Number of worker processes for parallel depth inference
-    # Each worker loads its own DepthInference model (~1GB memory each)
-    # Recommended: 10 workers for 100 msg/sec with 0.5s processing time
-    workers: 10
-    
-    # Model ID to use for depth inference
-    model_id: 4
-
   # Depth Validation Configuration
   # -----------------------------
   # Controls how the system handles edge cases in depth estimation
