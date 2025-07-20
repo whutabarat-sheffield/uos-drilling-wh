@@ -333,7 +333,7 @@ class DrillingDataAnalyser:
             if self.result_publisher:
                 try:
                     # Log what we're attempting to publish
-                    logging.info(f"Attempting to publish results for {toolbox_id}/{tool_id}")
+                    logging.debug(f"Attempting to publish results for {toolbox_id}/{tool_id}")
                     
                     self.result_publisher.publish_processing_result(
                         processing_result=processing_result,

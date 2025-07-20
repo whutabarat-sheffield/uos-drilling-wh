@@ -16,12 +16,7 @@
 # - toolid: ID of the specific tool (e.g., setitectest)
 
 mqtt:
-  # Analyzer Configuration
-  # --------------------
-  # Settings for the message correlation and analysis system
-  analyzer:
-    # Enable debug mode for correlation diagnostics
-    correlation_debug: false  # Shows why messages aren't correlating
+
     
   # Broker Connection Settings
   # ------------------------
@@ -130,6 +125,13 @@ mqtt:
     
     # Time window for sequential tracking (in minutes)
     sequential_window_minutes: 5
+
+  # Analyzer Configuration
+  # --------------------
+  # Settings for the message correlation and analysis system
+  analyzer:
+    # Enable debug mode for correlation diagnostics
+    correlation_debug: false  # Shows why messages aren't correlating
 
   # Test Publisher Configuration -- For Testing Only
   # -------------------------

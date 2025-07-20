@@ -36,7 +36,10 @@
       "Bash(python:*)",
       "Bash(rm:*)",
       "Bash(docker exec:*)",
-      "Bash(docker-compose logs:*)"
+      "Bash(docker-compose logs:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(docker service ps:*)",
+      "Bash(docker service logs:*)"
     ],
     "deny": []
   }
