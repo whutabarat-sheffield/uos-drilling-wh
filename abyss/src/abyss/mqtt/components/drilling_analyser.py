@@ -202,6 +202,9 @@ class DrillingDataAnalyser:
                 logging.warning("Message processing failed", extra={
                     'error_message': processing_result.error_message
                 })
+                # Still count this as a processed message for workflow stats
+                self._workflow_stats['messages_processed'] += 1
+                self._workflow_stats['last_processed'] = time.time()
                 return
             
             # Extract tool information from the first message
@@ -236,6 +239,9 @@ class DrillingDataAnalyser:
                         self._workflow_stats['processing_times'].append(processing_time)
                         if len(self._workflow_stats['processing_times']) > 10:
                             self._workflow_stats['processing_times'].pop(0)
+                        
+                        logging.debug(f"Workflow processing tracked. Total processed: {self._workflow_stats['messages_processed']}, "
+                                     f"Processing time: {processing_time:.1f}ms")
                     except Exception as e:
                         logging.warning("Failed to publish results", extra={
                             'toolbox_id': toolbox_id,
@@ -357,6 +363,11 @@ class DrillingDataAnalyser:
                 arrival_rate = self._workflow_stats['messages_arrived'] / elapsed
                 processing_rate = self._workflow_stats['messages_processed'] / elapsed
                 
+                # Debug logging to verify statistics are being tracked
+                logging.debug(f"Workflow stats - arrived: {self._workflow_stats['messages_arrived']}, "
+                             f"processed: {self._workflow_stats['messages_processed']}, "
+                             f"elapsed: {elapsed:.1f}s")
+                
                 # Determine health status
                 health = "HEALTHY"
                 if self._workflow_stats['messages_arrived'] > 0:
@@ -368,15 +379,13 @@ class DrillingDataAnalyser:
                 # Calculate average processing time
                 avg_time = sum(self._workflow_stats['processing_times']) / len(self._workflow_stats['processing_times']) if self._workflow_stats['processing_times'] else 0
                 
-                # Only log workflow status if there's activity or issues
-                if self._workflow_stats['messages_arrived'] > 0 or health != "HEALTHY":
-                    logging.info("Workflow status", extra={
-                        'health': health,
-                        'arrival_rate': f"{arrival_rate:.2f} msg/s",
-                        'processing_rate': f"{processing_rate:.2f} msg/s",
-                        'avg_processing_ms': f"{avg_time:.1f}",
-                        'backlog': self._workflow_stats['messages_arrived'] - self._workflow_stats['messages_processed']
-                    })
+                # Always log workflow status to show system is monitoring
+                backlog = self._workflow_stats['messages_arrived'] - self._workflow_stats['messages_processed']
+                minutes_since_last = round((time.time() - self._workflow_stats['last_processed']) / 60, 1) if self._workflow_stats['last_processed'] > 0 else "N/A"
+                
+                logging.info(f"Workflow status | health={health} | arrival_rate={arrival_rate:.2f} msg/s | "
+                            f"processing_rate={processing_rate:.2f} msg/s | avg_processing_ms={avg_time:.1f} | "
+                            f"backlog={backlog} | last_msg={minutes_since_last}min ago")
                 
                 # Reset counters after logging
                 self._workflow_stats['messages_arrived'] = 0

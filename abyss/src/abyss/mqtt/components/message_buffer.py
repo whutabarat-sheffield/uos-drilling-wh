@@ -112,13 +112,16 @@ class MessageBuffer:
                 })
                 return False
 
-            # Record message arrival for throughput monitoring
-            if self.throughput_monitor:
-                self.throughput_monitor.record_arrival()
-            
             # Increment arrival counter for workflow statistics
             if hasattr(self, '_analyser_ref') and self._analyser_ref:
                 self._analyser_ref._workflow_stats['messages_arrived'] += 1
+                logging.debug(f"Workflow arrival tracked. Total arrivals: {self._analyser_ref._workflow_stats['messages_arrived']}")
+            else:
+                logging.debug("No analyser reference available for workflow tracking")
+            
+            # Record message arrival for throughput monitoring (if available)
+            if self.throughput_monitor:
+                self.throughput_monitor.record_arrival()
 
             # Log buffer operation
             buffer_size_before = len(self.buffers[matching_topic])
