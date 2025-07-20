@@ -4,14 +4,8 @@ import os
 import yaml
 import argparse
 
-
-from abyss.uos_depth_est import (
-    MQTTDrillingDataAnalyser,
-)
-
-from abyss.uos_depth_est_utils import (
-    setup_logging,
-)
+from abyss.mqtt.components import DrillingDataAnalyser
+from abyss.uos_depth_est_utils import setup_logging
 
 
 def main():
@@ -46,7 +40,7 @@ def main():
     setup_logging(getattr(logging, args.log_level))
     
     try:
-        analyzer = MQTTDrillingDataAnalyser(config_path=args.config)
+        analyzer = DrillingDataAnalyser(config_path=args.config)
         analyzer.run()
     except FileNotFoundError:
         logging.critical("Configuration file '%s' not found in %s", args.config, os.getcwd())

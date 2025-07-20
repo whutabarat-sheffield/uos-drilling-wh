@@ -83,8 +83,24 @@ class TimestampedData(Generic[T]):
             return False
         return self.timestamp == other.timestamp and self.source == other.source
 
+
+# ============================================================================
+# DEPRECATED CLASS - DO NOT USE
+# ============================================================================
+# This class is deprecated and will be removed in a future version.
+# Use 'from abyss.mqtt.components import DrillingDataAnalyser' instead.
+# The new modular implementation provides better maintainability and testability.
+# ============================================================================
+
 class MQTTDrillingDataAnalyser:
     def __init__(self, config_path='mqtt_conf.yaml'):
+        import warnings
+        warnings.warn(
+            "MQTTDrillingDataAnalyser is deprecated and will be removed in a future version. "
+            "Use 'from abyss.mqtt.components import DrillingDataAnalyser' instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # Load configuration
         with open(config_path, 'r') as file:
             self.config = yaml.safe_load(file)

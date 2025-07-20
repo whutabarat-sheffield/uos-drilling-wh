@@ -43,7 +43,7 @@ class TestPahoV2Compatibility(unittest.TestCase):
         client_mock = Mock()
         userdata_mock = None
         mid = 1
-        reason_code = mqtt.ReasonCode(mqtt.ReasonCode.Success)
+        reason_code = mqtt.MQTT_ERR_SUCCESS  # Use the success constant directly
         properties = None
         
         # This should not raise TypeError
@@ -63,7 +63,7 @@ class TestPahoV2Compatibility(unittest.TestCase):
         client_mock.subscribe = Mock()
         userdata_mock = None
         connect_flags = Mock()
-        reason_code = mqtt.ReasonCode(mqtt.ReasonCode.Success)
+        reason_code = mqtt.MQTT_ERR_SUCCESS  # Use the success constant directly
         properties = None
         
         # Should not raise TypeError
