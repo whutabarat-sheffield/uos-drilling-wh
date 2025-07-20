@@ -155,6 +155,13 @@ Examples:
         help="Set the logging level"
     )
     
+    # Validation
+    parser.add_argument(
+        "--validate-data",
+        action="store_true",
+        help="Validate JSON files on startup (skip invalid folders)"
+    )
+    
     return parser
 
 
@@ -229,7 +236,7 @@ def main():
         
         # Run standard publisher
         use_patterns = not args.no_patterns
-        publisher = StandardPublisher(config, use_patterns=use_patterns)
+        publisher = StandardPublisher(config, use_patterns=use_patterns, validate_data=args.validate_data)
         publisher.run()
 
 

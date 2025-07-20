@@ -110,8 +110,15 @@ class BasePublisher(ABC):
             self.client.disconnect()
             self.logger.info("Disconnected from MQTT broker")
     
-    def find_test_data_folders(self) -> List[Path]:
-        """Find all folders containing test data."""
+    def find_test_data_folders(self, validate: bool = False) -> List[Path]:
+        """Find all folders containing test data.
+        
+        Args:
+            validate: If True, validate JSON files during discovery
+            
+        Returns:
+            List of valid test data folders
+        """
         if not self.config.test_data_path:
             raise ValueError("No test data path configured")
         
@@ -125,6 +132,7 @@ class BasePublisher(ABC):
         
         # Look for subdirectories with JSON files
         data_folders = []
+        invalid_folders = []
         
         for subdir in path.iterdir():
             if subdir.is_dir():
@@ -135,7 +143,21 @@ class BasePublisher(ABC):
                     found_files = {f.name for f in json_files}
                     
                     if all(req in found_files for req in required_files):
-                        data_folders.append(subdir)
+                        # Optionally validate JSON content
+                        if validate:
+                            try:
+                                for req_file in required_files:
+                                    with open(subdir / req_file) as f:
+                                        json.load(f)  # Just validate, don't keep in memory
+                                data_folders.append(subdir)
+                            except json.JSONDecodeError as e:
+                                self.logger.warning(f"Invalid JSON in {subdir}: {e}")
+                                invalid_folders.append(subdir)
+                            except Exception as e:
+                                self.logger.warning(f"Error validating {subdir}: {e}")
+                                invalid_folders.append(subdir)
+                        else:
+                            data_folders.append(subdir)
                     else:
                         self.logger.warning(f"Folder {subdir} missing required files: {set(required_files) - found_files}")
         
@@ -147,12 +169,25 @@ class BasePublisher(ABC):
                 found_files = {f.name for f in json_files}
                 
                 if all(req in found_files for req in required_files):
-                    data_folders.append(path)
+                    if validate:
+                        try:
+                            for req_file in required_files:
+                                with open(path / req_file) as f:
+                                    json.load(f)
+                            data_folders.append(path)
+                        except json.JSONDecodeError as e:
+                            self.logger.warning(f"Invalid JSON in {path}: {e}")
+                            invalid_folders.append(path)
+                    else:
+                        data_folders.append(path)
         
         if not data_folders:
             raise ValueError(f"No valid test data folders found in {path}")
         
-        self.logger.info(f"Found {len(data_folders)} test data folders")
+        if invalid_folders:
+            self.logger.warning(f"Skipped {len(invalid_folders)} folders with invalid JSON: {invalid_folders}")
+        
+        self.logger.info(f"Found {len(data_folders)} valid test data folders")
         return sorted(data_folders)
     
     def load_test_data(self, folder: Path) -> Tuple[str, str, str, str]:
@@ -224,6 +259,9 @@ class BasePublisher(ABC):
     
     def publish_message(self, topic: str, payload: str, original_timestamp: str, new_timestamp: str):
         """Publish a single message with timestamp replacement."""
+        if not self.client:
+            raise RuntimeError("MQTT client not connected. Call setup_client() first.")
+            
         if original_timestamp in payload:
             payload = payload.replace(original_timestamp, new_timestamp)
         else:

@@ -19,9 +19,10 @@ from .patterns import DrillPattern, PatternGenerator
 class StandardPublisher(BasePublisher):
     """Standard MQTT publisher with realistic drilling patterns."""
     
-    def __init__(self, config: PublisherConfig, use_patterns: bool = True):
+    def __init__(self, config: PublisherConfig, use_patterns: bool = True, validate_data: bool = False):
         super().__init__(config)
         self.use_patterns = use_patterns
+        self.validate_data = validate_data
         self.pattern_generator = PatternGenerator() if use_patterns else None
         self._running = True
         
@@ -42,7 +43,7 @@ class StandardPublisher(BasePublisher):
         
         # Find test data folders
         try:
-            data_folders = self.find_test_data_folders()
+            data_folders = self.find_test_data_folders(validate=self.validate_data)
         except ValueError as e:
             self.logger.error(e)
             return
@@ -129,12 +130,12 @@ class StandardPublisher(BasePublisher):
                     )
             
             except FileNotFoundError as e:
-                self.logger.error(f"File not found: {e}. Skipping this data folder.")
+                self.logger.error(f"File not found: {e}. Skipping data folder {data_folder}.")
             except json.JSONDecodeError as e:
-                self.logger.error(f"JSON decode error: {e}. Skipping this data folder.")
+                self.logger.error(f"JSON decode error: {e}. Skipping data folder {data_folder}.")
             except Exception as e:
-                self.logger.error(f"Unexpected error: {e}. Skipping this data folder.")
-        
+                self.logger.error(f"Unexpected error: {e}. Skipping data folder {data_folder}.")
+
         # Final statistics
         stats = self.get_stats()
         self.logger.info(
