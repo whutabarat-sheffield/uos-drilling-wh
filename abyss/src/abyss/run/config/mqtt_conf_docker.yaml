@@ -16,6 +16,13 @@
 # - toolid: ID of the specific tool (e.g., setitectest)
 
 mqtt:
+  # Analyzer Configuration
+  # --------------------
+  # Settings for the message correlation and analysis system
+  analyzer:
+    # Enable debug mode for correlation diagnostics
+    correlation_debug: false  # Shows why messages aren't correlating
+    
   # Broker Connection Settings
   # ------------------------
   # These settings define the connection details for the MQTT broker
@@ -113,7 +120,7 @@ mqtt:
     #   - "publish": Always publish, even with negative values (default)
     #   - "skip": Don't publish when negative values are detected
     #   - "warning": Publish but log warnings
-    negative_depth_behavior: "skip"  # Docker default: skip negative values
+    negative_depth_behavior: "publish"  # Default: publish negative values (needed for air drilling scenarios)
     
     # Track sequential negative depths for operational insights
     track_sequential_negatives: true

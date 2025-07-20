@@ -23,6 +23,7 @@ import paho.mqtt.client as mqtt
 import yaml
 
 from abyss.uos_depth_est_utils import setup_logging
+from abyss.mqtt.components.config_manager import ConfigurationManager
 
 
 def find_in_dict(data: dict, target_key: str) -> list:
@@ -165,11 +166,12 @@ def validate_and_get_data_folders(path_str: str) -> list[Path]:
             raise ValueError(f"Directory '{path_str}' contains no JSON files")
 
 
-def setup_mqtt_client(config: dict) -> mqtt.Client:
+def setup_mqtt_client(config_manager: ConfigurationManager) -> mqtt.Client:
     """Set up and connect MQTT client."""
     client = mqtt.Client()
     try:
-        client.connect(config['mqtt']['broker']['host'], config['mqtt']['broker']['port'])
+        broker_config = config_manager.get_mqtt_broker_config()
+        client.connect(broker_config['host'], broker_config['port'])
         return client
     except Exception as e:
         logging.error(f"Failed to connect to MQTT broker: {e}")
@@ -232,15 +234,12 @@ def main():
     # Configure logging
     setup_logging(getattr(logging, args.log_level.upper()))
 
-    # Load configuration
+    # Load configuration using ConfigurationManager
     try:
-        with open(args.conf) as f:
-            config = yaml.safe_load(f)
-    except FileNotFoundError:
-        logging.error(f"Configuration file '{args.conf}' not found")
-        sys.exit(1)
-    except yaml.YAMLError as e:
-        logging.error(f"Error parsing configuration file: {e}")
+        config_manager = ConfigurationManager(args.conf)
+        config = config_manager.get_raw_config()
+    except Exception as e:
+        logging.error(f"Error loading configuration: {e}")
         sys.exit(1)
 
     # Validate path and get data folders
@@ -262,7 +261,7 @@ def main():
     ]
 
     # Set up MQTT client and signal handlers
-    client = setup_mqtt_client(config)
+    client = setup_mqtt_client(config_manager)
     setup_signal_handlers(client)
 
     # Publish data for specified number of repetitions
@@ -312,10 +311,11 @@ def main():
                 logging.debug(f"Signal tracking enabled - ID: {signal_id}")
             
             # Build topics
-            mqtt_root = config['mqtt']['listener']['root']
-            topic_result = f"{mqtt_root}/{toolbox_id}/{tool_id}/{config['mqtt']['listener']['result']}"
-            topic_trace = f"{mqtt_root}/{toolbox_id}/{tool_id}/{config['mqtt']['listener']['trace']}"
-            topic_heads = f"{mqtt_root}/{toolbox_id}/{tool_id}/{config['mqtt']['listener']['heads']}"
+            listener_config = config_manager.get_mqtt_listener_config()
+            mqtt_root = listener_config['root']
+            topic_result = f"{mqtt_root}/{toolbox_id}/{tool_id}/{listener_config['result']}"
+            topic_trace = f"{mqtt_root}/{toolbox_id}/{tool_id}/{listener_config['trace']}"
+            topic_heads = f"{mqtt_root}/{toolbox_id}/{tool_id}/{listener_config.get('heads', 'AssetManagement/Heads')}"
 
             # Prepare data for publishing in random order
             publish_items = [
