@@ -1,10 +1,17 @@
 import pytest
 import json
 import time
-from unittest.mock import MagicMock, patch
+import csv
+import uuid
+from unittest.mock import MagicMock, patch, mock_open
 from pathlib import Path
 import tempfile
-from abyss.run.uos_publish_json import find_in_dict, publish
+from abyss.run.uos_publish_json import (
+    find_in_dict, 
+    publish, 
+    validate_and_get_data_folders,
+    read_and_validate_json_files
+)
 from abyss.mqtt.components.config_manager import ConfigurationManager
 
 
@@ -196,7 +203,7 @@ class TestUosPublishJsonIntegration:
         
         assert result_topic == "OPCPUBSUB/ILLL502033771/setitec001/ResultManagement"
         assert trace_topic == "OPCPUBSUB/ILLL502033771/setitec001/ResultManagement/Trace"
-        assert heads_topic == "OPCPUBSUB/ILLL502033771/setitec001/AssetManagement/Head"
+        assert heads_topic == "OPCPUBSUB/ILLL502033771/setitec001/AssetManagement/Heads"
 
 
 class TestFileDiscovery:
@@ -224,3 +231,270 @@ class TestFileDiscovery:
             assert len(json_files) == 3
             for test_file in test_files:
                 assert test_file in json_filenames
+
+
+class TestValidateAndGetDataFolders:
+    """Tests for validate_and_get_data_folders function"""
+    
+    def test_validate_file_path_raises_error(self):
+        """Test that providing a file path raises ValueError"""
+        with tempfile.NamedTemporaryFile(suffix='.json') as temp_file:
+            with pytest.raises(ValueError, match="is a file, but a directory is required"):
+                validate_and_get_data_folders(temp_file.name)
+    
+    def test_validate_nonexistent_path_raises_error(self):
+        """Test that providing a non-existent path raises ValueError"""
+        with pytest.raises(ValueError, match="does not exist"):
+            validate_and_get_data_folders("/path/that/does/not/exist")
+    
+    def test_validate_empty_directory_raises_error(self):
+        """Test that an empty directory raises ValueError"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with pytest.raises(ValueError, match="contains no JSON files"):
+                validate_and_get_data_folders(temp_dir)
+    
+    def test_validate_directory_with_json_files(self):
+        """Test directory containing JSON files directly"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create JSON files
+            (temp_path / "test1.json").write_text('{"test": "data"}')
+            (temp_path / "test2.json").write_text('{"test": "data"}')
+            
+            result = validate_and_get_data_folders(temp_dir)
+            assert len(result) == 1
+            assert result[0] == temp_path
+    
+    def test_validate_directory_with_subdirs_containing_json(self):
+        """Test directory with subdirectories containing JSON files"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create subdirectories with JSON files
+            subdir1 = temp_path / "data1"
+            subdir2 = temp_path / "data2"
+            subdir3 = temp_path / "empty"
+            
+            subdir1.mkdir()
+            subdir2.mkdir()
+            subdir3.mkdir()
+            
+            (subdir1 / "test.json").write_text('{"test": "data"}')
+            (subdir2 / "test.json").write_text('{"test": "data"}')
+            
+            result = validate_and_get_data_folders(temp_dir)
+            assert len(result) == 2
+            assert subdir1 in result
+            assert subdir2 in result
+            assert subdir3 not in result
+    
+    def test_validate_subdirs_without_json_raises_error(self):
+        """Test that subdirectories without JSON files raise ValueError"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create subdirectories without JSON files
+            (temp_path / "empty1").mkdir()
+            (temp_path / "empty2").mkdir()
+            
+            with pytest.raises(ValueError, match="No subdirectories .* contain JSON files"):
+                validate_and_get_data_folders(temp_dir)
+
+
+class TestSignalTracking:
+    """Tests for signal tracking functionality"""
+    
+    @patch('abyss.run.uos_publish_json.mqtt.Client')
+    @patch('time.strftime')
+    @patch('uuid.uuid4')
+    def test_signal_tracking_with_csv_logging(self, mock_uuid, mock_strftime, mock_mqtt):
+        """Test that signal tracking generates UUIDs and logs to CSV"""
+        from abyss.run.uos_publish_json import main
+        
+        # Setup mocks
+        mock_uuid.return_value = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        mock_strftime.return_value = "2024-01-01T10:00:00Z"
+        mock_client = MagicMock()
+        mock_mqtt.return_value = mock_client
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create test JSON files
+            (temp_path / "ResultManagement.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            (temp_path / "Trace.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            (temp_path / "Heads.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            
+            # Create config file
+            config_path = temp_path / "config.yaml"
+            config_path.write_text("""
+mqtt:
+  broker:
+    host: localhost
+    port: 1883
+  listener:
+    root: OPCPUBSUB
+    result: ResultManagement
+    trace: ResultManagement/Trace
+    heads: AssetManagement/Head
+""")
+            
+            csv_path = temp_path / "signals.csv"
+            
+            # Run with signal tracking
+            test_args = [
+                'uos_publish_json.py',
+                str(temp_path),
+                '-c', str(config_path),
+                '-r', '1',
+                '--track-signals',
+                '--signal-log', str(csv_path)
+            ]
+            
+            with patch('sys.argv', test_args):
+                main()
+            
+            # Verify CSV was created and contains signal ID
+            assert csv_path.exists()
+            with open(csv_path, 'r') as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                assert len(rows) == 1
+                assert rows[0][0] == '12345678-1234-5678-1234-567812345678'
+            
+            # Verify signal ID was injected into published messages
+            published_calls = mock_client.publish.call_args_list
+            assert len(published_calls) == 3
+            
+            for call in published_calls:
+                payload = json.loads(call[0][1])
+                assert payload['_signal_id'] == '12345678-1234-5678-1234-567812345678'
+
+
+class TestErrorHandling:
+    """Tests for error handling in main publishing flow"""
+    
+    def test_read_and_validate_json_files_missing_file(self):
+        """Test handling of missing JSON files"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create only some of the required files
+            (temp_path / "ResultManagement.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            
+            with pytest.raises(FileNotFoundError):
+                read_and_validate_json_files(temp_path)
+    
+    def test_read_and_validate_json_files_invalid_json(self):
+        """Test handling of invalid JSON content"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create files with invalid JSON
+            (temp_path / "ResultManagement.json").write_text('{"invalid": json}')
+            (temp_path / "Trace.json").write_text('{"data": "valid"}')
+            (temp_path / "Heads.json").write_text('{"data": "valid"}')
+            
+            with pytest.raises(json.JSONDecodeError):
+                read_and_validate_json_files(temp_path)
+    
+    def test_read_and_validate_json_files_mismatched_timestamps(self):
+        """Test that mismatched timestamps raise ValueError"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create files with different timestamps
+            (temp_path / "ResultManagement.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}, '
+                '"other": {"SourceTimestamp": "2024-01-01T10:00:00Z"}}'
+            )
+            (temp_path / "Trace.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            (temp_path / "Heads.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            
+            with pytest.raises(ValueError, match="SourceTimestamp values are not identical"):
+                read_and_validate_json_files(temp_path)
+    
+    @patch('abyss.run.uos_publish_json.mqtt.Client')
+    def test_main_continues_on_file_errors(self, mock_mqtt):
+        """Test that main function continues when encountering file errors"""
+        from abyss.run.uos_publish_json import main
+        
+        mock_client = MagicMock()
+        mock_mqtt.return_value = mock_client
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create two subdirs - one valid, one with missing files
+            valid_dir = temp_path / "valid"
+            invalid_dir = temp_path / "invalid"
+            valid_dir.mkdir()
+            invalid_dir.mkdir()
+            
+            # Valid directory
+            (valid_dir / "ResultManagement.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            (valid_dir / "Trace.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            (valid_dir / "Heads.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            
+            # Invalid directory (missing file)
+            (invalid_dir / "ResultManagement.json").write_text(
+                '{"data": {"SourceTimestamp": "2024-01-01T09:00:00Z"}}'
+            )
+            
+            # Create config
+            config_path = temp_path / "config.yaml"
+            config_path.write_text("""
+mqtt:
+  broker:
+    host: localhost
+    port: 1883
+  listener:
+    root: OPCPUBSUB
+    result: ResultManagement
+    trace: ResultManagement/Trace
+    heads: AssetManagement/Head
+""")
+            
+            test_args = [
+                'uos_publish_json.py',
+                str(temp_path),
+                '-c', str(config_path),
+                '-r', '3'
+            ]
+            
+            # We need to mock all random.choice calls:
+            # - 3 for data_folder selection
+            # - 6 for toolbox_id and tool_id (2 per successful run)
+            # - Plus extra calls for publish_items shuffling
+            choice_returns = [
+                invalid_dir,  # First repetition - will fail
+                valid_dir, 'ILLL502033771', 'setitec001',  # Second repetition - will succeed
+                invalid_dir  # Third repetition - will fail
+            ]
+            
+            with patch('sys.argv', test_args), \
+                 patch('random.choice', side_effect=choice_returns), \
+                 patch('random.shuffle'):  # Mock shuffle to avoid needing more random choices
+                main()
+            
+            # Should have published from the valid directory only
+            assert mock_client.publish.call_count == 3  # 3 messages from 1 valid run

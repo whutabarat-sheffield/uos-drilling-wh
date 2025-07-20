@@ -38,14 +38,20 @@ class TestMessageBufferConfigManager:
             assert message_buffer._topic_patterns[key] == expected, \
                 f"Topic pattern mismatch for {key}: expected {expected}, got {message_buffer._topic_patterns[key]}"
     
-    def test_message_buffer_with_raw_config(self, minimal_config):
-        """Test MessageBuffer with raw config dictionary (backward compatibility)."""
-        # Create MessageBuffer with raw config
-        message_buffer = MessageBuffer(config=minimal_config)
+    def test_message_buffer_with_raw_config(self, minimal_config, tmp_path):
+        """Test MessageBuffer with ConfigurationManager (updated from raw config)."""
+        # Create temporary config file from minimal_config
+        import yaml
+        config_file = tmp_path / "minimal_config.yaml"
+        config_file.write_text(yaml.dump(minimal_config))
+        
+        # Create MessageBuffer with ConfigurationManager
+        config_manager = ConfigurationManager(str(config_file))
+        message_buffer = MessageBuffer(config=config_manager)
         
         # Test that configuration is properly accessed
         assert message_buffer.duplicate_handling == 'ignore'  # default value
-        assert message_buffer.config_manager is None  # Should be None for raw config
+        assert message_buffer.config_manager is not None  # Should have ConfigurationManager
         
         # Test topic patterns
         expected_patterns = {
@@ -95,23 +101,26 @@ class TestMessageBufferConfigManager:
         # Note: duplicate_time_window is internal, not exposed as attribute
     
     def test_both_approaches_equivalent(self, temp_config_file):
-        """Test that both approaches produce equivalent results."""
-        # Create both versions
+        """Test ConfigurationManager consistency."""
+        # Create buffer with ConfigurationManager
         config_manager = ConfigurationManager(temp_config_file)
-        raw_config = config_manager.get_raw_config()
-        
         buffer_with_manager = MessageBuffer(config=config_manager)
-        buffer_with_raw = MessageBuffer(config=raw_config)
         
-        # Test equivalence
-        assert buffer_with_manager.duplicate_handling == buffer_with_raw.duplicate_handling
-        assert buffer_with_manager._topic_patterns == buffer_with_raw._topic_patterns
+        # Test that the buffer properly uses ConfigurationManager
+        assert buffer_with_manager.duplicate_handling == 'ignore'
+        assert buffer_with_manager.config_manager is not None
+        assert buffer_with_manager._topic_patterns is not None
     
-    def test_missing_heads_pattern(self):
+    def test_missing_heads_pattern(self, tmp_path):
         """Test MessageBuffer with config missing heads pattern."""
-        # Create raw config without heads
+        # Create config file without heads
+        import yaml
         config = {
             'mqtt': {
+                'broker': {
+                    'host': 'localhost',
+                    'port': 1883
+                },
                 'listener': {
                     'duplicate_handling': 'replace',
                     'duplicate_time_window': 1.5,
@@ -119,12 +128,20 @@ class TestMessageBufferConfigManager:
                     'result': 'RawResult',
                     'trace': 'RawTrace'
                     # Note: no 'heads' configured
+                },
+                'estimation': {
+                    'keypoints': 'Estimation/Keypoints',
+                    'depth_estimation': 'Estimation/DepthEstimation'
                 }
             }
         }
         
-        # Create MessageBuffer with raw config
-        message_buffer = MessageBuffer(config=config)
+        config_file = tmp_path / "no_heads_config.yaml"
+        config_file.write_text(yaml.dump(config))
+        
+        # Create MessageBuffer with ConfigurationManager
+        config_manager = ConfigurationManager(str(config_file))
+        message_buffer = MessageBuffer(config=config_manager)
         
         # Test that configuration is properly accessed
         assert message_buffer.duplicate_handling == 'replace'

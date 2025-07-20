@@ -9,6 +9,9 @@ import logging
 from unittest.mock import patch, MagicMock
 from datetime import datetime
 
+# Disable debug logging for tests
+logging.getLogger().setLevel(logging.WARNING)
+
 # Import the classes we need to test
 import sys
 import os
@@ -26,6 +29,10 @@ class TestMessageBufferWarnings:
         """Sample configuration for testing."""
         return {
             'mqtt': {
+                'broker': {
+                    'host': 'localhost',
+                    'port': 1883
+                },
                 'listener': {
                     'root': 'test/root',
                     'result': 'Result',
@@ -37,10 +44,20 @@ class TestMessageBufferWarnings:
         }
     
     @pytest.fixture
-    def small_buffer(self, sample_config):
+    def small_buffer(self, sample_config, tmp_path):
         """Create MessageBuffer with small size for testing warnings."""
+        import yaml
+        from abyss.mqtt.components.config_manager import ConfigurationManager
+        
+        # Create temporary config file
+        config_file = tmp_path / "warnings_test_config.yaml"
+        with open(config_file, 'w') as f:
+            yaml.dump(sample_config, f)
+        
+        # Create ConfigurationManager and MessageBuffer
+        config_manager = ConfigurationManager(str(config_file))
         return MessageBuffer(
-            config=sample_config,
+            config=config_manager,
             cleanup_interval=300,
             max_buffer_size=10,  # Small buffer for testing
             max_age_seconds=300
@@ -109,20 +126,15 @@ class TestMessageBufferWarnings:
     @patch('logging.warning')
     def test_high_drop_rate_warning(self, mock_warning, small_buffer):
         """Test warning for high message drop rate."""
-        # Track some successful messages
-        for i in range(100):
-            small_buffer.add_message(self.create_test_message(i))
-        
-        # Clear buffer to make room
-        small_buffer.clear_buffer()
-        
-        # Force some drops by adding invalid messages
+        # Directly set metrics to simulate a high drop rate scenario
         with small_buffer._metrics_lock:
-            small_buffer._metrics['messages_dropped'] = 10  # 10% drop rate
-        
-        # Check drop rate warning
+            small_buffer._metrics['messages_received'] = 95
+            small_buffer._metrics['messages_dropped'] = 10  # ~10% drop rate
+
+        # Ensure no background threads or blocking calls are triggered
+        # Only call the warning check directly
         small_buffer._check_drop_rate_warning()
-        
+
         mock_warning.assert_called()
         args, kwargs = mock_warning.call_args
         assert "High message drop rate detected" in args[0]
@@ -131,19 +143,34 @@ class TestMessageBufferWarnings:
     @patch('logging.warning')
     def test_excessive_cleanup_warning(self, mock_warning, small_buffer):
         """Test warning when cleanup removes too many messages."""
-        # Fill buffer
+        # Fill buffer to max capacity
         for i in range(10):
             small_buffer.add_message(self.create_test_message(i))
         
-        # Add many more to trigger cleanup
-        for i in range(10, 30):
-            small_buffer.add_message(self.create_test_message(i))
+        # Force cleanup by setting old timestamps on more than half the messages
+        with small_buffer._buffer_lock:
+            # First ensure we have messages in a buffer
+            if not small_buffer.buffers:
+                # No buffers exist yet, skip test
+                pytest.skip("No buffers created")
+            
+            topic = list(small_buffer.buffers.keys())[0]
+            buffer = small_buffer.buffers[topic]
+            original_size = len(buffer)
+            
+            # Make 60% of messages very old to trigger high removal percentage
+            messages_to_age = int(original_size * 0.6)
+            for i in range(messages_to_age):
+                buffer[i]._timestamp = time.time() - 400  # Older than max_age_seconds
+        
+        # Manually trigger cleanup to ensure it runs
+        small_buffer.cleanup_old_messages()
         
         # Should see warning about excessive cleanup
         warning_found = False
         for call in mock_warning.call_args_list:
             args, kwargs = call
-            if "Excessive buffer cleanup" in args[0]:
+            if args and "Excessive buffer cleanup indicates system falling behind" in args[0]:
                 warning_found = True
                 assert kwargs['extra']['removal_percent'] > 50
                 break

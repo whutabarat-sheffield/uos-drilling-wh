@@ -98,40 +98,53 @@ Add head ID test cases to existing `test_message_processor.py` and `test_result_
 
 ## Test Organization After Migration
 
-### Final Test Structure:
+### Current Test Structure:
 ```
 tests/
 ├── unit/
 │   ├── mqtt/
-│   │   ├── test_config_manager.py (consolidated)
-│   │   ├── test_message_buffer.py (+ duplicate tests)
-│   │   ├── test_simple_correlator.py
-│   │   ├── test_message_processor.py (+ head ID tests)
-│   │   └── test_result_publisher.py (+ head ID tests)
+│   │   ├── test_config_manager_clean.py
+│   │   └── test_result_publisher.py
 │   └── core/
-│       ├── test_uos_depth_est_core.py
-│       └── test_uos_inference.py
+│       └── (empty - core tests at root level)
+├── mqtt/
+│   └── components/
+│       ├── test_drilling_analyser.py
+│       ├── test_message_buffer.py (with thread safety & load tests)
+│       ├── test_message_buffer_thread_safety.py
+│       ├── test_message_buffer_warnings.py
+│       └── test_mqtt_system_load.py
 ├── integration/
 │   ├── test_config_manager_integration.py
 │   ├── test_message_buffer_config_manager.py
 │   └── test_integration_duplicate_handling.py
 ├── performance/
-│   ├── test_message_buffer_thread_safety.py
-│   ├── test_mqtt_system_load.py
-│   └── test_throughput_monitoring.py (NEW)
-└── fixtures/
-    └── ... (unchanged)
+│   └── test_throughput_monitoring.py
+├── fixtures/
+│   ├── config_fixtures.py
+│   ├── data_fixtures.py
+│   └── mqtt_fixtures.py
+└── (root level tests for core functionality)
+    ├── test_uos_depth_est_core.py
+    ├── test_uos_inference.py
+    ├── test_head_id_*.py (various head ID tests)
+    ├── test_duplicate_*.py (various duplicate handling tests)
+    └── test_processing_pool_*.py (processing pool tests)
 ```
 
-## Deletion Checklist
+## Cleanup Status
 
-Before deleting any test file:
-1. [ ] Run the test and capture output
-2. [ ] Extract unique test cases
-3. [ ] Verify cases are covered in consolidated test
-4. [ ] Run consolidated test to ensure coverage
-5. [ ] Delete original file
-6. [ ] Update any imports/references
+### Files That Should Be Consolidated/Removed:
+1. [ ] Multiple duplicate test files at root level (test_duplicate_*.py)
+2. [ ] Multiple head ID test files (test_head_id_*.py)
+3. [ ] Multiple processing pool test files (test_processing_pool_*.py)
+4. [ ] Script-style tests that should be converted to proper pytest format
+
+### Consolidation Target Locations:
+- Duplicate tests → `tests/mqtt/components/test_message_buffer.py`
+- Head ID tests → `tests/mqtt/components/test_drilling_analyser.py`
+- Processing pool tests → `tests/mqtt/components/test_processing_pool.py` (to be created)
+- Config tests → Keep `tests/unit/mqtt/test_config_manager_clean.py` as primary
 
 ## New Tests Added (Phase 1) ✅
 
@@ -142,22 +155,14 @@ Before deleting any test file:
    - "Keeping up" status
    - Location: `tests/performance/test_throughput_monitoring.py`
 
-2. **test_bottleneck_profiler.py** ✅
-   - Pipeline stage timing
-   - Bottleneck identification
-   - Sampling accuracy
-   - Location: `tests/performance/test_bottleneck_profiler.py`
+2. **test_bottleneck_profiler.py** ❌ REMOVED
+   - Component removed as over-engineered
+   - Functionality replaced by simpler throughput monitoring
 
-3. **test_realistic_load_patterns.py** ✅
-   - Drilling operation patterns
-   - Burst handling
-   - Idle period behavior
-   - Multi-tool concurrent load
-   - Location: `tests/performance/test_realistic_load_patterns.py`
+3. **test_realistic_load_patterns.py** ❌ REMOVED
+   - Component removed as over-engineered
+   - Basic load testing retained in other test files
 
-4. **test_diagnostic_correlator.py** ✅
-   - Correlation history tracking
-   - Orphan message detection
-   - Queue growth monitoring
-   - Throughput integration
-   - Location: `tests/unit/mqtt/test_diagnostic_correlator.py`
+4. **test_diagnostic_correlator.py** ❌ REMOVED
+   - Component removed as redundant with SimpleThroughputMonitor
+   - Functionality consolidated into existing correlation tests

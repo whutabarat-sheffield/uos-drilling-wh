@@ -81,10 +81,9 @@ def test_message_buffer_integration():
         
         try:
             config_manager = ConfigurationManager(temp_config_path)
-            config = config_manager.get_raw_config()
             
-            # Create MessageBuffer with the config
-            message_buffer = MessageBuffer(config=config)
+            # Create MessageBuffer with the ConfigurationManager
+            message_buffer = MessageBuffer(config=config_manager)
             
             print(f"✓ MessageBuffer with mode '{mode}': duplicate_handling = {message_buffer.duplicate_handling}")
             assert message_buffer.duplicate_handling == mode, f"Expected '{mode}', got '{message_buffer.duplicate_handling}'"
@@ -142,11 +141,24 @@ def test_simple_correlator_awareness():
                 'root': 'test/root',
                 'result': 'result',
                 'trace': 'trace'
+            },
+            'estimation': {
+                'keypoints': 'Estimation/Keypoints',
+                'depth_estimation': 'Estimation/DepthEstimation'
             }
         }
     }
     
-    correlator = SimpleMessageCorrelator(config_data, time_window=30.0)
+    # Create temporary config file and ConfigurationManager
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump(config_data, f)
+        temp_config_path = f.name
+    
+    try:
+        config_manager = ConfigurationManager(temp_config_path)
+        correlator = SimpleMessageCorrelator(config_manager, time_window=30.0)
+    finally:
+        os.unlink(temp_config_path)
     
     # Check that correlator has the expected topic patterns
     expected_patterns = {

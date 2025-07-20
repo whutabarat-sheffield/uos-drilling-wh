@@ -83,23 +83,28 @@ mqtt:
         assert dest_payload['HeadId'] == "TEST_HEAD_ID"
         assert dest_payload['AlgoVersion'] == "0.2.6"
     
-    def test_result_publisher_backward_compatibility(self, mock_mqtt_client, sample_processing_result):
-        """Test ResultPublisher still works with raw config dictionary"""
-        # Legacy config dictionary
-        config_dict = {
-            'mqtt': {
-                'listener': {
-                    'root': 'OPCPUBSUB'
-                },
-                'estimation': {
-                    'keypoints': 'Estimation/Keypoints',
-                    'depth_estimation': 'Estimation/DepthEstimation'
-                }
-            }
-        }
+    def test_result_publisher_backward_compatibility(self, mock_mqtt_client, sample_processing_result, tmp_path):
+        """Test ResultPublisher works with ConfigurationManager"""
+        # Create temporary config file
+        config_file = tmp_path / "test_config.yaml"
+        config_content = """
+mqtt:
+  broker:
+    host: "localhost"
+    port: 1883
+  listener:
+    root: "OPCPUBSUB"
+    result: "ResultManagement"
+    trace: "ResultManagement/Trace"
+  estimation:
+    keypoints: "Estimation/Keypoints"
+    depth_estimation: "Estimation/DepthEstimation"
+"""
+        config_file.write_text(config_content)
         
-        # Create ResultPublisher with legacy config
-        result_publisher = ResultPublisher(mock_mqtt_client, config_dict)
+        # Create ResultPublisher with ConfigurationManager
+        config_manager = ConfigurationManager(str(config_file))
+        result_publisher = ResultPublisher(mock_mqtt_client, config_manager)
         
         # Test publishing
         result_publisher.publish_processing_result(
@@ -240,29 +245,36 @@ mqtt:
         }
         assert correlator._topic_patterns == expected_patterns
     
-    def test_simple_correlator_backward_compatibility(self):
-        """Test SimpleMessageCorrelator still works with raw config dictionary"""
+    def test_simple_correlator_backward_compatibility(self, tmp_path):
+        """Test SimpleMessageCorrelator works with ConfigurationManager"""
         from abyss.mqtt.components.simple_correlator import SimpleMessageCorrelator
         
-        # Legacy config dictionary
-        config_dict = {
-            'mqtt': {
-                'listener': {
-                    'root': 'OPCPUBSUB',
-                    'result': 'ResultManagement',
-                    'trace': 'ResultManagement/Trace',
-                    'heads': 'AssetManagement/Head'
-                }
-            }
-        }
+        # Create temporary config file
+        config_file = tmp_path / "test_config.yaml"
+        config_content = """
+mqtt:
+  broker:
+    host: "localhost"
+    port: 1883
+  listener:
+    root: "OPCPUBSUB"
+    result: "ResultManagement"
+    trace: "ResultManagement/Trace"
+    heads: "AssetManagement/Head"
+    time_window: 15.0
+  estimation:
+    keypoints: "Estimation/Keypoints"
+    depth_estimation: "Estimation/DepthEstimation"
+"""
+        config_file.write_text(config_content)
         
-        # Create SimpleMessageCorrelator with legacy config
-        correlator = SimpleMessageCorrelator(config_dict, time_window=15.0)
+        # Create SimpleMessageCorrelator with ConfigurationManager
+        config_manager = ConfigurationManager(str(config_file))
+        correlator = SimpleMessageCorrelator(config_manager, time_window=15.0)
         
-        # Verify it uses legacy mode
-        assert correlator.config_manager is None
+        # Verify it uses ConfigurationManager
+        assert correlator.config_manager is not None
         assert correlator.time_window == 15.0
-        assert hasattr(correlator, 'config')
         
         # Verify topic patterns are set correctly using legacy method
         expected_patterns = {

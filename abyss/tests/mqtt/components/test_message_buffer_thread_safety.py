@@ -26,6 +26,10 @@ class TestMessageBufferThreadSafety:
         """Sample configuration for testing."""
         return {
             'mqtt': {
+                'broker': {
+                    'host': 'localhost',
+                    'port': 1883
+                },
                 'listener': {
                     'root': 'test/root',
                     'result': 'Result',
@@ -37,10 +41,20 @@ class TestMessageBufferThreadSafety:
         }
     
     @pytest.fixture
-    def thread_safe_buffer(self, sample_config):
+    def thread_safe_buffer(self, sample_config, tmp_path):
         """Create MessageBuffer instance for thread safety testing."""
+        import yaml
+        from abyss.mqtt.components.config_manager import ConfigurationManager
+        
+        # Create temporary config file
+        config_file = tmp_path / "thread_safety_config.yaml"
+        with open(config_file, 'w') as f:
+            yaml.dump(sample_config, f)
+        
+        # Create ConfigurationManager and MessageBuffer
+        config_manager = ConfigurationManager(str(config_file))
         return MessageBuffer(
-            config=sample_config,
+            config=config_manager,
             cleanup_interval=60,
             max_buffer_size=1000,
             max_age_seconds=300
@@ -228,6 +242,7 @@ class TestMessageBufferThreadSafety:
         
         # Fill buffer to trigger cleanup
         thread_safe_buffer.max_buffer_size = 5
+        thread_safe_buffer.cleanup_target_size = int(5 * 0.8)  # Recalculate cleanup target
         
         def fill_and_trigger_cleanup():
             """Fill buffer to trigger automatic cleanup."""

@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
-Simple test to verify ProcessingPool is working correctly.
+Simple integration test to verify ProcessingPool is working correctly.
+
+This is a minimal test that validates basic ProcessingPool functionality
+with actual message processing.
+
+Environment Variables:
+- MQTT_CONFIG_PATH: Path to MQTT configuration file
+- TEST_DATA_PATH: Path to test data directory
 """
 
 import sys
@@ -11,10 +18,14 @@ import logging
 from datetime import datetime
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.abyss.mqtt.components.processing_pool import SimpleProcessingPool
 from src.abyss.uos_depth_est import TimestampedData
+
+# Configuration from environment
+CONFIG_PATH = os.environ.get('MQTT_CONFIG_PATH', 'src/abyss/run/config/mqtt_conf_local.yaml')
+TEST_DATA_PATH = os.environ.get('TEST_DATA_PATH', 'src/abyss/test_data/data_20250626')
 
 
 def setup_logging():
@@ -27,7 +38,7 @@ def setup_logging():
 
 def load_actual_messages():
     """Load actual messages from test data files."""
-    test_data_path = "src/abyss/test_data/data_20250626"
+    test_data_path = TEST_DATA_PATH
     timestamp = datetime.now().timestamp()
     
     messages = []
@@ -79,7 +90,7 @@ def main():
     print("\n=== Simple ProcessingPool Test ===\n")
     
     # Initialize pool
-    pool = SimpleProcessingPool(max_workers=2, config_path='src/abyss/run/config/mqtt_conf_local.yaml')
+    pool = SimpleProcessingPool(max_workers=2, config_path=CONFIG_PATH)
     
     # Load actual messages
     messages = load_actual_messages()

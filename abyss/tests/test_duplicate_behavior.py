@@ -6,6 +6,8 @@ Test MessageBuffer duplicate handling behavior through public interface
 import sys
 import os
 import json
+import tempfile
+import yaml
 from datetime import datetime
 
 # Add the source directory to the path
@@ -13,28 +15,54 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'abyss', 'src'))
 
 from abyss.uos_depth_est import TimestampedData
 from abyss.mqtt.components.message_buffer import MessageBuffer
+from abyss.mqtt.components.config_manager import ConfigurationManager
 
 # Define the exception locally for testing since it might not be in the installed version
 class DuplicateMessageError(Exception):
     pass
 
-def test_duplicate_behavior_ignore():
-    """Test duplicate handling with 'ignore' strategy"""
-    print("=== Testing Duplicate Behavior: IGNORE Strategy ===")
-    
-    config = {
+def create_base_config(duplicate_handling='ignore', duplicate_time_window=1.0):
+    """Create a complete config with all required sections"""
+    return {
         'mqtt': {
+            'broker': {
+                'host': 'localhost',
+                'port': 1883,
+                'username': '',
+                'password': ''
+            },
             'listener': {
                 'root': 'OPCPUBSUB',
                 'result': 'ResultManagement',
                 'trace': 'ResultManagement/Trace',
-                'duplicate_handling': 'ignore',
-                'duplicate_time_window': 1.0
+                'duplicate_handling': duplicate_handling,
+                'duplicate_time_window': duplicate_time_window
+            },
+            'estimation': {
+                'depth_estimation': 'DepthEstimation',
+                'keypoints': 'KeypointsEstimation'
             }
         }
     }
+
+def create_test_buffer(duplicate_handling='ignore', duplicate_time_window=1.0):
+    """Helper function to create MessageBuffer with ConfigurationManager"""
+    config_dict = create_base_config(duplicate_handling, duplicate_time_window)
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump(config_dict, f)
+        config_file = f.name
     
-    buffer = MessageBuffer(config)
+    try:
+        config_manager = ConfigurationManager(config_file)
+        return MessageBuffer(config_manager)
+    finally:
+        os.unlink(config_file)
+
+def test_duplicate_behavior_ignore():
+    """Test duplicate handling with 'ignore' strategy"""
+    print("=== Testing Duplicate Behavior: IGNORE Strategy ===")
+    
+    buffer = create_test_buffer('ignore', 1.0)
     timestamp = datetime.now().timestamp()
     test_data = {"test": "data", "value": 123}
     source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
@@ -79,19 +107,7 @@ def test_duplicate_behavior_replace():
     """Test duplicate handling with 'replace' strategy"""
     print("\n\n=== Testing Duplicate Behavior: REPLACE Strategy ===")
     
-    config = {
-        'mqtt': {
-            'listener': {
-                'root': 'OPCPUBSUB',
-                'result': 'ResultManagement',
-                'trace': 'ResultManagement/Trace',
-                'duplicate_handling': 'replace',
-                'duplicate_time_window': 1.0
-            }
-        }
-    }
-    
-    buffer = MessageBuffer(config)
+    buffer = create_test_buffer('replace', 1.0)
     timestamp = datetime.now().timestamp()
     original_data = {"version": 1, "value": "original"}
     updated_data = {"version": 2, "value": "updated"}
@@ -132,19 +148,7 @@ def test_duplicate_behavior_error():
     """Test duplicate handling with 'error' strategy"""
     print("\n\n=== Testing Duplicate Behavior: ERROR Strategy ===")
     
-    config = {
-        'mqtt': {
-            'listener': {
-                'root': 'OPCPUBSUB',
-                'result': 'ResultManagement',
-                'trace': 'ResultManagement/Trace',
-                'duplicate_handling': 'error',
-                'duplicate_time_window': 1.0
-            }
-        }
-    }
-    
-    buffer = MessageBuffer(config)
+    buffer = create_test_buffer('error', 1.0)
     timestamp = datetime.now().timestamp()
     test_data = {"test": "data", "value": 123}
     source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
@@ -181,18 +185,7 @@ def test_complex_data_comparison():
     """Test duplicate detection with complex nested data structures"""
     print("\n\n=== Testing Complex Data Comparison ===")
     
-    config = {
-        'mqtt': {
-            'listener': {
-                'root': 'OPCPUBSUB',
-                'result': 'ResultManagement',
-                'trace': 'ResultManagement/Trace',
-                'duplicate_handling': 'ignore'
-            }
-        }
-    }
-    
-    buffer = MessageBuffer(config)
+    buffer = create_test_buffer('ignore', 1.0)
     timestamp = datetime.now().timestamp()
     source = "OPCPUBSUB/toolbox1/tool1/ResultManagement"
     
