@@ -1,0 +1,77 @@
+# Lightweight MQTT Publisher Dockerfile
+# Optimized for minimal size and dependencies - perfect for edge devices
+# Base image size: ~50MB, Final image size: ~100MB (vs ~2GB for full system)
+
+ARG PYTHON_VERSION=3.10.16
+FROM python:${PYTHON_VERSION}-slim
+
+# Python environment configuration
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Create non-privileged user
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    appuser
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
+
+# Set working directory
+WORKDIR /app
+
+# Copy only the minimal requirements
+COPY abyss/requirements.publisher.txt ./
+
+# Install minimal dependencies (only paho-mqtt and pyyaml)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -r requirements.publisher.txt
+
+# Copy only the publisher module and its dependencies
+RUN mkdir -p ./abyss/mqtt/publishers
+
+# Copy publisher source files
+COPY abyss/src/abyss/mqtt/publishers/*.py ./abyss/mqtt/publishers/
+COPY abyss/src/abyss/mqtt/__init__.py ./abyss/mqtt/
+COPY abyss/src/abyss/__init__.py ./abyss/
+
+# Create empty __init__.py files to make Python packages
+RUN touch ./abyss/__init__.py \
+    && touch ./abyss/mqtt/__init__.py \
+    && touch ./abyss/mqtt/publishers/__init__.py
+
+# Copy the standalone main file as __main__.py
+COPY abyss/src/abyss/mqtt/publishers/__main__standalone.py ./abyss/mqtt/publishers/__main__.py
+
+# Copy configuration and test data
+RUN mkdir -p ./config ./test_data
+COPY abyss/src/abyss/run/config/mqtt_conf_docker.yaml ./config/
+COPY abyss/src/abyss/test_data ./test_data
+
+# Set Python path to find our modules
+ENV PYTHONPATH=/app:${PYTHONPATH}
+
+# Performance tuning for high-throughput publishing
+ENV PYTHONUNBUFFERED=1
+ENV MQTT_MAX_INFLIGHT_MESSAGES=100
+ENV MQTT_MAX_QUEUED_MESSAGES=1000
+
+# Expose MQTT port (if running broker in same container)
+EXPOSE 1883
+
+# Switch to non-privileged user
+USER appuser
+
+# Health check - verify MQTT publisher can be imported
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "from abyss.mqtt.publishers import BasePublisher; print('Publisher ready')" || exit 1
+
+# Default command - publish from test_data directory
+# Override with your own data path: docker run -v /your/data:/data image /data
+CMD ["python", "-m", "abyss.mqtt.publishers", "test_data", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]

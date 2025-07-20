@@ -56,7 +56,7 @@ def setup_logging(level):
     """
     logging.basicConfig(
         level=level,
-        format='[%(asctime)s.%(msecs)03d] %(levelname)-8s %(name)s | %(message)s',
+        format='[%(asctime)s.%(msecs)03d] %(levelname)-8s %(name)s | %(filename)s:%(lineno)d:%(funcName)s | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     

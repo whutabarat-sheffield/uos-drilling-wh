@@ -63,7 +63,7 @@ install: build ## Install the built wheel locally
 		exit 1; \
 	fi
 
-# Run tests (placeholder for future test implementation)
+# Run tests
 test: ## Run tests
 	@echo "Running tests..."
 	@if [ -d "$(ABYSS_DIR)/tests" ]; then \
@@ -78,26 +78,6 @@ dev-install: ## Install package in development mode
 	@echo "Installing package in development mode..."
 	cd $(ABYSS_DIR) && pip install -e .
 
-# Lint and format code (if tools are available)
-lint: ## Lint the code
-	@echo "Linting code..."
-	@if command -v flake8 >/dev/null 2>&1; then \
-		cd $(ABYSS_DIR) && flake8 src/; \
-	else \
-		echo "flake8 not found, skipping linting"; \
-	fi
-
-format: ## Format the code
-	@echo "Formatting code..."
-	@if command -v black >/dev/null 2>&1; then \
-		cd $(ABYSS_DIR) && black src/; \
-	else \
-		echo "black not found, skipping formatting"; \
-	fi
-
-# Documentation
-docs: ## Generate documentation (placeholder)
-	@echo "Documentation generation not yet implemented"
 
 # Release targets
 release-check: build ## Check if ready for release
@@ -171,18 +151,30 @@ docker-devel-fresh: check-docker ## Build development Docker image (no cache)
 	@echo "Building development Docker image without cache..."
 	@./build-devel.sh --no-cache
 
-docker-publish: check-docker ## Build publisher Docker image
+docker-publish: check-docker ## Build publisher Docker image (full system)
 	@echo "Building publisher Docker image with caching..."
 	@./build-publish.sh
 
-docker-publish-fresh: check-docker ## Build publisher Docker image (no cache)
+docker-publish-fresh: check-docker ## Build publisher Docker image (full system, no cache)
 	@echo "Building publisher Docker image without cache..."
 	@./build-publish.sh --no-cache
 
+docker-publisher: check-docker ## Build lightweight publisher Docker image
+	@echo "Building lightweight publisher Docker image with caching..."
+	@./build-publisher.sh
+
+docker-publisher-fresh: check-docker ## Build lightweight publisher Docker image (no cache)
+	@echo "Building lightweight publisher Docker image without cache..."
+	@./build-publisher.sh --no-cache
+
 # Publisher testing targets
-test-publisher: docker-publish ## Test the publisher Docker image
+test-publisher: docker-publish ## Test the publisher Docker image (full system)
 	@echo "Testing publisher module..."
 	@docker run --rm uos-publish-json:publisher python -m abyss.mqtt.publishers --help
+
+test-publisher-lightweight: docker-publisher ## Test the lightweight publisher Docker image
+	@echo "Testing lightweight publisher module..."
+	@docker run --rm abyss-publisher:lightweight python -m abyss.mqtt.publishers --help
 
 publisher-modes: docker-publish ## Show publisher operation modes
 	@echo "Publisher Operation Modes:"
@@ -204,14 +196,33 @@ publisher-modes: docker-publish ## Show publisher operation modes
 	@echo "   docker run --rm -v \$$(pwd)/test_data:/data -v \$$(pwd)/tracking:/tracking uos-publish-json:publisher \\"
 	@echo "     python -m abyss.mqtt.publishers /data --track-signals --signal-log /tracking/signals.csv"
 
+publisher-modes-lightweight: docker-publisher ## Show lightweight publisher operation modes
+	@echo "Lightweight Publisher Operation Modes:"
+	@echo "====================================="
+	@echo ""
+	@echo "⚡ Optimized for edge devices and minimal footprint (217MB vs 2GB)"
+	@echo ""
+	@echo "1. Standard Mode:"
+	@echo "   docker run --rm -v \$$(pwd)/test_data:/data abyss-publisher:lightweight /data"
+	@echo ""
+	@echo "2. With custom configuration:"
+	@echo "   docker run --rm -v \$$(pwd)/test_data:/data -v \$$(pwd)/config.yaml:/app/config/custom.yaml \\"
+	@echo "     abyss-publisher:lightweight /data -c /app/config/custom.yaml"
+	@echo ""
+	@echo "3. With signal tracking:"
+	@echo "   docker run --rm -v \$$(pwd)/test_data:/data -v \$$(pwd)/tracking:/tracking \\"
+	@echo "     abyss-publisher:lightweight /data --track-signals --signal-log /tracking/signals.csv"
+	@echo ""
+	@echo "Dependencies: Only paho-mqtt and pyyaml (no deep learning libraries)"
+
 # Docker utility targets
 docker-list: check-docker ## List all project Docker images
 	@echo "Project Docker images:"
-	@docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}" | grep -E "(REPOSITORY|uos-depthest-listener|uos-publish-json)" || echo "No project images found"
+	@docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}" | grep -E "(REPOSITORY|uos-depthest-listener|uos-publish-json|abyss-publisher)" || echo "No project images found"
 
 docker-clean: check-docker ## Remove all project Docker images
 	@echo "Removing project Docker images..."
-	@docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "(uos-depthest-listener|uos-publish-json)" | xargs -r docker rmi -f || echo "No images to remove"
+	@docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "(uos-depthest-listener|uos-publish-json|abyss-publisher)" | xargs -r docker rmi -f || echo "No images to remove"
 	@echo "Docker images cleaned."
 
 docker-cache-info: check-docker ## Show Docker build cache usage
