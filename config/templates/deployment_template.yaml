@@ -1,0 +1,268 @@
+# Deployment Configuration Template
+# =================================
+#
+# This template provides deployment configuration for various environments.
+# Copy and customize for specific deployment scenarios.
+
+# Deployment Metadata
+deployment:
+  name: "${DEPLOYMENT_NAME:-drilling-analysis}"
+  version: "${DEPLOYMENT_VERSION:-1.0.0}"
+  environment: "${ENVIRONMENT:-development}"
+  
+  # Deployment labels for identification
+  labels:
+    project: "uos-drilling-depth-estimation"
+    component: "analysis-system"
+    managed-by: "docker-compose"
+
+# Infrastructure Configuration
+infrastructure:
+  # Container orchestration settings
+  orchestration:
+    type: "${ORCHESTRATION_TYPE:-docker-compose}"  # Options: docker-compose, docker-swarm, kubernetes
+    
+    # Resource allocation strategy
+    resource_strategy: "${RESOURCE_STRATEGY:-balanced}"  # Options: minimal, balanced, performance
+  
+  # Network configuration
+  networking:
+    # Network isolation level
+    isolation: "${NETWORK_ISOLATION:-moderate}"  # Options: strict, moderate, open
+    
+    # External connectivity
+    external_access:
+      mqtt_broker: "${MQTT_EXTERNAL_ACCESS:-true}"
+      monitoring: "${MONITORING_EXTERNAL_ACCESS:-false}"
+      
+    # Port configuration
+    ports:
+      mqtt: "${MQTT_PORT:-1883}"
+      mqtt_ws: "${MQTT_WS_PORT:-9001}"
+      monitoring: "${MONITORING_PORT:-9090}"
+
+# Service Configuration
+services:
+  # MQTT Broker deployment settings
+  mqtt_broker:
+    enabled: "${MQTT_BROKER_ENABLED:-true}"
+    
+    # High availability configuration
+    ha:
+      enabled: "${MQTT_HA_ENABLED:-false}"
+      replicas: "${MQTT_REPLICAS:-1}"
+      persistence: "${MQTT_PERSISTENCE:-true}"
+    
+    # Resource requirements
+    resources:
+      memory_limit: "${MQTT_MEMORY_LIMIT:-512M}"
+      cpu_limit: "${MQTT_CPU_LIMIT:-0.5}"
+      storage: "${MQTT_STORAGE:-1G}"
+  
+  # Drilling analyzer service settings  
+  analyzer:
+    enabled: "${ANALYZER_ENABLED:-true}"
+    
+    # Scaling configuration
+    scaling:
+      replicas: "${ANALYZER_REPLICAS:-1}"
+      auto_scaling: "${ANALYZER_AUTO_SCALING:-false}"
+      max_replicas: "${ANALYZER_MAX_REPLICAS:-3}"
+      cpu_threshold: "${ANALYZER_CPU_THRESHOLD:-80}"
+    
+    # Resource requirements
+    resources:
+      memory_limit: "${ANALYZER_MEMORY_LIMIT:-4G}"
+      memory_request: "${ANALYZER_MEMORY_REQUEST:-2G}"
+      cpu_limit: "${ANALYZER_CPU_LIMIT:-2.0}"
+      cpu_request: "${ANALYZER_CPU_REQUEST:-1.0}"
+      storage: "${ANALYZER_STORAGE:-10G}"
+    
+    # Processing configuration
+    processing:
+      workers: "${PROCESSING_WORKERS:-4}"
+      model_id: "${MODEL_ID:-4}"
+      batch_size: "${BATCH_SIZE:-10}"
+  
+  # Data publisher service settings
+  publisher:
+    enabled: "${PUBLISHER_ENABLED:-false}"
+    
+    # Publisher modes
+    mode: "${PUBLISHER_MODE:-standard}"  # Options: standard, stress-test, continuous
+    
+    # Resource requirements
+    resources:
+      memory_limit: "${PUBLISHER_MEMORY_LIMIT:-512M}"
+      cpu_limit: "${PUBLISHER_CPU_LIMIT:-0.5}"
+    
+    # Data generation settings
+    data_generation:
+      rate_hz: "${PUBLISH_RATE_HZ:-1.0}"
+      duration_minutes: "${PUBLISH_DURATION:-60}"
+      realistic_patterns: "${REALISTIC_PATTERNS:-true}"
+  
+  # Monitoring service settings
+  monitoring:
+    enabled: "${MONITORING_ENABLED:-false}"
+    
+    # Monitoring stack components
+    components:
+      prometheus: "${PROMETHEUS_ENABLED:-true}"
+      grafana: "${GRAFANA_ENABLED:-false}"
+      alertmanager: "${ALERTMANAGER_ENABLED:-false}"
+    
+    # Data retention
+    retention:
+      metrics_days: "${METRICS_RETENTION_DAYS:-7}"
+      logs_days: "${LOGS_RETENTION_DAYS:-3}"
+
+# Security Configuration
+security:
+  # Authentication and authorization
+  auth:
+    mqtt_auth_required: "${MQTT_AUTH_REQUIRED:-false}"
+    
+    # Certificate management
+    tls:
+      enabled: "${TLS_ENABLED:-false}"
+      cert_path: "${TLS_CERT_PATH:-/certs}"
+      auto_generate: "${TLS_AUTO_GENERATE:-false}"
+  
+  # Network security
+  network:
+    firewall_enabled: "${FIREWALL_ENABLED:-false}"
+    allowed_networks: "${ALLOWED_NETWORKS:-0.0.0.0/0}"
+  
+  # Container security
+  container:
+    run_as_non_root: "${RUN_AS_NON_ROOT:-true}"
+    readonly_filesystem: "${READONLY_FILESYSTEM:-false}"
+    security_profiles: "${SECURITY_PROFILES:-default}"
+
+# Data Management
+data:
+  # Data persistence strategy
+  persistence:
+    strategy: "${PERSISTENCE_STRATEGY:-local}"  # Options: local, network, cloud
+    
+    # Backup configuration
+    backup:
+      enabled: "${BACKUP_ENABLED:-false}"
+      schedule: "${BACKUP_SCHEDULE:-0 2 * * *}"  # Daily at 2 AM
+      retention_days: "${BACKUP_RETENTION_DAYS:-30}"
+  
+  # Data volumes
+  volumes:
+    mqtt_data: "${MQTT_DATA_VOLUME:-mqtt_data}"
+    model_cache: "${MODEL_CACHE_VOLUME:-model_cache}"
+    logs: "${LOGS_VOLUME:-logs}"
+
+# Logging and Monitoring
+observability:
+  # Logging configuration
+  logging:
+    level: "${LOG_LEVEL:-INFO}"
+    format: "${LOG_FORMAT:-structured}"  # Options: structured, json, simple
+    
+    # Log aggregation
+    aggregation:
+      enabled: "${LOG_AGGREGATION_ENABLED:-false}"
+      destination: "${LOG_DESTINATION:-stdout}"
+  
+  # Metrics configuration
+  metrics:
+    collection_enabled: "${METRICS_COLLECTION_ENABLED:-true}"
+    collection_interval: "${METRICS_INTERVAL:-30s}"
+    
+    # Custom metrics
+    custom_metrics:
+      processing_rate: true
+      message_latency: true
+      error_rate: true
+      depth_estimation_accuracy: false
+  
+  # Health checks
+  health_checks:
+    enabled: "${HEALTH_CHECKS_ENABLED:-true}"
+    interval: "${HEALTH_CHECK_INTERVAL:-30s}"
+    timeout: "${HEALTH_CHECK_TIMEOUT:-10s}"
+    retries: "${HEALTH_CHECK_RETRIES:-3}"
+
+# Environment-Specific Overrides
+# -----------------------------
+# These sections provide environment-specific configuration overrides
+
+development:
+  # Development environment settings
+  services:
+    publisher:
+      enabled: true
+    monitoring:
+      enabled: false
+  
+  logging:
+    level: "DEBUG"
+  
+  security:
+    auth:
+      mqtt_auth_required: false
+    network:
+      firewall_enabled: false
+
+testing:
+  # Testing environment settings
+  services:
+    publisher:
+      enabled: true
+      mode: "stress-test"
+    monitoring:
+      enabled: true
+  
+  data:
+    persistence:
+      strategy: "memory"  # Faster for testing
+  
+  logging:
+    level: "INFO"
+
+production:
+  # Production environment settings
+  infrastructure:
+    resource_strategy: "performance"
+    
+  services:
+    mqtt_broker:
+      ha:
+        enabled: true
+        replicas: 3
+        persistence: true
+    analyzer:
+      scaling:
+        auto_scaling: true
+        max_replicas: 5
+    publisher:
+      enabled: false
+    monitoring:
+      enabled: true
+      components:
+        prometheus: true
+        grafana: true
+        alertmanager: true
+  
+  security:
+    auth:
+      mqtt_auth_required: true
+    tls:
+      enabled: true
+    network:
+      firewall_enabled: true
+  
+  data:
+    persistence:
+      strategy: "network"
+    backup:
+      enabled: true
+  
+  logging:
+    level: "WARNING"
