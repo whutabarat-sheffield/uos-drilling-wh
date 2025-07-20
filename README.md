@@ -21,7 +21,7 @@ For detailed installation options, see the [Installation](#installation) section
 
 ### Changes in 0.2.7
 
-**Organizational & Quality Release** - This version focuses on repository structure, documentation, and comprehensive test coverage improvements.
+**Organizational & Quality Release** - This version focuses on workflow monitoring, repository structure, documentation, and comprehensive test coverage improvements.
 
 1. **Workflow Statistics Monitoring**: Ultra-lightweight performance tracking
    - Real-time message arrival and processing rates (msg/sec)
