@@ -10,13 +10,12 @@ monolithic MQTTDrillingDataAnalyser class.
 import logging
 import sys
 import os
-import yaml
 import argparse
 
 # Add the source directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from abyss.mqtt.components import DrillingDataAnalyser
+from abyss.mqtt.components import DrillingDataAnalyser, ConfigurationManager
 from abyss.uos_depth_est_utils import setup_logging
 
 
@@ -30,9 +29,9 @@ def main():
     
     Example usage:
         python example_usage.py
-        python example_usage.py --config=mqtt_conf.yaml --log-level=DEBUG
+        python example_usage.py --config=mqtt_conf_docker.yaml --log-level=DEBUG
     """
-    parser = argparse.ArgumentParser(description='MQTT Drilling Data Analyzer - Refactored Components')
+    parser = argparse.ArgumentParser(description='MQTT Drilling Data Analyzer - Component-Based Architecture')
     parser.add_argument(
         '--config', 
         type=str,
@@ -54,7 +53,6 @@ def main():
     # Resolve config path - check multiple locations
     config_path = args.config
     if not os.path.isabs(config_path):
-        # Try relative to script location first
         script_dir = os.path.dirname(__file__)
         possible_paths = [
             os.path.join(script_dir, '..', 'run', 'config', config_path),
@@ -75,21 +73,20 @@ def main():
             sys.exit(1)
     
     try:
-        logging.info("Starting MQTT Drilling Data Analyzer with refactored components")
+        logging.info("Starting MQTT Drilling Data Analyzer with component-based architecture")
         logging.info("Configuration file: %s", config_path)
         
+        # Initialize ConfigurationManager first to validate configuration
+        config_manager = ConfigurationManager(config_path)
+        
+        # Log configuration summary for debugging
+        config_summary = config_manager.get_config_summary()
+        logging.info("Configuration loaded successfully: %s", config_summary)
+        
+        # Initialize analyzer with validated config path
         analyzer = DrillingDataAnalyser(config_path=config_path)
         analyzer.run()
         
-    except FileNotFoundError:
-        logging.critical("Configuration file '%s' not found in %s", config_path, os.getcwd())
-        sys.exit(1)
-    except yaml.YAMLError as e:
-        logging.critical("Invalid YAML configuration in '%s': %s", config_path, str(e))
-        sys.exit(1)
-    except KeyboardInterrupt:
-        logging.info("Received keyboard interrupt, shutting down...")
-        sys.exit(0)
     except Exception as e:
         logging.critical("Error: %s", str(e))
         sys.exit(1)
