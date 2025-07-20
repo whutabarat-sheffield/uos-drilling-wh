@@ -5,8 +5,9 @@ This documentation provides a guide to the MQTT Drilling Data Analysis System, w
 ## Overview
 
 The system consists of:
-1. A Python script (`listen-continuous.py`) that listens for MQTT messages containing drilling data
-2. A configuration file (`mqtt_conf.yaml`) for customizing connection settings and data mappings
+1. A Python module (`abyss.mqtt.example_usage`) that runs the MQTT drilling data analyzer
+2. Configuration files (`mqtt_conf_local.yaml` and `mqtt_conf_docker.yaml`) for customizing connection settings and data mappings
+3. A component-based architecture with parallel processing capabilities
 
 The system listens for two types of messages:
 - Result messages: Contains metadata and operation results
@@ -23,7 +24,7 @@ When matching result and trace messages are received, the system processes them 
 
 ### Installation Steps
 
-1. Install required dependencies from the provided tarballs. Note that these tarballs has the same name as publicly available sources but the provided packages contain custom modifications:
+1. Install required dependencies from the provided tarballs. Note that these tarballs have the same name as publicly available sources but the provided packages contain custom modifications:
 
 ```bash
 pip install transformers-4.41.0.dev0.tar.gz
@@ -37,7 +38,11 @@ pip install accelerate-1.2.1.tar.gz
 pip install abyss-0.1.0.tar.gz
 ```
 
-3. Place the `listen-continuous.py` and `mqtt_conf.yaml` files in your project directory
+3. Navigate to the MQTT module directory:
+
+```bash
+cd abyss/src/abyss/mqtt
+```
 
 ## Configuration
 
@@ -86,19 +91,19 @@ The `mqtt_conf.yaml` file contains all necessary configuration for the MQTT conn
 Run the script with default configuration:
 
 ```bash
-python listen-continuous.py
+python example_usage.py
 ```
 
 ### Command-line Arguments
 
 The script supports the following command-line arguments:
 
-- `--config`: Path to YAML configuration file (default: mqtt_docker_conf.yaml)
+- `--config`: Path to YAML configuration file (default: mqtt_conf_local.yaml)
 - `--log-level`: Logging level (choices: DEBUG, INFO, WARNING, ERROR, CRITICAL; default: INFO)
 
 Example:
 ```bash
-python listen-continuous.py --config=custom_config.yaml --log-level=DEBUG
+python example_usage.py --config=mqtt_conf_docker.yaml --log-level=DEBUG
 ```
 
 ### Logging
@@ -112,20 +117,27 @@ The system uses Python's built-in logging module with configurable levels:
 
 ## How It Works
 
-1. **Message Listening**: The system creates two MQTT clients to listen for result and trace messages.
+1. **Message Listening**: The system creates multiple MQTT clients to listen for result, trace, and heads messages.
 
-2. **Message Buffering**: Messages are buffered and matched based on:
+2. **Message Buffering**: Messages are buffered in thread-safe buffers with deduplication based on:
    - Same toolbox ID and tool ID
-   - Timestamps within the configured time window (default: 1 second)
+   - Timestamps within the configured time window (default: 5 seconds)
+   - Configurable duplicate handling (ignore, replace, error)
 
-3. **Processing**: When matching messages are found:
-   - Data is extracted according to the configured mappings
-   - Matched pairs are saved to files for reference (in non-DEBUG mode)
-   - The depth inference model processes the data
+3. **Message Correlation**: The SimpleMessageCorrelator finds matching message sets across buffers.
 
-4. **Results Publishing**: Depth estimation results are published back to the MQTT broker
+4. **Parallel Processing**: Matched message sets are submitted to a ProcessingPool with multiple workers:
+   - Each worker loads its own DepthInference model (~1GB memory)
+   - Default: 10 workers for parallel processing
+   - Non-blocking Future-based result handling
 
-5. **Cleanup**: Old messages are periodically removed from the buffer
+5. **Depth Validation**: Results are validated with configurable behaviors:
+   - Publish, skip, or warn on negative depth values
+   - Sequential negative depth tracking
+
+6. **Results Publishing**: Formatted results are published back to the MQTT broker
+
+7. **System Monitoring**: Throughput monitoring tracks if the system is keeping up with message arrival rate
 
 ## Example Use Cases
 
@@ -134,7 +146,7 @@ The system uses Python's built-in logging module with configurable levels:
 Monitor drilling operations in real-time by analyzing depth data:
 
 ```bash
-python listen-continuous.py --log-level=INFO
+python example_usage.py --log-level=INFO
 ```
 
 The system will:
@@ -149,7 +161,7 @@ The system will:
 To troubleshoot data processing problems:
 
 ```bash
-python listen-continuous.py --log-level=DEBUG
+python example_usage.py --log-level=DEBUG
 ```
 
 This will provide detailed logs about:
@@ -166,32 +178,67 @@ For different environments or data structures:
 2. Update broker settings, topic structure, and data mappings
 3. Run with the custom configuration:
    ```bash
-   python listen-continuous.py --config=production_conf.yaml
+   python example_usage.py --config=production_conf.yaml
    ```
 
 ## Key Components
 
-### DrillingDataAnalyser Class
+### DrillingDataAnalyser
 
-The main class that:
-- Connects to the MQTT broker
-- Listens for messages
-- Buffers and matches messages
-- Processes matched pairs
-- Publishes depth estimation results
+The main orchestrator that coordinates all components:
+- Manages MQTT client lifecycle
+- Coordinates message buffering and correlation
+- Submits work to processing pool
+- Handles result publishing
+- Monitors system health
 
-### TimestampedData Class
+### ProcessingPool (SimpleProcessingPool)
 
-A data structure that stores:
-- Unix timestamp of the message
-- Message data
-- Source topic
+Manages parallel processing of depth inference tasks:
+- Worker pool management (default: 10 workers)
+- Model initialization in each worker process
+- Future tracking and result handling
+- Performance metrics collection
 
-### Main Functions
+### MessageBuffer
 
-- `find_and_process_matches()`: Matches result and trace messages
-- `process_matching_messages()`: Processes matched messages to estimate depth
-- `depth_est_ml_mqtt()`: Performs depth estimation using the ML model
+Thread-safe buffer for storing incoming MQTT messages:
+- Store messages with deduplication
+- Provide thread-safe access
+- Track buffer health metrics
+- Handle buffer overflow protection
+
+### SimpleMessageCorrelator
+
+Correlates related messages within a time window:
+- Find matching messages across buffers
+- Process complete message sets
+- Clean up old messages
+- Maintain correlation metrics
+
+### ResultPublisher
+
+Publishes processing results to MQTT:
+- Publish depth estimation results
+- Delegate formatting to ResultMessageFormatter
+- Delegate validation to DepthValidator
+- Handle publish errors
+
+### DepthValidator
+
+Configurable validation for depth estimation results:
+- Three validation behaviors: publish, skip, warning
+- Sequential negative depth tracking
+- Configurable alert thresholds
+- Validation statistics
+
+### ConfigurationManager
+
+Centralized configuration management:
+- YAML configuration loading
+- Default value handling
+- Configuration validation
+- Safe nested access with get() method
 
 ## Customization
 
