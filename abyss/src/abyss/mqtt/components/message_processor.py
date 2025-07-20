@@ -266,8 +266,8 @@ class MessageProcessor:
             
             logging.info(
                 f"Depth estimation completed - "
-                f"Machine: {self.machine_id}, "
-                f"Result: {self.result_id} - "
+                f"Machine ID: {self.machine_id}, "
+                f"Result ID: {self.result_id} - "
                 f"Keypoints: {keypoints_str}, "
                 f"Depths: {depth_str} mm", 
                 extra={
@@ -401,7 +401,7 @@ class MessageProcessor:
             if len(head_id_str) > 100:
                 logging.warning(f"Head ID unusually long ({len(head_id_str)} chars): {head_id_str[:50]}...")
             
-            logging.info(f"Extracted and validated head_id: {head_id_str}")
+            logging.debug(f"Extracted and validated head_id: {head_id_str}")
             return head_id_str
             
         except Exception as e:
