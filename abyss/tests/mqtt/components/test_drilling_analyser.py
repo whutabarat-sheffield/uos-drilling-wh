@@ -10,6 +10,13 @@ import time
 import threading
 from unittest.mock import Mock, patch, MagicMock
 
+# Get the expected version dynamically
+try:
+    from importlib.metadata import version
+    EXPECTED_VERSION = version('abyss')
+except Exception:
+    EXPECTED_VERSION = "0.2.7"  # Fallback version same as in the code
+
 # Import the classes we need to test
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
@@ -77,7 +84,7 @@ class TestDrillingDataAnalyser:
         analyser = DrillingDataAnalyser(config_file)
         
         assert analyser.config_path == config_file
-        assert analyser.ALGO_VERSION == "0.2.7"
+        assert analyser.ALGO_VERSION == EXPECTED_VERSION
         assert analyser.processing_active is False
         assert analyser.processing_thread is None
         
@@ -109,7 +116,7 @@ class TestDrillingDataAnalyser:
         assert 'config_summary' in status
         
         assert status['processing_active'] is False
-        assert status['algo_version'] == "0.2.7"
+        assert status['algo_version'] == EXPECTED_VERSION
         assert status['config_path'] == config_file
     
     @patch('paho.mqtt.client.Client')
@@ -315,6 +322,55 @@ class TestDrillingDataAnalyser:
         
         # Verify no publishing occurred due to invalid source
         analyser.result_publisher.publish_processing_result.assert_not_called()
+    
+    def test_workflow_statistics_tracking(self, config_file, mock_depth_inference):
+        """Test workflow statistics tracking functionality."""
+        analyser = DrillingDataAnalyser(config_file)
+        
+        # Verify initial workflow stats
+        assert analyser._workflow_stats['messages_arrived'] == 0
+        assert analyser._workflow_stats['messages_processed'] == 0
+        assert analyser._workflow_stats['processing_times'] == []
+        assert analyser._workflow_stats['last_processed'] == 0
+        
+        # Test message arrival tracking by simulating MessageBuffer reference
+        analyser._workflow_stats['messages_arrived'] += 1  # Simulate arrival
+        
+        # Mock successful processing result
+        mock_result = Mock()
+        mock_result.success = True
+        mock_result.keypoints = [0.0, 5.0, 10.0]
+        mock_result.depth_estimation = [5.0, 5.0]
+        mock_result.machine_id = "TEST_MACHINE"
+        mock_result.result_id = "TEST_RESULT"
+        
+        analyser.message_processor.process_matching_messages = Mock(return_value=mock_result)
+        analyser.result_publisher = Mock()
+        analyser.result_publisher.publish_processing_result = Mock(return_value=True)
+        
+        # Create test message
+        test_message = TimestampedData(
+            _timestamp=time.time(),
+            _data={'test': 'data'},
+            _source='drilling/data/toolbox1/tool1/Result'
+        )
+        
+        # Process message
+        analyser._process_matched_messages([test_message])
+        
+        # Verify workflow stats were updated
+        assert analyser._workflow_stats['messages_processed'] == 1
+        assert analyser._workflow_stats['last_processed'] > 0
+        assert len(analyser._workflow_stats['processing_times']) == 1
+        assert analyser._workflow_stats['processing_times'][0] > 0  # Should be in milliseconds
+        
+        # Test get_status includes workflow stats
+        status = analyser.get_status()
+        assert 'workflow' in status
+        assert status['workflow']['health'] == 'HEALTHY'
+        assert status['workflow']['last_minute_arrivals'] == 1
+        assert status['workflow']['last_minute_processed'] == 1
+        assert status['workflow']['avg_processing_ms'] > 0
 
 
 if __name__ == '__main__':

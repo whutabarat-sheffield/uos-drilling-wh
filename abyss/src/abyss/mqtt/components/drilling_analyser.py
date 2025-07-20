@@ -56,6 +56,15 @@ class DrillingDataAnalyser:
         self._max_error_history = 100
         self._error_warning_threshold = 10  # Warn if 10 errors in 60 seconds
         
+        # Workflow statistics tracking
+        self._workflow_stats = {
+            'messages_arrived': 0,
+            'messages_processed': 0,
+            'last_reset': time.time(),
+            'processing_times': [],  # Last 10 processing times only
+            'last_processed': 0      # Timestamp of last successful processing
+        }
+        
         # Initialize components
         self._initialize_components()
         
@@ -78,6 +87,8 @@ class DrillingDataAnalyser:
                 max_buffer_size=self.config_manager.get_max_buffer_size(),
                 max_age_seconds=300  # 5 minutes
             )
+            # Set reference for workflow tracking
+            self.message_buffer._analyser_ref = self
             
             # Message correlation
             self.message_correlator = SimpleMessageCorrelator(
@@ -181,6 +192,8 @@ class DrillingDataAnalyser:
         Args:
             matches: List of matched timestamped messages
         """
+        start_time = time.time()
+        
         try:
             # Process the messages
             processing_result = self.message_processor.process_matching_messages(matches)
@@ -215,6 +228,14 @@ class DrillingDataAnalyser:
                             'has_keypoints': processing_result.keypoints is not None,
                             'has_depth_estimation': processing_result.depth_estimation is not None
                         })
+                        
+                        # Update workflow statistics for successful processing
+                        self._workflow_stats['messages_processed'] += 1
+                        self._workflow_stats['last_processed'] = time.time()
+                        processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+                        self._workflow_stats['processing_times'].append(processing_time)
+                        if len(self._workflow_stats['processing_times']) > 10:
+                            self._workflow_stats['processing_times'].pop(0)
                     except Exception as e:
                         logging.warning("Failed to publish results", extra={
                             'toolbox_id': toolbox_id,
@@ -330,6 +351,38 @@ class DrillingDataAnalyser:
                 self.message_buffer.get_all_buffers()
             )
             
+            # Calculate workflow statistics
+            elapsed = time.time() - self._workflow_stats['last_reset']
+            if elapsed > 0:
+                arrival_rate = self._workflow_stats['messages_arrived'] / elapsed
+                processing_rate = self._workflow_stats['messages_processed'] / elapsed
+                
+                # Determine health status
+                health = "HEALTHY"
+                if self._workflow_stats['messages_arrived'] > 0:
+                    if processing_rate < arrival_rate * 0.8:
+                        health = "FALLING_BEHIND"
+                    elif time.time() - self._workflow_stats['last_processed'] > 30:
+                        health = "STALLED"
+                
+                # Calculate average processing time
+                avg_time = sum(self._workflow_stats['processing_times']) / len(self._workflow_stats['processing_times']) if self._workflow_stats['processing_times'] else 0
+                
+                # Only log workflow status if there's activity or issues
+                if self._workflow_stats['messages_arrived'] > 0 or health != "HEALTHY":
+                    logging.info("Workflow status", extra={
+                        'health': health,
+                        'arrival_rate': f"{arrival_rate:.2f} msg/s",
+                        'processing_rate': f"{processing_rate:.2f} msg/s",
+                        'avg_processing_ms': f"{avg_time:.1f}",
+                        'backlog': self._workflow_stats['messages_arrived'] - self._workflow_stats['messages_processed']
+                    })
+                
+                # Reset counters after logging
+                self._workflow_stats['messages_arrived'] = 0
+                self._workflow_stats['messages_processed'] = 0
+                self._workflow_stats['last_reset'] = time.time()
+            
             logging.debug("System status", extra={
                 'processing_active': self.processing_active,
                 'processing_thread_alive': self.processing_thread.is_alive() if self.processing_thread else False,
@@ -419,6 +472,28 @@ class DrillingDataAnalyser:
             
             if hasattr(self, 'client_manager'):
                 status['subscribed_topics'] = self.client_manager.get_subscribed_topics()
+            
+            # Add workflow statistics
+            elapsed = time.time() - self._workflow_stats['last_reset']
+            avg_time = sum(self._workflow_stats['processing_times']) / len(self._workflow_stats['processing_times']) if self._workflow_stats['processing_times'] else 0
+            
+            # Calculate health status
+            health = "HEALTHY"
+            if self._workflow_stats['messages_arrived'] > 0 and elapsed > 0:
+                arrival_rate = self._workflow_stats['messages_arrived'] / elapsed
+                processing_rate = self._workflow_stats['messages_processed'] / elapsed
+                if processing_rate < arrival_rate * 0.8:
+                    health = "FALLING_BEHIND"
+            if self._workflow_stats['last_processed'] > 0 and time.time() - self._workflow_stats['last_processed'] > 30:
+                health = "STALLED"
+            
+            status['workflow'] = {
+                'health': health,
+                'last_minute_arrivals': self._workflow_stats['messages_arrived'],
+                'last_minute_processed': self._workflow_stats['messages_processed'],
+                'avg_processing_ms': round(avg_time, 1),
+                'minutes_since_last_message': round((time.time() - self._workflow_stats['last_processed']) / 60, 1) if self._workflow_stats['last_processed'] > 0 else None
+            }
             
             return status
             

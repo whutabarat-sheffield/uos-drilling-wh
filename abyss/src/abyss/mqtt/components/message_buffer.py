@@ -115,6 +115,10 @@ class MessageBuffer:
             # Record message arrival for throughput monitoring
             if self.throughput_monitor:
                 self.throughput_monitor.record_arrival()
+            
+            # Increment arrival counter for workflow statistics
+            if hasattr(self, '_analyser_ref') and self._analyser_ref:
+                self._analyser_ref._workflow_stats['messages_arrived'] += 1
 
             # Log buffer operation
             buffer_size_before = len(self.buffers[matching_topic])
