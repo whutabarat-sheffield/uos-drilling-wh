@@ -2,6 +2,23 @@
 
 This documentation provides a guide to the Deep Learning Drilling Depth Estimation System, which processes drilling data from MQTT messages to perform depth estimation.
 
+## Quick Start
+
+```bash
+# Clone and build
+git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git
+cd uos-drilling-wh
+make docker-cpu
+
+# Run with Docker Compose (includes MQTT broker)
+docker-compose up -d
+
+# View logs and workflow statistics
+docker logs -f drilling-listener
+```
+
+For detailed installation options, see the [Installation](#installation) section below.
+
 ### Changes in 0.2.7
 
 **Organizational & Quality Release** - This version focuses on repository structure, documentation, and comprehensive test coverage improvements.
@@ -147,41 +164,123 @@ When matching result and trace messages are received, the system processes them 
 
 ### Prerequisites
 
-- Python 3.9+
-- The `abyss` package
-- Key dependencies, namely `transformers`, `tsfm_public`, and `accelerate`
-- For local testing, an MQTT broker such as `mosquitto` should already be installed
-- Docker for virtual machine installation
+- Python 3.9+ (for source installation)
+- Docker (for containerized deployment)
+- MQTT broker (e.g., Mosquitto) for message communication
+- Git for cloning the repository
 
+### Docker Installation (Recommended)
 
-### Steps for virtual machine installation (using Docker)
+The project provides multiple Docker images optimized for different use cases:
 
-1. Clone the entire repository
-2. Build the Docker images for publisher and listener
-3. Run the Docker images
+#### 1. Quick Start with CPU-Optimized Image
 
-Details on step #1
 ```bash
-git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git .
+# Clone the repository
+git clone https://github.com/whutabarat-sheffield/uos-drilling-wh.git
+cd uos-drilling-wh
+
+# Build the CPU-optimized listener image (recommended for most deployments)
+make docker-cpu
+
+# Or manually build without make
+docker build -f Dockerfile -t uos-depthest-listener:cpu .
 ```
 
-Details on step #2 and #3
+#### 2. Running the Listener
+
 ```bash
-#  step #2 build the listener
-docker build -t listener .
+# Run with default configuration
+docker run -it --rm \
+  --name drilling-listener \
+  --network host \
+  uos-depthest-listener:cpu
+
+# Run with custom configuration
+docker run -it --rm \
+  --name drilling-listener \
+  -v $(pwd)/config/mqtt_conf_docker.yaml:/app/config/mqtt_conf_docker.yaml \
+  --network host \
+  uos-depthest-listener:cpu \
+  --config=/app/config/mqtt_conf_docker.yaml --log-level=INFO
 ```
 
-```
-# step #3 run the listener
-docker run -t listener
+#### 3. Available Docker Images
+
+- **CPU Listener** (`make docker-cpu`): Optimized for CPU-only deployments, smallest size
+- **Main Listener** (`make docker-main`): Includes PyTorch for advanced features
+- **GPU Runtime** (`make docker-runtime`): For GPU-accelerated deployments
+- **Publisher** (`make docker-publisher`): Lightweight MQTT message publisher for testing
+
+### Portainer Deployment
+
+For production deployments using Portainer:
+
+1. **Prepare the Stack**
+   ```bash
+   # Navigate to the deployment directory
+   cd mqtt-multistack/simple-tracking
+   
+   # Review the Portainer stack configuration
+   cat docker-compose.portainer.yml
+   ```
+
+2. **Deploy in Portainer**
+   - Log into your Portainer instance
+   - Navigate to Stacks → Add Stack
+   - Name your stack (e.g., "drilling-depth-estimation")
+   - Copy the contents of `docker-compose.portainer.yml`
+   - Configure environment variables:
+     - `MQTT_BROKER_HOST`: Your MQTT broker address
+     - `LOG_LEVEL`: Set to INFO or DEBUG
+   - Deploy the stack
+
+3. **Verify Deployment**
+   - Check container logs in Portainer
+   - Look for "Drilling data analyser started successfully"
+   - Monitor workflow statistics (logged every 60 seconds)
+
+### Configuration Notes
+
+The Docker images use `/app/config/` for configuration files:
+- Default config: `/app/config/mqtt_conf_docker.yaml`
+- Mount custom configs using `-v` flag
+- Environment variables override config file settings
+
+### Docker Compose Deployment
+
+For multi-container deployments with MQTT broker:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-logs:/mosquitto/log
+
+  drilling-listener:
+    image: uos-depthest-listener:cpu
+    depends_on:
+      - mqtt-broker
+    environment:
+      - MQTT_BROKER_HOST=mqtt-broker
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./config/mqtt_conf_docker.yaml:/app/config/mqtt_conf_docker.yaml
+    command: --config=/app/config/mqtt_conf_docker.yaml
+
+volumes:
+  mosquitto-data:
+  mosquitto-logs:
 ```
 
-The listener is callable from the command line as:
-```bash 
-uos_depthest_listener --config=mqtt_conf_local.yaml --log-level=INFO
-```
-
-The docker build will setup a workspace under `/app` directory, with configuration files available in `/app/config/`. 
+Run with: `docker-compose up -d` 
 
 ### Steps for direct installation using sources
 
@@ -217,6 +316,31 @@ The docker build will setup a workspace under `/app` directory, with configurati
    # Show available targets
    make help
    ```
+
+### Build System
+
+The project includes a comprehensive Makefile for common tasks:
+
+```bash
+# Python wheel builds
+make build          # Build wheel with validation
+make install        # Build and install locally
+make clean          # Clean build artifacts
+
+# Docker builds
+make docker-cpu     # Build CPU-optimized image (recommended)
+make docker-all     # Build all Docker variants
+make docker-list    # List project Docker images
+make docker-clean   # Remove all project images
+
+# Combined workflows
+make quick-start    # Build wheel + CPU Docker image
+make full-build     # Build wheel + all Docker images
+
+# Help and diagnostics
+make help           # Show all available targets
+make check-tools    # Verify required tools installed
+```
 
 ### Steps for direct installation using wheels
 1. Download all of the files in the `release` section apart from the source code files. 
@@ -452,33 +576,84 @@ The system is now built with modular components for better maintainability and t
 
 To adapt the system to your specific needs:
 
-1. Update the appropriate configuration file (`mqtt_conf_local.yaml` or `mqtt_conf_docker.yaml`) with your specific:
-   - MQTT broker details
-   - Topic structure and data field mappings
-   - Duplicate handling strategy
-   - Time windows and cleanup intervals
+### 1. Configuration Files
 
-2. Customize message processing by modifying the `MessageProcessor` component
+Update the appropriate configuration file with your specific settings:
 
-3. Adjust correlation strategies by selecting between `SimpleMessageCorrelator` and `MessageCorrelator`
+```yaml
+# Key configuration sections in mqtt_conf_docker.yaml
+mqtt:
+  broker:
+    host: "your-mqtt-broker"  # Use actual broker IP/hostname
+    port: 1883
+  listener:
+    duplicate_handling: "ignore"  # Options: ignore, replace, error
+    time_window: 30.0  # Correlation window in seconds
+  depth_validation:
+    negative_depth_behavior: "publish"  # Options: publish, skip, warning
+```
 
-4. Configure deployment-specific settings:
-   - For local development: Use `mqtt_conf_local.yaml`
-   - For Docker deployment: Use `mqtt_conf_docker.yaml`
-   - For Portainer deployment: Configure volume mounts appropriately
+### 2. Deployment Environments
+
+- **Local Development**: 
+  ```bash
+  # Use mqtt_conf_local.yaml with localhost broker
+  uos_depthest_listener --config=mqtt_conf_local.yaml
+  ```
+
+- **Docker Deployment**:
+  ```bash
+  # Mount your custom config
+  docker run -v $(pwd)/custom_config.yaml:/app/config/mqtt_conf_docker.yaml ...
+  ```
+
+- **Portainer Deployment**:
+  - Use environment variables in stack configuration
+  - Mount config files as volumes
+  - Configure external networks for MQTT connectivity
+
+### 3. Advanced Customization
+
+- **Message Processing**: Extend `MessageProcessor` class in `abyss/src/abyss/mqtt/components/message_processor.py`
+- **Correlation Logic**: Modify `SimpleMessageCorrelator` for custom matching rules
+- **Result Publishing**: Customize `ResultPublisher` for different output formats
+- **Workflow Monitoring**: Adjust thresholds in `DrillingDataAnalyser` for your message rates
 
 ## Troubleshooting
 
-Common issues and solutions:
+### Common Docker Issues
+
+1. **Docker Network Issues**:
+   ```bash
+   # Container can't connect to MQTT broker
+   docker run --network host ...  # Use host network
+   # OR
+   docker run --link mqtt-broker:broker ...  # Link containers
+   ```
+
+2. **Permission Denied Errors**:
+   ```bash
+   # Fix volume mount permissions
+   chmod -R 755 ./config
+   docker run -u $(id -u):$(id -g) ...  # Run as current user
+   ```
+
+3. **Container Exits Immediately**:
+   ```bash
+   # Check logs for errors
+   docker logs <container-name>
+   # Run interactively to debug
+   docker run -it --entrypoint /bin/bash uos-depthest-listener:cpu
+   ```
+
+### MQTT Connection Issues
 
 1. **Connection Problems**:
    - Verify broker host and port in config file
-   - Check network connectivity
-   - Ensure credentials are correct if authentication is required
-   - For testing in linux localhost, update the broker host to 'localhost'
-   - Ensure that a broker such as mosquitto is installed. Testing in Windows without a broker present creates this issue:
- 
-![image](https://github.airbus.corp/Airbus/uos-drilling/assets/13312/cf83fca7-a50e-485c-84ef-081efa391285)
+   - For Docker: use container name (e.g., `mqtt-broker`) not `localhost`
+   - For host network: use actual host IP, not `127.0.0.1`
+   - Check firewall rules for port 1883
+   - Test with mosquitto_sub: `mosquitto_sub -h broker-ip -t '#' -v`
 
 
 2. **No Messages Being Processed**:
