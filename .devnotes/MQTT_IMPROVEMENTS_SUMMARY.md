@@ -145,7 +145,7 @@ The system now supports configurable duplicate handling strategies:
 ## Testing Results
 
 The load tests demonstrate:
-- System can handle >1000 messages/second
+- System can handle up to 100 messages/second
 - Thread safety under 20+ concurrent threads
 - Recovery from overload conditions
 - Appropriate warning generation under stress

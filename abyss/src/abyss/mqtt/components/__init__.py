@@ -14,23 +14,13 @@ from .result_publisher import ResultPublisher
 from .config_manager import ConfigurationManager
 from .drilling_analyser import DrillingDataAnalyser
 
-# Import all exceptions
+# Import simplified exceptions
 from .exceptions import (
     AbyssError,
-    AbyssConfigurationError,
     AbyssCommunicationError,
     AbyssProcessingError,
-    AbyssSystemError,
-    MQTTConnectionError,
     MQTTPublishError,
-    MQTTSubscriptionError,
-    MessageValidationError,
-    MessageCorrelationError,
-    DepthEstimationError,
-    DataConversionError,
-    BufferOverflowError,
-    ResourceExhaustionError,
-    ComponentInitializationError
+    wrap_exception
 )
 
 __all__ = [
@@ -43,20 +33,10 @@ __all__ = [
     'ConfigurationManager',
     'DrillingDataAnalyser',
     
-    # Exceptions
+    # Simplified exceptions
     'AbyssError',
-    'AbyssConfigurationError',
     'AbyssCommunicationError',
     'AbyssProcessingError',
-    'AbyssSystemError',
-    'MQTTConnectionError',
     'MQTTPublishError',
-    'MQTTSubscriptionError',
-    'MessageValidationError',
-    'MessageCorrelationError',
-    'DepthEstimationError',
-    'DataConversionError',
-    'BufferOverflowError',
-    'ResourceExhaustionError',
-    'ComponentInitializationError'
+    'wrap_exception'
 ]

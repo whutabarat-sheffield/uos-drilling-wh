@@ -18,6 +18,8 @@ from .simple_correlator import SimpleMessageCorrelator
 from .message_processor import MessageProcessor
 from .data_converter import DataFrameConverter
 from .result_publisher import ResultPublisher
+from .processing_pool import SimpleProcessingPool
+from .throughput_monitor import SimpleThroughputMonitor
 
 from ...uos_depth_est import TimestampedData
 from ...uos_depth_est_core import DepthInference
@@ -55,6 +57,11 @@ class DrillingDataAnalyser:
         self._processing_errors = []
         self._max_error_history = 100
         self._error_warning_threshold = 10  # Warn if 10 errors in 60 seconds
+        
+        # Processing pool and monitoring
+        self.processing_pool = None
+        self.throughput_monitor = None
+        self.last_status_log_time = 0
         
         # Initialize components
         self._initialize_components()
@@ -108,7 +115,16 @@ class DrillingDataAnalyser:
             # Result publishing (will be set up after clients are created)
             self.result_publisher = None
             
-            logging.info("All components initialized successfully")
+            # Initialize processing pool
+            num_workers = self.config_manager.get('mqtt.processing.workers', 10)
+            self.processing_pool = SimpleProcessingPool(max_workers=num_workers, config_path=self.config_path)
+            
+            # Initialize throughput monitor
+            self.throughput_monitor = SimpleThroughputMonitor(sample_rate=0.1)
+            
+            logging.info("All components initialized successfully", extra={
+                'processing_workers': num_workers
+            })
             
         except Exception as e:
             logging.error("Failed to initialize components", extra={
@@ -141,18 +157,32 @@ class DrillingDataAnalyser:
         
         This replicates the continuous_processing method from the original class.
         """
-        logging.info("Starting continuous processing thread")
+        logging.info("Starting continuous processing thread with worker pool")
+        
+        log_interval = 30.0  # Log status every 30 seconds
         
         while self.processing_active:
             try:
+                # Record message arrival for monitoring
+                self.throughput_monitor.record_arrival()
+                
                 # Get all buffer contents
                 buffers = self.message_buffer.get_all_buffers()
                 
                 # Find and process matches
                 matches_found = self.message_correlator.find_and_process_matches(
                     buffers=buffers,
-                    message_processor=self._process_matched_messages
+                    message_processor=self._submit_to_pool  # Changed to pool submission
                 )
+                
+                # Collect completed results from pool
+                self.processing_pool.collect_completed()
+                
+                # Log simple status every 30 seconds
+                current_time = time.time()
+                if current_time - self.last_status_log_time >= log_interval:
+                    self._log_simple_status()
+                    self.last_status_log_time = current_time
                 
                 if not matches_found:
                     # Sleep if no matches found to avoid CPU spinning
@@ -172,6 +202,10 @@ class DrillingDataAnalyser:
                 
                 time.sleep(1)  # Longer sleep on error to prevent rapid error loops
         
+        # Shutdown pool when stopping
+        if self.processing_pool:
+            self.processing_pool.shutdown()
+            
         logging.info("Continuous processing thread stopped")
     
     def _process_matched_messages(self, matches: List[TimestampedData]):
@@ -235,6 +269,125 @@ class DrillingDataAnalyser:
                 'error_message': str(e),
                 'message_count': len(matches)
             }, exc_info=True)
+    
+    def _submit_to_pool(self, matches: List[TimestampedData]):
+        """
+        Submit matched messages to processing pool.
+        
+        Args:
+            matches: List of matched timestamped messages
+        """
+        start_time = time.time()
+        
+        # Try to submit to pool
+        submitted = self.processing_pool.submit(
+            matches,
+            callback=lambda result: self._handle_pool_result(result, matches, start_time)
+        )
+        
+        if not submitted:
+            logging.warning("Processing pool full - applying backpressure")
+            # Buffer will handle overflow
+    
+    def _handle_pool_result(self, result: Dict[str, Any], matches: List[TimestampedData], start_time: float):
+        """
+        Handle result from pool processing.
+        
+        Args:
+            result: Processing result from pool
+            matches: Original matched messages
+            start_time: When processing started
+        """
+        # Record completion for monitoring
+        self.throughput_monitor.record_processing_complete(start_time)
+        
+        # Convert result dict back to ProcessingResult-like object
+        class ProcessingResult:
+            def __init__(self, result_dict):
+                self.success = result_dict.get('success', False)
+                self.keypoints = result_dict.get('keypoints')
+                self.depth_estimation = result_dict.get('depth_estimation')
+                self.machine_id = result_dict.get('machine_id')
+                self.result_id = result_dict.get('result_id')
+                self.head_id = result_dict.get('head_id')
+                self.error_message = result_dict.get('error_message')
+        
+        processing_result = ProcessingResult(result)
+        
+        # Existing result handling logic
+        if not processing_result.success:
+            logging.warning("Message processing failed", extra={
+                'error_message': processing_result.error_message
+            })
+            return
+        
+        # Extract tool information from the first message
+        first_message = matches[0]
+        parts = first_message.source.split('/')
+        if len(parts) >= 3:
+            toolbox_id = parts[1]
+            tool_id = parts[2]
+            
+            # Publish results if publisher is available
+            if self.result_publisher:
+                try:
+                    self.result_publisher.publish_processing_result(
+                        processing_result=processing_result,
+                        toolbox_id=toolbox_id,
+                        tool_id=tool_id,
+                        timestamp=first_message.timestamp,
+                        algo_version=self.ALGO_VERSION
+                    )
+                    
+                    logging.debug("Results published successfully", extra={
+                        'toolbox_id': toolbox_id,
+                        'tool_id': tool_id,
+                        'has_keypoints': processing_result.keypoints is not None,
+                        'has_depth_estimation': processing_result.depth_estimation is not None
+                    })
+                except Exception as e:
+                    logging.warning("Failed to publish results", extra={
+                        'toolbox_id': toolbox_id,
+                        'tool_id': tool_id,
+                        'error_type': type(e).__name__,
+                        'error_message': str(e)
+                    })
+    
+    def _log_simple_status(self):
+        """Log simple status every 30 seconds."""
+        try:
+            # Get throughput status
+            status = self.throughput_monitor.get_status()
+            
+            # Get pool queue depth
+            queue_depth = self.processing_pool.get_queue_depth()
+            
+            # Get buffer stats
+            buffer_stats = self.message_buffer.get_buffer_stats()
+            
+            # Simple log message
+            if status.status == 'FALLING_BEHIND':
+                logging.warning(
+                    f"System falling behind: "
+                    f"IN: {status.details.get('arrival_rate', 'N/A')} msg/s, "
+                    f"OUT: {status.details.get('processing_rate', 'N/A')} msg/s, "
+                    f"Queue: {queue_depth}, "
+                    f"Buffer: {buffer_stats['total_messages']} msgs"
+                )
+            else:
+                logging.info(
+                    f"System healthy: "
+                    f"IN: {status.details.get('arrival_rate', 'N/A')} msg/s, "
+                    f"OUT: {status.details.get('processing_rate', 'N/A')} msg/s, "
+                    f"Queue: {queue_depth}"
+                )
+            
+            # Alert if queue is getting too deep
+            if queue_depth > 15:
+                logging.error(f"Processing queue critical: {queue_depth} pending")
+                
+        except Exception as e:
+            logging.debug(f"Error logging status: {e}")
     
     def run(self):
         """

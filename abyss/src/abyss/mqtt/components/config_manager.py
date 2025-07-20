@@ -10,10 +10,7 @@ import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
-
-class ConfigurationError(Exception):
-    """Exception raised for configuration-related errors."""
-    pass
+from ...uos_depth_est import ConfigurationError
 
 
 class ConfigurationManager:

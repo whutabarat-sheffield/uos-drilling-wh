@@ -9,7 +9,7 @@ import logging
 import threading
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Union, Deque
 import time as time_module
 
 from ...uos_depth_est import TimestampedData, ConfigurationError
@@ -73,18 +73,16 @@ class MessageBuffer:
         self.last_cleanup = datetime.now().timestamp()
         self.last_cleanup_by_topic: Dict[str, float] = {}  # Track cleanup times per topic
         
-        # Performance metrics
+        # Buffer-specific metrics only
         self._metrics = {
-            'messages_received': 0,
-            'messages_dropped': 0,
-            'messages_processed': 0,
-            'duplicate_messages': 0,
-            'cleanup_cycles': 0,
-            'last_warning_time': {},  # Track last warning time by type to avoid spam
-            'processing_times': deque(maxlen=1000),  # Keep last 1000 processing times
-            'messages_dropped_by_topic': defaultdict(int),  # Track drops per topic
-            'messages_dropped_age': defaultdict(int),  # Drops due to age
-            'messages_dropped_size': defaultdict(int)  # Drops due to size limit
+            'messages_received': 0,  # Total received
+            'messages_dropped': 0,   # Total dropped
+            'duplicate_messages': 0, # Duplicates detected
+            'cleanup_cycles': 0,     # Number of cleanups
+            'last_warning_time': {}, # Track last warning time by type
+            'messages_dropped_by_topic': defaultdict(int),  # Drops per topic
+            'messages_dropped_age': defaultdict(int),       # Drops due to age
+            'messages_dropped_size': defaultdict(int)       # Drops due to size limit
         }
         self._metrics_lock = threading.Lock()
         
@@ -105,7 +103,6 @@ class MessageBuffer:
         Returns:
             True if message was added successfully, False otherwise
         """
-        start_time = time_module.time()
         try:
             # Validation
             if not data or not data.source:
@@ -221,11 +218,8 @@ class MessageBuffer:
             # Trigger cleanup if needed
             self._check_cleanup_triggers()
             
-            # Track processing time and successful addition
-            processing_time = time_module.time() - start_time
-            with self._metrics_lock:
-                self._metrics['messages_processed'] += 1
-                self._metrics['processing_times'].append(processing_time)
+            # Note: Processing time tracking removed - this is buffer insertion time, not processing
+            # Actual processing happens in the ProcessingPool
             
             return True
             
@@ -593,7 +587,8 @@ class MessageBuffer:
             List of messages for the topic
         """
         with self._buffer_lock:
-            return self.buffers.get(topic_pattern, []).copy()
+            buffer = self.buffers.get(topic_pattern, deque())
+            return list(buffer)
     
     def get_all_buffers(self) -> Dict[str, List[TimestampedData]]:
         """
@@ -603,7 +598,7 @@ class MessageBuffer:
             Dictionary mapping topic patterns to message lists
         """
         with self._buffer_lock:
-            return {topic: buffer.copy() for topic, buffer in self.buffers.items()}
+            return {topic: list(buffer) for topic, buffer in self.buffers.items()}
     
     def clear_buffer(self, topic_pattern: Optional[str] = None):
         """
@@ -681,33 +676,3 @@ class MessageBuffer:
                             'oldest_timestamp': datetime.fromtimestamp(oldest_msg.timestamp).isoformat()
                         })
     
-    def get_metrics(self) -> Dict[str, Any]:
-        """
-        Get current performance metrics.
-        
-        Returns:
-            Dictionary containing performance metrics
-        """
-        with self._metrics_lock:
-            metrics = self._metrics.copy()
-            # Calculate rates
-            total = metrics['messages_received'] + metrics['messages_dropped']
-            metrics['drop_rate'] = metrics['messages_dropped'] / total if total > 0 else 0
-            metrics['duplicate_rate'] = metrics['duplicate_messages'] / total if total > 0 else 0
-            
-            # Calculate average processing time
-            if metrics['processing_times']:
-                metrics['avg_processing_time_ms'] = sum(metrics['processing_times']) / len(metrics['processing_times']) * 1000
-            else:
-                metrics['avg_processing_time_ms'] = 0
-            
-            # Add per-topic drop information
-            metrics['drops_by_topic'] = dict(metrics['messages_dropped_by_topic'])
-            metrics['drops_by_age'] = dict(metrics['messages_dropped_age'])
-            metrics['drops_by_size'] = dict(metrics['messages_dropped_size'])
-            
-            # Add hysteresis information
-            metrics['hysteresis_factor'] = self.hysteresis_factor
-            metrics['cleanup_target_size'] = self.cleanup_target_size
-                
-            return metrics
