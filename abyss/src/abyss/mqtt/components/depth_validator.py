@@ -85,16 +85,23 @@ class DepthValidator:
         Returns:
             ValidationResult indicating what action to take
         """
-        # Check if result has required data
-        if not result.success or result.depth_estimation is None:
+        # Check if result has required data - only skip if unsuccessful
+        if not result.success:
             return ValidationResult(
                 is_valid=False,
                 action='skip',
-                reason='No depth estimation available'
+                reason='Processing was unsuccessful'
             )
         
-        # Check for negative depth values
-        negative_values = [d for d in result.depth_estimation if d < 0]
+        # Allow None depth estimation to proceed (for insufficient data messages)
+        if result.depth_estimation is None:
+            return ValidationResult(
+                is_valid=True,
+                action='publish'
+            )
+        
+        # Check for negative depth values (excluding None values)
+        negative_values = [d for d in result.depth_estimation if d is not None and d < 0]
         
         if negative_values:
             return self._handle_negative_depths(result, negative_values)

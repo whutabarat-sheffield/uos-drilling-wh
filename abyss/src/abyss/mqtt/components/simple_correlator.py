@@ -8,7 +8,7 @@ Simplified approach replacing complex time-bucket grouping with direct key match
 import logging
 import time
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple, Any, Callable, Optional, Union
+from typing import Dict, List, Set, Tuple, Any, Callable, Optional
 
 from ...uos_depth_est import TimestampedData
 from .config_manager import ConfigurationManager
@@ -25,42 +25,32 @@ class SimpleMessageCorrelator:
     - Provide correlation statistics
     """
     
-    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], time_window: float = 30.0):
+    def __init__(self, config: ConfigurationManager, time_window: float = 30.0):
         """
         Initialize SimpleMessageCorrelator.
         
         Args:
-            config: Configuration dictionary or ConfigurationManager instance
+            config: ConfigurationManager instance
             time_window: Time window for message correlation (seconds)
         """
-        if isinstance(config, ConfigurationManager):
-            self.config_manager = config
-            self.time_window = time_window if time_window != 30.0 else config.get_time_window()
-            # Get topic patterns from ConfigurationManager
-            self._topic_patterns = config.get_topic_patterns()
-        else:
-            # Legacy support
-            self.config_manager = None
-            self.config = config
-            self.time_window = time_window
-            
-            # Pre-compute topic patterns (legacy method)
-            listener_config = self.config['mqtt']['listener']
-            self._topic_patterns = {
-                'result': f"{listener_config['root']}/+/+/{listener_config['result']}",
-                'trace': f"{listener_config['root']}/+/+/{listener_config['trace']}"
-            }
-            
-            # Add heads pattern only if configured
-            if 'heads' in listener_config:
-                self._topic_patterns['heads'] = f"{listener_config['root']}/+/+/{listener_config['heads']}"
-                logging.debug("Heads topic configured, adding pattern")
-                logging.debug(f"Topic patterns: {self._topic_patterns['heads']}")
+        self.config_manager = config
+        self.time_window = time_window if time_window != 30.0 else config.get_time_window()
+        # Get topic patterns from ConfigurationManager
+        self._topic_patterns = config.get_topic_patterns()
+        # Get debug mode setting
+        self.debug_mode = config.get_correlation_debug_mode()
         
         # Track correlation failures for warning detection
         self._correlation_failures = defaultdict(int)  # tool_key -> failure count
         self._last_warning_time = {}  # warning_type -> timestamp
         self._unprocessed_threshold = 100  # Warn when unprocessed messages exceed this
+        
+        # Track correlation successes
+        self._correlation_successes = 0  # Total successful correlations
+        self._correlation_attempts = 0  # Total correlation attempts
+        
+        # Heads message cleanup settings
+        self.heads_cleanup_timeout = 60.0  # Clean up heads messages after 60 seconds
     
     def find_and_process_matches(self, buffers: Dict[str, List[TimestampedData]], 
                                 message_processor: Callable) -> bool:
@@ -88,7 +78,23 @@ class SimpleMessageCorrelator:
             
             if not result_messages or not trace_messages:
                 logging.debug("Insufficient messages for correlation")
+                
+                # Debug mode: log more details about why correlation can't proceed
+                if self.debug_mode:
+                    logging.debug("Correlation debug - insufficient messages", extra={
+                        'has_result': len(result_messages) > 0,
+                        'has_trace': len(trace_messages) > 0,
+                        'result_count': len(result_messages),
+                        'trace_count': len(trace_messages),
+                        'buffer_state': {
+                            topic: len(msgs) for topic, msgs in buffers.items()
+                        }
+                    })
+                
                 return False
+            
+            # Increment correlation attempts
+            self._correlation_attempts += 1
             
             # Find matches using simple key-based approach
             matches_found, processed_messages = self._find_key_based_matches(
@@ -97,6 +103,9 @@ class SimpleMessageCorrelator:
             
             # Mark processed messages
             self._mark_messages_as_processed(processed_messages)
+            
+            # Clean up orphaned heads messages
+            self._cleanup_orphaned_heads(heads_messages, processed_messages, buffers)
             
             logging.debug("Correlation process completed", extra={
                 'matches_found': matches_found,
@@ -206,6 +215,13 @@ class SimpleMessageCorrelator:
         # Find matches for each tool key
         for tool_key in result_by_key.keys():
             if tool_key in trace_by_key:
+                if self.debug_mode:
+                    logging.debug(f"Correlation debug - attempting to match tool_key: {tool_key}", extra={
+                        'result_msgs': len(result_by_key[tool_key]),
+                        'trace_msgs': len(trace_by_key[tool_key]),
+                        'heads_msgs': len(heads_by_key.get(tool_key, []))
+                    })
+                
                 key_matches = self._process_key_matches(
                     tool_key,
                     result_by_key[tool_key],
@@ -215,6 +231,8 @@ class SimpleMessageCorrelator:
                     message_processor
                 )
                 matches_found = matches_found or key_matches
+            elif self.debug_mode:
+                logging.debug(f"Correlation debug - no trace messages for tool_key: {tool_key}")
         
         return matches_found, processed_messages
     
@@ -245,50 +263,64 @@ class SimpleMessageCorrelator:
                 
             # Find matching trace message within time window
             for trace_msg in trace_msgs:
-                if (trace_msg not in processed_messages and
-                    abs(result_msg.timestamp - trace_msg.timestamp) <= self.time_window):
-                    
-                    # Find matching heads message (optional)
-                    heads_msg = self._find_matching_heads_message(
-                        result_msg, heads_msgs, processed_messages
-                    )
-                    
-                    # Create match group
-                    match_group = [result_msg, trace_msg]
-                    if heads_msg:
-                        match_group.append(heads_msg)
-                    
-                    try:
-                        logging.debug("Found matching message pair", extra={
-                            'tool_key': tool_key,
-                            'result_timestamp': result_msg.timestamp,
-                            'trace_timestamp': trace_msg.timestamp,
-                            'time_difference': abs(result_msg.timestamp - trace_msg.timestamp),
-                            'has_heads_message': heads_msg is not None
-                        })
+                if trace_msg not in processed_messages:
+                    time_diff = abs(result_msg.timestamp - trace_msg.timestamp)
+                    if time_diff <= self.time_window:
                         
-                        # Reset failure count for successful correlation
-                        if tool_key in self._correlation_failures:
-                            self._correlation_failures[tool_key] = 0
+                        # Find matching heads message (optional)
+                        heads_msg = self._find_matching_heads_message(
+                            result_msg, heads_msgs, processed_messages
+                        )
                         
-                        # Process the match
-                        message_processor(match_group)
-                        matches_found = True
-                        
-                        # Mark messages as processed
-                        processed_messages.add(result_msg)
-                        processed_messages.add(trace_msg)
+                        # Create match group
+                        match_group = [result_msg, trace_msg]
                         if heads_msg:
-                            processed_messages.add(heads_msg)
+                            match_group.append(heads_msg)
                         
-                    except Exception as e:
-                        logging.error("Error processing message match", extra={
-                            'tool_key': tool_key,
-                            'error_type': type(e).__name__,
-                            'error_message': str(e)
-                        })
-                    
-                    break  # Only match each result message once
+                        try:
+                            logging.debug("Found matching message pair", extra={
+                                'tool_key': tool_key,
+                                'result_timestamp': result_msg.timestamp,
+                                'trace_timestamp': trace_msg.timestamp,
+                                'time_difference': abs(result_msg.timestamp - trace_msg.timestamp),
+                                'has_heads_message': heads_msg is not None
+                            })
+                        
+                            # Reset failure count for successful correlation
+                            if tool_key in self._correlation_failures:
+                                self._correlation_failures[tool_key] = 0
+                            
+                            # Process the match
+                            message_processor(match_group)
+                            matches_found = True
+                            
+                            # Increment success counter
+                            self._correlation_successes += 1
+                            
+                            # Mark messages as processed
+                            processed_messages.add(result_msg)
+                            processed_messages.add(trace_msg)
+                            if heads_msg:
+                                processed_messages.add(heads_msg)
+                            
+                        except Exception as e:
+                            logging.error("Error processing message match", extra={
+                                'tool_key': tool_key,
+                                'error_type': type(e).__name__,
+                                'error_message': str(e)
+                            })
+                        
+                        break  # Only match each result message once
+                
+                elif self.debug_mode:
+                    # Debug: log why messages didn't match
+                    logging.debug("Correlation debug - messages outside time window", extra={
+                        'tool_key': tool_key,
+                        'result_timestamp': result_msg.timestamp,
+                        'trace_timestamp': trace_msg.timestamp,
+                        'time_difference': time_diff,
+                        'time_window': self.time_window
+                    })
         
         # Track correlation failures for this tool
         if not matches_found and tool_key:
@@ -347,7 +379,11 @@ class SimpleMessageCorrelator:
             'total_messages': total_messages,
             'unprocessed_messages': unprocessed_messages,
             'time_window': self.time_window,
-            'correlation_approach': 'simple_key_based'
+            'correlation_approach': 'simple_key_based',
+            'correlation_attempts': self._correlation_attempts,
+            'correlation_successes': self._correlation_successes,
+            'correlation_success_rate': (self._correlation_successes / self._correlation_attempts * 100 
+                                       if self._correlation_attempts > 0 else 0.0)
         }
     
     def _check_correlation_health(self, buffers: Dict[str, List[TimestampedData]], 
@@ -403,3 +439,45 @@ class SimpleMessageCorrelator:
         if current_time - last_warning >= min_interval:
             logging.warning(message, extra=extra)
             self._last_warning_time[warning_type] = current_time
+    
+    def _cleanup_orphaned_heads(self, heads_messages: List[TimestampedData], 
+                               processed_messages: Set[TimestampedData],
+                               buffers: Dict[str, List[TimestampedData]]):
+        """
+        Clean up heads messages that are too old to correlate.
+        
+        Args:
+            heads_messages: List of heads messages from buffer
+            processed_messages: Set of already processed messages  
+            buffers: Message buffers to update
+        """
+        current_time = time.time()
+        heads_cleaned = 0
+        
+        # Get the heads buffer
+        heads_topic = self._topic_patterns.get('heads')
+        if not heads_topic or heads_topic not in buffers:
+            return
+            
+        heads_buffer = buffers[heads_topic]
+        
+        # Check each heads message
+        for heads_msg in heads_messages:
+            if heads_msg not in processed_messages:
+                age = current_time - heads_msg.timestamp
+                if age > self.heads_cleanup_timeout:
+                    # Mark as processed to prevent further correlation attempts
+                    heads_msg.processed = True
+                    heads_cleaned += 1
+                    
+                    if self.debug_mode:
+                        tool_key = self._extract_tool_key(heads_msg.source)
+                        logging.info(f"Cleaned up orphaned heads message", extra={
+                            'tool_key': tool_key,
+                            'age_seconds': age,
+                            'timestamp': heads_msg.timestamp,
+                            'source': heads_msg.source
+                        })
+        
+        if heads_cleaned > 0:
+            logging.info(f"Cleaned up {heads_cleaned} orphaned heads messages older than {self.heads_cleanup_timeout}s")

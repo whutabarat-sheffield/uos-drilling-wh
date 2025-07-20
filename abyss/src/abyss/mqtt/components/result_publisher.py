@@ -7,7 +7,7 @@ to specialized components for better separation of concerns.
 
 import logging
 import json
-from typing import Dict, Optional, Any, Union
+from typing import Dict, Optional, Any
 import paho.mqtt.client as mqtt
 
 from .message_processor import ProcessingResult
@@ -25,23 +25,16 @@ class ResultPublisher:
     and validation delegated to specialized components.
     """
     
-    def __init__(self, mqtt_client: mqtt.Client, config: Union[Dict[str, Any], ConfigurationManager]):
+    def __init__(self, mqtt_client: mqtt.Client, config: ConfigurationManager):
         """
         Initialize ResultPublisher.
         
         Args:
             mqtt_client: MQTT client for publishing results
-            config: Configuration dictionary or ConfigurationManager instance
+            config: ConfigurationManager instance
         """
         self.mqtt_client = mqtt_client
-        
-        if isinstance(config, ConfigurationManager):
-            self.config_manager = config
-            self.config = config.get_raw_config()
-        else:
-            # Legacy support for raw config dictionary
-            self.config_manager = ConfigurationManager(config)
-            self.config = config
+        self.config_manager = config
         
         # Initialize components
         self.formatter = ResultMessageFormatter()
@@ -97,7 +90,9 @@ class ResultPublisher:
                 result_type = ResultType.ERROR
                 error_msg = processing_result.error_message or "Processing failed"
             elif (processing_result.keypoints is None or 
-                  processing_result.depth_estimation is None):
+                  processing_result.depth_estimation is None or
+                  (isinstance(processing_result.keypoints, list) and len(processing_result.keypoints) == 0) or
+                  (isinstance(processing_result.depth_estimation, list) and len(processing_result.depth_estimation) == 0)):
                 result_type = ResultType.INSUFFICIENT_DATA
                 error_msg = None
             elif validation.action == 'publish_with_warning':
@@ -119,6 +114,11 @@ class ResultPublisher:
             # Publish each message
             for topic_suffix, payload in messages.items():
                 topic = self._build_topic(toolbox_id, tool_id, topic_suffix)
+                logging.debug(f"Publishing to topic: {topic}", extra={
+                    'topic_suffix': topic_suffix,
+                    'toolbox_id': toolbox_id,
+                    'tool_id': tool_id
+                })
                 self._publish_message(topic, payload)
             
             # Log success
@@ -133,7 +133,7 @@ class ResultPublisher:
                 'error_message': str(e),
                 'toolbox_id': toolbox_id,
                 'tool_id': tool_id
-            })
+            }, exc_info=True)
             raise wrap_exception(e, MQTTPublishError, "Failed to publish processing result")
     
     def publish_custom_result(self, 
@@ -168,8 +168,30 @@ class ResultPublisher:
     
     def _build_topic(self, toolbox_id: str, tool_id: str, result_type: str) -> str:
         """Build MQTT topic for publishing."""
-        listener = self.config['mqtt']['listener']
-        return f"{listener['root']}/{toolbox_id}/{tool_id}/{listener['result']}/{result_type}"
+        # Get the estimation path from config - these ARE used as topic suffixes
+        # This maintains compatibility with the old system
+        estimation_config = self.config_manager.get_mqtt_estimation_config()
+        estimation_path = estimation_config.get(result_type)
+        
+        # Get listener config for root path
+        listener_config = self.config_manager.get_mqtt_listener_config()
+        root = listener_config.get('root', '')
+        
+        # Log what we're working with
+        logging.debug(f"Building topic - root: {root}, toolbox: {toolbox_id}, tool: {tool_id}, "
+                     f"result_type: {result_type}, estimation_path: {estimation_path}")
+        
+        if not estimation_path:
+            # Fallback to simple suffix if not found in config
+            result_suffix = listener_config.get('result', 'ResultManagement')
+            topic = f"{root}/{toolbox_id}/{tool_id}/{result_suffix}/{result_type}"
+            logging.debug(f"Using fallback topic: {topic}")
+            return topic
+        
+        # Use the estimation path directly as in the old system
+        topic = f"{root}/{toolbox_id}/{tool_id}/{estimation_path}"
+        logging.debug(f"Built topic: {topic}")
+        return topic
     
     def _publish_message(self, topic: str, data: Dict[str, Any]) -> None:
         """

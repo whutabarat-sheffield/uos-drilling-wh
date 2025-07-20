@@ -11,24 +11,35 @@ import logging
 import time
 import os
 
-# Global model cache per process
+# Global model and config cache per process
 _model_cache = None
+_config_cache = None
+_converter_cache = None
 _model_initialized = False
 
 
-def _init_worker():
-    """Initialize model in each worker process."""
-    global _model_cache, _model_initialized
+def _init_worker(config_path: str):
+    """Initialize model and configuration in each worker process."""
+    global _model_cache, _config_cache, _converter_cache, _model_initialized
     
     if _model_initialized:
         return
         
     try:
         from ...uos_depth_est_core import DepthInference
-        model_id = int(os.environ.get('MODEL_ID', '4'))
+        from .config_manager import ConfigurationManager
+        from .data_converter import DataFrameConverter
+        
+        # Initialize configuration once per worker
+        _config_cache = ConfigurationManager(config_path)
+        _converter_cache = DataFrameConverter(_config_cache)
+        
+        # Initialize model
+        model_id = _config_cache.get('mqtt.processing.model_id', 4)
         _model_cache = DepthInference(n_model=model_id)
         _model_initialized = True
-        logging.info(f"Worker {os.getpid()} initialized with model {model_id}")
+        
+        logging.info(f"Worker {os.getpid()} initialized with model {model_id} and cached configuration")
     except Exception as e:
         logging.error(f"Failed to initialize worker {os.getpid()}: {e}")
         raise
@@ -36,7 +47,7 @@ def _init_worker():
 
 def _process_messages(args: tuple) -> Dict[str, Any]:
     """
-    Process messages using cached model.
+    Process messages using cached model and configuration.
     
     Args:
         args: Tuple of (matched_messages, config_path)
@@ -48,13 +59,13 @@ def _process_messages(args: tuple) -> Dict[str, Any]:
     
     try:
         from .message_processor import MessageProcessor
-        from .data_converter import DataFrameConverter
-        from .config_manager import ConfigurationManager
         
-        # Initialize components for this worker
-        config = ConfigurationManager(config_path)
-        converter = DataFrameConverter(config)
-        processor = MessageProcessor(_model_cache, converter, config, "0.2.5")
+        # Ensure worker is initialized (in case of new worker)
+        if not _model_initialized:
+            _init_worker(config_path)
+        
+        # Use cached components - no more disk I/O per message!
+        processor = MessageProcessor(_model_cache, _converter_cache, _config_cache, "0.2.5")
         
         # Process the messages
         result = processor.process_matching_messages(matched_messages)
@@ -103,7 +114,8 @@ class SimpleProcessingPool:
         
         self.executor = ProcessPoolExecutor(
             max_workers=max_workers,
-            initializer=_init_worker
+            initializer=_init_worker,
+            initargs=(config_path,)
         )
         self.pending_futures: Dict[Future, float] = {}
         

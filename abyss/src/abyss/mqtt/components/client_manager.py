@@ -230,6 +230,46 @@ class MQTTClientManager:
         self.clients[listener_type] = client
         
         return client
+    
+    def create_publisher(self, client_id: str = 'depth_est_publisher') -> mqtt.Client:
+        """
+        Create an MQTT client specifically for publishing results.
+        
+        Args:
+            client_id: Unique identifier for the publisher client
+            
+        Returns:
+            Configured MQTT client for publishing
+        """
+        client = self.create_mqtt_client(client_id)
+        
+        # Simple callbacks for publisher
+        def on_connect(client, userdata, flags, reason_code, properties):
+            if reason_code == 0:
+                logging.info("Publisher client connected", extra={
+                    'client_id': client_id,
+                    'reason_code': str(reason_code)
+                })
+            else:
+                logging.error("Publisher client failed to connect", extra={
+                    'client_id': client_id,
+                    'reason_code': str(reason_code)
+                })
+        
+        def on_publish(client, userdata, mid, reason_code, properties):
+            logging.debug("Message published", extra={
+                'message_id': mid,
+                'client_id': client_id,
+                'reason_code': str(reason_code) if reason_code else 'None'
+            })
+        
+        client.on_connect = on_connect
+        client.on_publish = on_publish
+        
+        # Store the client
+        self.clients['publisher'] = client
+        
+        return client
         
     def create_result_listener(self) -> mqtt.Client:
         """Create an MQTT client for listening to Result data."""

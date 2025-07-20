@@ -78,12 +78,16 @@ class DrillingDataAnalyser:
             self.config_manager = ConfigurationManager(self.config_path)
             config = self.config_manager.get_raw_config()
             
+            # Initialize throughput monitor first so it can be passed to other components
+            self.throughput_monitor = SimpleThroughputMonitor(sample_rate=0.1)
+            
             # Message buffering
             self.message_buffer = MessageBuffer(
                 config=self.config_manager,  # Pass ConfigurationManager instead of raw config
                 cleanup_interval=self.config_manager.get_cleanup_interval(),
                 max_buffer_size=self.config_manager.get_max_buffer_size(),
-                max_age_seconds=300  # 5 minutes
+                max_age_seconds=300,  # 5 minutes
+                throughput_monitor=self.throughput_monitor
             )
             
             # Message correlation
@@ -119,9 +123,6 @@ class DrillingDataAnalyser:
             num_workers = self.config_manager.get('mqtt.processing.workers', 10)
             self.processing_pool = SimpleProcessingPool(max_workers=num_workers, config_path=self.config_path)
             
-            # Initialize throughput monitor
-            self.throughput_monitor = SimpleThroughputMonitor(sample_rate=0.1)
-            
             logging.info("All components initialized successfully", extra={
                 'processing_workers': num_workers
             })
@@ -134,17 +135,18 @@ class DrillingDataAnalyser:
             raise
     
     def _setup_result_publisher(self):
-        """Set up result publisher with the result client."""
+        """Set up result publisher with a dedicated publisher client."""
         try:
-            result_client = self.client_manager.get_client('result')
-            if result_client:
+            # Create a dedicated publisher client
+            publisher_client = self.client_manager.create_publisher()
+            if publisher_client:
                 self.result_publisher = ResultPublisher(
-                    mqtt_client=result_client,
+                    mqtt_client=publisher_client,
                     config=self.config_manager
                 )
-                logging.info("Result publisher initialized")
+                logging.info("Result publisher initialized with dedicated publisher client")
             else:
-                logging.warning("No result client available for result publisher")
+                logging.warning("Failed to create publisher client")
         except Exception as e:
             logging.error("Failed to setup result publisher", extra={
                 'error_type': type(e).__name__,
@@ -163,9 +165,6 @@ class DrillingDataAnalyser:
         
         while self.processing_active:
             try:
-                # Record message arrival for monitoring
-                self.throughput_monitor.record_arrival()
-                
                 # Get all buffer contents
                 buffers = self.message_buffer.get_all_buffers()
                 
@@ -183,6 +182,8 @@ class DrillingDataAnalyser:
                 if current_time - self.last_status_log_time >= log_interval:
                     self._log_simple_status()
                     self.last_status_log_time = current_time
+                    # Also check publisher health periodically
+                    self._check_publisher_health()
                 
                 if not matches_found:
                     # Sleep if no matches found to avoid CPU spinning
@@ -331,6 +332,9 @@ class DrillingDataAnalyser:
             # Publish results if publisher is available
             if self.result_publisher:
                 try:
+                    # Log what we're attempting to publish
+                    logging.info(f"Attempting to publish results for {toolbox_id}/{tool_id}")
+                    
                     self.result_publisher.publish_processing_result(
                         processing_result=processing_result,
                         toolbox_id=toolbox_id,
@@ -352,42 +356,152 @@ class DrillingDataAnalyser:
                         'error_type': type(e).__name__,
                         'error_message': str(e)
                     })
+                    # Check if publisher client is still connected
+                    self._check_publisher_health()
+    
+    def _check_publisher_health(self):
+        """Check and recover publisher client if needed."""
+        try:
+            publisher_client = self.client_manager.get_client('publisher')
+            if publisher_client and not publisher_client.is_connected():
+                logging.warning("Publisher client disconnected, attempting to reconnect")
+                broker_config = self.config_manager.get_mqtt_broker_config()
+                try:
+                    publisher_client.reconnect()
+                    logging.info("Publisher client reconnected successfully")
+                except Exception as e:
+                    logging.error("Failed to reconnect publisher client", extra={
+                        'error_type': type(e).__name__,
+                        'error_message': str(e)
+                    })
+                    # Try to create a new publisher
+                    self._setup_result_publisher()
+        except Exception as e:
+            logging.error("Error checking publisher health", extra={
+                'error_type': type(e).__name__,
+                'error_message': str(e)
+            })
     
     def _log_simple_status(self):
         """Log simple status every 30 seconds."""
         try:
+            # Get comprehensive metrics
+            metrics = self.get_comprehensive_metrics()
+            
             # Get throughput status
             status = self.throughput_monitor.get_status()
             
-            # Get pool queue depth
-            queue_depth = self.processing_pool.get_queue_depth()
+            # Extract key values
+            messages = metrics.get('messages', {})
+            buffer = metrics.get('buffer', {})
+            processing = metrics.get('processing', {})
+            correlation = metrics.get('correlation', {})
             
-            # Get buffer stats
-            buffer_stats = self.message_buffer.get_buffer_stats()
+            # Build buffer breakdown string
+            buffer_by_topic = buffer.get('by_topic', {})
+            buffer_breakdown = ", ".join([f"{k}: {v}" for k, v in buffer_by_topic.items()])
             
-            # Simple log message
+            # Build detailed status message
+            status_parts = [
+                f"Arrivals: {status.details.get('arrival_rate', 'N/A')}",
+                f"Processing: {status.details.get('processing_rate', 'N/A')}",
+                f"Correlated: {messages.get('correlated', 0)}/{correlation.get('attempts', 0)}",
+                f"Queue: {processing.get('queue_depth', 0)}",
+                f"Buffer: {buffer.get('total_messages', 0)} ({buffer_breakdown})"
+            ]
+            
+            # Add oldest message age if buffer has messages
+            if buffer.get('total_messages', 0) > 0:
+                oldest_age = buffer.get('oldest_message_age', 0.0)
+                status_parts.append(f"Oldest: {oldest_age:.1f}s")
+            
+            # Log appropriate level based on status
             if status.status == 'FALLING_BEHIND':
-                logging.warning(
-                    f"System falling behind: "
-                    f"IN: {status.details.get('arrival_rate', 'N/A')} msg/s, "
-                    f"OUT: {status.details.get('processing_rate', 'N/A')} msg/s, "
-                    f"Queue: {queue_depth}, "
-                    f"Buffer: {buffer_stats['total_messages']} msgs"
-                )
+                logging.warning(f"System falling behind: {' | '.join(status_parts)}")
+                
+                # Add detailed diagnostics for falling behind
+                unprocessed = correlation.get('unprocessed_messages', {})
+                if any(v > 0 for v in unprocessed.values()):
+                    logging.warning(f"Unprocessed messages: {unprocessed}")
+                    
             else:
-                logging.info(
-                    f"System healthy: "
-                    f"IN: {status.details.get('arrival_rate', 'N/A')} msg/s, "
-                    f"OUT: {status.details.get('processing_rate', 'N/A')} msg/s, "
-                    f"Queue: {queue_depth}"
-                )
+                logging.info(f"System status: {' | '.join(status_parts)}")
             
             # Alert if queue is getting too deep
+            queue_depth = processing.get('queue_depth', 0)
             if queue_depth > 15:
                 logging.error(f"Processing queue critical: {queue_depth} pending")
                 
         except Exception as e:
             logging.debug(f"Error logging status: {e}")
+    
+    def get_comprehensive_metrics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive metrics from all components.
+        
+        Returns:
+            Dictionary containing all system metrics
+        """
+        try:
+            # Throughput metrics
+            throughput_metrics = self.throughput_monitor.get_metrics()
+            
+            # Buffer metrics
+            buffer_stats = self.message_buffer.get_buffer_stats()
+            buffer_metrics = self.message_buffer._metrics.copy()  # Get internal metrics
+            
+            # Correlation metrics
+            correlation_stats = self.message_correlator.get_correlation_stats(
+                self.message_buffer.get_all_buffers()
+            )
+            
+            # Processing pool metrics
+            pool_stats = self.processing_pool.get_stats()
+            
+            # Calculate derived metrics
+            messages_buffered = buffer_metrics.get('messages_received', 0) - buffer_metrics.get('duplicate_messages', 0)
+            
+            return {
+                'messages': {
+                    'received': buffer_metrics.get('messages_received', 0),
+                    'buffered': messages_buffered,
+                    'duplicates': buffer_metrics.get('duplicate_messages', 0),
+                    'dropped': buffer_metrics.get('messages_dropped', 0),
+                    'correlated': correlation_stats.get('correlation_successes', 0),
+                    'processed': pool_stats.get('completed', 0),
+                    'failed': pool_stats.get('failed', 0),
+                    'expired': sum(buffer_metrics.get('messages_dropped_age', {}).values())
+                },
+                'rates': {
+                    'arrival_rate': throughput_metrics.get('arrival_rate', 0.0),
+                    'processing_rate': throughput_metrics.get('processing_rate', 0.0),
+                    'correlation_success_rate': correlation_stats.get('correlation_success_rate', 0.0)
+                },
+                'buffer': {
+                    'total_messages': buffer_stats.get('total_messages', 0),
+                    'by_topic': buffer_stats.get('buffer_sizes', {}),
+                    'oldest_message_age': buffer_stats.get('oldest_message_age', 0.0),
+                    'average_message_age': buffer_stats.get('average_message_age', 0.0),
+                    'message_type_distribution': buffer_stats.get('message_type_distribution', {}),
+                    'age_distribution': buffer_stats.get('age_distribution', {})
+                },
+                'processing': {
+                    'queue_depth': pool_stats.get('queue_depth', 0),
+                    'workers': pool_stats.get('workers', 0),
+                    'avg_processing_time_ms': throughput_metrics.get('avg_processing_time_ms', 0.0)
+                },
+                'correlation': {
+                    'attempts': correlation_stats.get('correlation_attempts', 0),
+                    'successes': correlation_stats.get('correlation_successes', 0),
+                    'unprocessed_messages': correlation_stats.get('unprocessed_messages', {})
+                }
+            }
+        except Exception as e:
+            logging.error("Error collecting comprehensive metrics", extra={
+                'error_type': type(e).__name__,
+                'error_message': str(e)
+            })
+            return {}
     
     def run(self):
         """
@@ -420,12 +534,20 @@ class DrillingDataAnalyser:
             if heads_client:
                 heads_client.connect(broker_config['host'], broker_config['port'])
             
+            # Connect publisher client if it was created
+            publisher_client = self.client_manager.get_client('publisher')
+            if publisher_client:
+                publisher_client.connect(broker_config['host'], broker_config['port'])
+                logging.info("Publisher client connected")
+            
             # Start client loops
             logging.info("Starting MQTT client loops")
             result_client.loop_start()
             trace_client.loop_start()
             if heads_client:
                 heads_client.loop_start()
+            if publisher_client:
+                publisher_client.loop_start()
             
             # Start continuous processing thread
             logging.info("Starting continuous processing")
@@ -517,7 +639,7 @@ class DrillingDataAnalyser:
             if hasattr(self, 'client_manager'):
                 logging.info("Disconnecting MQTT clients")
                 
-                client_types = ['result', 'trace']
+                client_types = ['result', 'trace', 'publisher']
                 if 'heads' in self.config_manager.get_mqtt_listener_config():
                     client_types.append('heads')
                 

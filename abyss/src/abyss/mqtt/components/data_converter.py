@@ -8,7 +8,7 @@ Extracted from the original MQTTDrillingDataAnalyser class.
 import logging
 import json
 import re
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 import pandas as pd
 
 from ...uos_depth_est import TimestampedData, MessageProcessingError
@@ -27,21 +27,15 @@ class DataFrameConverter:
     - Handle conversion errors gracefully
     """
     
-    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager]):
+    def __init__(self, config: ConfigurationManager):
         """
         Initialize DataFrameConverter.
         
         Args:
-            config: Configuration dictionary or ConfigurationManager instance
+            config: ConfigurationManager instance
         """
-        # Handle both ConfigurationManager and raw config dict for backward compatibility
-        if isinstance(config, ConfigurationManager):
-            self.config_manager = config
-            self.config = config.get_raw_config()
-        else:
-            # Legacy support for raw config dictionary
-            self.config_manager = None
-            self.config = config
+        self.config_manager = config
+        self.config = config.get_raw_config()
     
     def convert_messages_to_df(self, result_msg: TimestampedData, 
                              trace_msg: TimestampedData,

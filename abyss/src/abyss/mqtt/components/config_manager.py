@@ -2,11 +2,13 @@
 Configuration Manager Module
 
 Handles loading, validation, and access to configuration settings.
+Implements singleton pattern to ensure consistent configuration across the application.
 """
 
 import logging
 import yaml
 import os
+import threading
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
@@ -17,12 +19,49 @@ class ConfigurationManager:
     """
     Manages configuration loading, validation, and access.
     
+    Implements singleton pattern to ensure only one instance exists per config file.
+    
     Responsibilities:
     - Load configuration from YAML files
     - Validate configuration structure and values
     - Provide typed access to configuration values
     - Handle configuration file errors gracefully
     """
+    
+    # Class-level instance cache and lock for thread-safe singleton
+    _instances: Dict[str, 'ConfigurationManager'] = {}
+    _lock = threading.Lock()
+    
+    def __new__(cls, config_path: str):
+        """
+        Create or return existing instance for the given config path.
+        
+        Args:
+            config_path: Path to the configuration file
+            
+        Returns:
+            ConfigurationManager instance
+        """
+        # Normalize the path to handle relative/absolute paths consistently
+        normalized_path = os.path.abspath(config_path)
+        
+        # Check if instance already exists (without lock for performance)
+        if normalized_path in cls._instances:
+            return cls._instances[normalized_path]
+        
+        # Thread-safe instance creation
+        with cls._lock:
+            # Double-check pattern
+            if normalized_path not in cls._instances:
+                instance = super(ConfigurationManager, cls).__new__(cls)
+                cls._instances[normalized_path] = instance
+                # Mark as new instance for initialization
+                instance._is_new_instance = True
+            else:
+                instance = cls._instances[normalized_path]
+                instance._is_new_instance = False
+            
+            return instance
     
     def __init__(self, config_path: str):
         """
@@ -34,10 +73,18 @@ class ConfigurationManager:
         Raises:
             ConfigurationError: If configuration cannot be loaded or is invalid
         """
-        self.config_path = config_path
-        self.config = None
-        self._load_configuration()
-        self._validate_configuration()
+        # Only initialize if this is a new instance
+        if hasattr(self, '_is_new_instance') and self._is_new_instance:
+            self.config_path = os.path.abspath(config_path)
+            self.config = None
+            self._load_configuration()
+            self._validate_configuration()
+            logging.info(f"ConfigurationManager initialized for {self.config_path}")
+            # Clear the flag
+            self._is_new_instance = False
+        else:
+            # Instance already initialized, just update path for consistency
+            self.config_path = os.path.abspath(config_path)
     
     def _load_configuration(self):
         """Load configuration from YAML file."""
@@ -183,6 +230,10 @@ class ConfigurationManager:
         """Get message correlation time window."""
         return self.get('mqtt.listener.time_window', 30.0)
     
+    def get_correlation_debug_mode(self) -> bool:
+        """Get correlation debug mode setting."""
+        return self.get('mqtt.analyzer.correlation_debug', False)
+    
     def get_cleanup_interval(self) -> int:
         """Get buffer cleanup interval."""
         return self.get('mqtt.listener.cleanup_interval', 60)
@@ -316,3 +367,26 @@ class ConfigurationManager:
                 'error_message': str(e)
             })
             return {'error': str(e)}
+    
+    @classmethod
+    def clear_instances(cls):
+        """Clear all cached instances. Useful for testing."""
+        with cls._lock:
+            cls._instances.clear()
+            logging.debug("Cleared all ConfigurationManager instances")
+    
+    @classmethod
+    def get_instance(cls, config_path: str) -> 'ConfigurationManager':
+        """
+        Get or create ConfigurationManager instance for the given config path.
+        
+        This is an alternative to using the constructor directly and makes
+        the singleton pattern more explicit.
+        
+        Args:
+            config_path: Path to the configuration file
+            
+        Returns:
+            ConfigurationManager instance
+        """
+        return cls(config_path)

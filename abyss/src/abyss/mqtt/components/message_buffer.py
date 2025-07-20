@@ -9,7 +9,7 @@ import logging
 import threading
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Union, Deque
+from typing import Dict, List, Any, Optional, Deque
 import time as time_module
 
 from ...uos_depth_est import TimestampedData, ConfigurationError
@@ -32,36 +32,25 @@ class MessageBuffer:
     - Provide buffer statistics and monitoring
     """
     
-    def __init__(self, config: Union[Dict[str, Any], ConfigurationManager], cleanup_interval: int = 60, 
+    def __init__(self, config: ConfigurationManager, cleanup_interval: int = 60, 
                  max_buffer_size: int = 10000, max_age_seconds: int = 300, 
-                 hysteresis_factor: float = 0.8):
+                 hysteresis_factor: float = 0.8, throughput_monitor=None):
         """
         Initialize MessageBuffer.
         
         Args:
-            config: Configuration dictionary or ConfigurationManager instance
+            config: ConfigurationManager instance
             cleanup_interval: Interval between automatic cleanups (seconds)
             max_buffer_size: Maximum number of messages per buffer
             max_age_seconds: Maximum age of messages before cleanup (seconds)
             hysteresis_factor: Cleanup target size as fraction of max (0.8 = 80%)
+            throughput_monitor: Optional SimpleThroughputMonitor instance for tracking message arrivals
         """
-        # Handle both ConfigurationManager and raw config dict for backward compatibility
-        if isinstance(config, ConfigurationManager):
-            self.config_manager = config
-            self.config = config.get_raw_config()
-            
-            # Use ConfigurationManager methods for typed access
-            self.duplicate_handling = config.get_duplicate_handling()
-            listener_config = config.get_mqtt_listener_config()
-            
-        else:
-            # Legacy support for raw config dictionary
-            self.config_manager = None
-            self.config = config
-            
-            # Extract listener config manually (legacy method)
-            listener_config = self.config['mqtt']['listener']
-            self.duplicate_handling = listener_config.get('duplicate_handling', 'ignore')
+        self.config_manager = config
+        
+        # Use ConfigurationManager methods for typed access
+        self.duplicate_handling = config.get_duplicate_handling()
+        listener_config = config.get_mqtt_listener_config()
         
         self.buffers: Dict[str, Deque[TimestampedData]] = defaultdict(deque)
         self._buffer_lock = threading.RLock()  # Use RLock to prevent deadlocks
@@ -84,13 +73,16 @@ class MessageBuffer:
             'messages_dropped_age': defaultdict(int),       # Drops due to age
             'messages_dropped_size': defaultdict(int)       # Drops due to size limit
         }
-        self._metrics_lock = threading.Lock()
+        self._metrics_lock = threading.RLock()  # Use RLock to prevent deadlocks
+        
+        # Store throughput monitor reference
+        self.throughput_monitor = throughput_monitor
         
         # Pre-compute topic patterns for efficiency
         self._topic_patterns = {
-            'trace': f"{listener_config['root']}/+/+/{listener_config['trace']}",
-            'result': f"{listener_config['root']}/+/+/{listener_config['result']}",
-            'heads': f"{listener_config['root']}/+/+/{listener_config.get('heads', '')}"
+            'trace': f"{listener_config.get('root', '')}/+/+/{listener_config.get('trace', '')}",
+            'result': f"{listener_config.get('root', '')}/+/+/{listener_config.get('result', '')}",
+            'heads': f"{listener_config.get('root', '')}/+/+/{listener_config.get('heads', '')}"
         }
         
     def add_message(self, data: TimestampedData) -> bool:
@@ -119,6 +111,10 @@ class MessageBuffer:
                     'source': data.source
                 })
                 return False
+
+            # Record message arrival for throughput monitoring
+            if self.throughput_monitor:
+                self.throughput_monitor.record_arrival()
 
             # Log buffer operation
             buffer_size_before = len(self.buffers[matching_topic])
@@ -392,20 +388,16 @@ class MessageBuffer:
         Returns:
             Matching topic pattern or None if no match
         """
-        if self.config_manager:
-            # Use ConfigurationManager for typed access
-            listener_config = self.config_manager.get_mqtt_listener_config()
-        else:
-            # Legacy raw config access
-            listener_config = self.config['mqtt']['listener']
+        # Use ConfigurationManager for typed access
+        listener_config = self.config_manager.get_mqtt_listener_config()
         
-        if listener_config['trace'] in source:
+        if listener_config.get('trace', '') and listener_config['trace'] in source:
             logging.debug("Trace message identified")
             return self._topic_patterns['trace']
-        elif listener_config['result'] in source:
+        elif listener_config.get('result', '') and listener_config['result'] in source:
             logging.debug("Result message identified")
             return self._topic_patterns['result']
-        elif 'heads' in listener_config and listener_config['heads'] in source:
+        elif listener_config.get('heads', '') and listener_config['heads'] in source:
             logging.debug("Heads message identified")
             return self._topic_patterns['heads']
         
@@ -560,21 +552,79 @@ class MessageBuffer:
                 'buffer_sizes': {topic: len(buffer) for topic, buffer in self.buffers.items()},
                 'oldest_message_age': None,
                 'newest_message_age': None,
-                'last_cleanup_seconds_ago': current_time - self.last_cleanup
+                'last_cleanup_seconds_ago': current_time - self.last_cleanup,
+                'message_type_distribution': {},
+                'age_distribution': {
+                    '0-10s': 0,
+                    '10-30s': 0,
+                    '30-60s': 0,
+                    '60-120s': 0,
+                    '120-300s': 0,
+                    '>300s': 0
+                }
             }
             
-            # Find oldest and newest messages
+            # Calculate message type distribution
+            for topic_pattern, buffer in self.buffers.items():
+                # Extract message type from topic pattern (result/trace/heads)
+                msg_type = topic_pattern.split('/')[-1] if '/' in topic_pattern else topic_pattern
+                stats['message_type_distribution'][msg_type] = len(buffer)
+            
+            # Find oldest and newest messages and calculate age distribution
             all_timestamps = []
             for buffer in self.buffers.values():
-                all_timestamps.extend([msg.timestamp for msg in buffer])
+                for msg in buffer:
+                    timestamp = msg.timestamp
+                    all_timestamps.append(timestamp)
+                    
+                    # Calculate age and categorize
+                    age = current_time - timestamp
+                    if age <= 10:
+                        stats['age_distribution']['0-10s'] += 1
+                    elif age <= 30:
+                        stats['age_distribution']['10-30s'] += 1
+                    elif age <= 60:
+                        stats['age_distribution']['30-60s'] += 1
+                    elif age <= 120:
+                        stats['age_distribution']['60-120s'] += 1
+                    elif age <= 300:
+                        stats['age_distribution']['120-300s'] += 1
+                    else:
+                        stats['age_distribution']['>300s'] += 1
             
             if all_timestamps:
                 oldest_timestamp = min(all_timestamps)
                 newest_timestamp = max(all_timestamps)
                 stats['oldest_message_age'] = current_time - oldest_timestamp
                 stats['newest_message_age'] = current_time - newest_timestamp
+                stats['average_message_age'] = current_time - (sum(all_timestamps) / len(all_timestamps))
         
         return stats
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Get buffer performance metrics.
+        
+        Returns:
+            Dictionary containing performance metrics
+        """
+        with self._metrics_lock:
+            metrics = self._metrics.copy()
+            
+            # Calculate derived metrics
+            total_messages = metrics['messages_received'] + metrics['messages_dropped']
+            if total_messages > 0:
+                metrics['drop_rate'] = metrics['messages_dropped'] / total_messages
+                metrics['duplicate_rate'] = metrics['duplicate_messages'] / total_messages
+            else:
+                metrics['drop_rate'] = 0
+                metrics['duplicate_rate'] = 0
+            
+            # Add placeholder for metrics that aren't tracked yet
+            metrics['messages_processed'] = metrics['messages_received']  # Assume all received are processed
+            metrics['avg_processing_time_ms'] = 0  # Not tracked in current implementation
+            
+        return metrics
     
     def get_messages_by_topic(self, topic_pattern: str) -> List[TimestampedData]:
         """

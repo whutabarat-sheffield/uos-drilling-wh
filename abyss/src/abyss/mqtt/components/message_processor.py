@@ -260,12 +260,24 @@ class MessageProcessor:
             keypoints = self.depth_inference.infer3_common(df)
             depth_estimation = [keypoints[i+1] - keypoints[i] for i in range(len(keypoints)-1)]
             
-            logging.info("Depth estimation completed", extra={
-                'keypoints': keypoints,
-                'depth_estimation': depth_estimation,
-                'machine_id': self.machine_id,
-                'result_id': self.result_id
-            })
+            # Format depth estimation results for display
+            keypoints_str = [f"{kp:.3f}" for kp in keypoints]
+            depth_str = [f"{d:.3f}" for d in depth_estimation]
+            
+            logging.info(
+                f"Depth estimation completed - "
+                f"Machine: {self.machine_id}, "
+                f"Result: {self.result_id} - "
+                f"Keypoints: {keypoints_str}, "
+                f"Depths: {depth_str} mm", 
+                extra={
+                    'keypoints': keypoints,
+                    'depth_estimation': depth_estimation,
+                    'machine_id': self.machine_id,
+                    'result_id': self.result_id,
+                    'head_id': self.head_id
+                }
+            )
             
             # Reset failure count on successful estimation
             tool_key = self._get_tool_key_from_machine_id(self.machine_id)
