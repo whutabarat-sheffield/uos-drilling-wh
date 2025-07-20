@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    hostname: mqtt-broker
+    container_name: mqtt-test-broker
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mqtt-test-net
+
+  uos-depthest-listener-cpu:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: uos-depthest-listener:cpu-test
+    hostname: uos-depthest-listener
+    container_name: mqtt-test-listener
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - MPLCONFIGDIR=/app/.cache/matplotlib
+      - HF_HOME=/app/.cache/transformers
+    volumes:
+      - ../../abyss/src/abyss/run/config:/app/config:ro
+      - transformers_cache:/app/.cache/transformers
+      - matplotlib_cache:/app/.cache/matplotlib
+    command: ["python", "-m", "abyss.run.uos_depth_est_mqtt", "--config", "/app/config/mqtt_conf_docker.yaml"]
+    restart: unless-stopped
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - mqtt-test-net
+
+  uos-publisher-json:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.publisher
+    image: uos-publisher:test
+    hostname: uos-publisher
+    container_name: mqtt-test-publisher
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    volumes:
+      - ../../abyss/src/abyss/run/config:/app/config:ro
+      - ../simple-tracking/data:/app/data:ro
+    command: ["python", "-m", "abyss.mqtt.publishers", "/app/data/data_20250326", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+    restart: unless-stopped
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - mqtt-test-net
+
+networks:
+  mqtt-test-net:
+    driver: bridge
+
+volumes:
+  mosquitto_data:
+  mosquitto_logs:
+  transformers_cache:
+  matplotlib_cache:

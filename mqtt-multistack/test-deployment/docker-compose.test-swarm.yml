@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    hostname: mqtt-broker  # Explicit hostname for service discovery
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mqtt-test-net
+
+  uos-depthest-listener-cpu:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: uos-depthest-listener:cpu-test
+    hostname: uos-depthest-listener
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+      - MPLCONFIGDIR=/app/.cache/matplotlib
+      - HF_HOME=/app/.cache/transformers
+    volumes:
+      - ../../abyss/src/abyss/run/config:/app/config:ro
+      - transformers_cache:/app/.cache/transformers
+      - matplotlib_cache:/app/.cache/matplotlib
+    command: ["python", "-m", "abyss.run.uos_depth_est_mqtt", "--config", "/app/config/mqtt_conf_docker.yaml"]
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    # Note: Swarm mode doesn't support depends_on with conditions
+    # Services will retry until broker is available
+    networks:
+      - mqtt-test-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  uos-publisher-json:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.publisher
+    image: uos-publisher:test
+    hostname: uos-publisher
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    volumes:
+      - ../../abyss/src/abyss/run/config:/app/config:ro
+      - ../simple-tracking/data:/app/data:ro
+    command: ["python", "-m", "abyss.mqtt.publishers", "/app/data/data_20250326", "-c", "/app/config/mqtt_conf_docker.yaml", "--log-level", "INFO"]
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+    # Note: Swarm mode doesn't support depends_on with conditions
+    # Services will retry until broker is available
+    networks:
+      - mqtt-test-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "2"
+
+networks:
+  mqtt-test-net:
+    driver: overlay
+    attachable: true
+
+volumes:
+  mosquitto_data:
+    driver: local
+  mosquitto_logs:
+    driver: local
+  transformers_cache:
+    driver: local
+  matplotlib_cache:
+    driver: local
