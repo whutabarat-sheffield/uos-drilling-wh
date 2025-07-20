@@ -16,9 +16,8 @@ python uos_publish_json_stress.py test_data --rate 1000
 python -m abyss.mqtt.publishers test_data
 python -m abyss.mqtt.publishers test_data --stress-test --rate 1000
 
-# Using new CLI command (after reinstalling package)
-uos_publisher test_data
-uos_publisher test_data --stress-test --rate 1000
+# Note: CLI command 'uos_publisher' is not currently implemented
+# Use the module form above instead
 ```
 
 ## Docker Usage
@@ -43,7 +42,7 @@ docker run --rm uos-publish-json:latest python -m abyss.mqtt.publishers /data
 
 ## Backwards Compatibility
 
-The old `uos_publish_wrapper.py` script automatically redirects to the new module, ensuring zero downtime during migration.
+A compatibility wrapper can be created to redirect old scripts to the new module, ensuring zero downtime during migration. The wrapper would need to be implemented to support legacy command-line interfaces.
 
 ## Command Line Changes
 
@@ -52,8 +51,9 @@ The old `uos_publish_wrapper.py` script automatically redirects to the new modul
 - New: Add `--stress-test` flag
 
 ### Async Mode
-- Old: Run `uos_publish_json_async.py` with `--async` flag
-- New: Add `--async-mode` flag (requires aiomqtt)
+- Old: Run `uos_publish_json_async.py` (if it existed)
+- New: Add `--async-mode` flag (requires aiomqtt installation)
+- Note: Async mode is referenced in CLI but async_publisher.py implementation is not present
 
 ### Signal Tracking
 - Old: Only in main script with `--track-signals`

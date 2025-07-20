@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Tuple, Any
 import paho.mqtt.client as mqtt
 import yaml
 
+from .config_loader import PublisherConfigLoader, load_publisher_config
+
 
 @dataclass
 class PublisherConfig:
@@ -55,22 +57,17 @@ class PublisherConfig:
     @classmethod
     def from_yaml(cls, config_path: str) -> 'PublisherConfig':
         """Load configuration from YAML file."""
-        with open(config_path) as f:
-            data = yaml.safe_load(f)
-        
-        mqtt_config = data.get('mqtt', {})
-        broker = mqtt_config.get('broker', {})
-        listener = mqtt_config.get('listener', {})
+        config = load_publisher_config(config_path)
         
         return cls(
-            broker_host=broker.get('host', cls.broker_host),
-            broker_port=broker.get('port', cls.broker_port),
-            username=broker.get('username'),
-            password=broker.get('password'),
-            root_topic=listener.get('root', cls.root_topic),
-            result_suffix=listener.get('result', cls.result_suffix),
-            trace_suffix=listener.get('trace', cls.trace_suffix),
-            heads_suffix=listener.get('heads', cls.heads_suffix),
+            broker_host=config['broker_host'],
+            broker_port=config['broker_port'],
+            username=config['username'],
+            password=config['password'],
+            root_topic=config['root_topic'],
+            result_suffix=config['result_suffix'],
+            trace_suffix=config['trace_suffix'],
+            heads_suffix=config['heads_suffix'],
         )
 
 
