@@ -41,7 +41,8 @@
       "Bash(docker service ps:*)",
       "Bash(docker service logs:*)",
       "Bash(git rm:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

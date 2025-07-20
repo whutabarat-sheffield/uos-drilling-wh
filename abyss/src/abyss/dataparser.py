@@ -478,7 +478,7 @@ def findFirmwareVersion(path):
         Returns first string that matches pattern
     '''
     import re
-    mt = re.compile('V\s[1-9][.][0-9][.][0-9][.][0-9]*')
+    mt = re.compile(r'V\s[1-9][.][0-9][.][0-9][.][0-9]*')
     with open(path,'r') as of:
         for line in of:
             finds = mt.findall(line.strip('\n').strip('\t'))
